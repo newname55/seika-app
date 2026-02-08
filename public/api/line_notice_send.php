@@ -7,17 +7,39 @@ require_once __DIR__ . '/../../app/db.php';
 require_login();
 require_role(['manager','admin','super_user']);
 
-ensure_session();
-
-if (!function_exists('h')) {
-  function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+/* =========================
+   session / CSRF（auth.php に無い環境対策）
+========================= */
+if (session_status() !== PHP_SESSION_ACTIVE) {
+  session_start();
 }
-if (!function_exists('conf')) {
-  function conf(string $key): string {
-    if (defined($key)) return (string)constant($key);
-    $v = getenv($key);
-    return is_string($v) ? $v : '';
+
+if (!function_exists('csrf_token')) {
+  function csrf_token(): string {
+    if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+    if (empty($_SESSION['_csrf'])) {
+      $_SESSION['_csrf'] = bin2hex(random_bytes(32));
+    }
+    return (string)$_SESSION['_csrf'];
   }
+}
+if (!function_exists('csrf_verify')) {
+  function csrf_verify(?string $token): void {
+    if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+    $ok = is_string($token) && $token !== '' && isset($_SESSION['_csrf']) && hash_equals((string)$_SESSION['_csrf'], $token);
+    if (!$ok) {
+      http_response_code(403);
+      header('Content-Type: application/json; charset=utf-8');
+      echo json_encode(['ok'=>false,'error'=>'csrf'], JSON_UNESCAPED_UNICODE);
+      exit;
+    }
+  }
+}
+
+function conf(string $key): string {
+  if (defined($key)) return (string)constant($key);
+  $v = getenv($key);
+  return is_string($v) ? $v : '';
 }
 
 function json_out(array $a, int $code=200): void {
@@ -27,111 +49,122 @@ function json_out(array $a, int $code=200): void {
   exit;
 }
 
-function csrf_fail(): void { json_out(['ok'=>false,'error'=>'CSRF'], 400); }
-
-$csrf = (string)($_POST['csrf_token'] ?? '');
-if (!function_exists('csrf_token') || !hash_equals(csrf_token(), $csrf)) csrf_fail();
+function current_user_id_safe(): int {
+  return function_exists('current_user_id') ? (int)current_user_id() : (int)($_SESSION['user_id'] ?? 0);
+}
 
 $pdo = db();
 
-$storeId = (int)($_POST['store_id'] ?? 0);
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+  json_out(['ok'=>false,'error'=>'method'], 405);
+}
+
+/** CSRF */
+csrf_verify((string)($_POST['csrf_token'] ?? ''));
+
+$storeId    = (int)($_POST['store_id'] ?? 0);
+$bizDate    = (string)($_POST['business_date'] ?? '');
 $castUserId = (int)($_POST['cast_user_id'] ?? 0);
-$kind = (string)($_POST['kind'] ?? '');
-$businessDate = (string)($_POST['business_date'] ?? '');
-$text = trim((string)($_POST['text'] ?? ''));
+$kind       = (string)($_POST['kind'] ?? '');
+$text       = trim((string)($_POST['text'] ?? ''));
 
-if ($storeId <= 0 || $castUserId <= 0) json_out(['ok'=>false,'error'=>'bad params'], 400);
-if (!in_array($kind, ['late','absent'], true)) json_out(['ok'=>false,'error'=>'bad kind'], 400);
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $businessDate)) json_out(['ok'=>false,'error'=>'bad date'], 400);
-if ($text === '') json_out(['ok'=>false,'error'=>'empty text'], 400);
+if ($storeId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $bizDate) || $castUserId <= 0) {
+  json_out(['ok'=>false,'error'=>'bad params'], 400);
+}
+if (!in_array($kind, ['late','absent'], true)) {
+  json_out(['ok'=>false,'error'=>'bad kind'], 400);
+}
+if ($text === '') {
+  json_out(['ok'=>false,'error'=>'empty text'], 400);
+}
 
-$accessToken = conf('LINE_MSG_CHANNEL_ACCESS_TOKEN');
-if ($accessToken === '') json_out(['ok'=>false,'error'=>'LINE token missing'], 500);
+$senderUserId = current_user_id_safe();
+if ($senderUserId <= 0) json_out(['ok'=>false,'error'=>'no sender'], 403);
 
-/** 店長（送信者） */
-$senderId = function_exists('current_user_id') ? (int)current_user_id() : (int)($_SESSION['user_id'] ?? 0);
-
-/** 通知先LINE userId を取得（user_identities） */
+/**
+ * cast の LINE userId を解決（user_identities）
+ */
 $st = $pdo->prepare("
   SELECT provider_user_id
   FROM user_identities
   WHERE user_id=? AND provider='line' AND is_active=1
+  ORDER BY id DESC
   LIMIT 1
 ");
 $st->execute([$castUserId]);
 $lineUserId = (string)($st->fetchColumn() ?: '');
+
 if ($lineUserId === '') {
-  json_out(['ok'=>false,'error'=>'このキャストはLINE未連携です'], 400);
+  json_out(['ok'=>false,'error'=>'cast line not linked'], 400);
 }
 
-/** token 作成（返信紐付け） */
-$token = 'N' . bin2hex(random_bytes(8)); // 先頭N + 16hex = 17文字
+/** Messaging API env */
+$accessToken = conf('LINE_MSG_CHANNEL_ACCESS_TOKEN');
+if ($accessToken === '') {
+  json_out(['ok'=>false,'error'=>'LINE token missing'], 500);
+}
 
-$kindLabel = ($kind === 'late') ? '遅刻' : '欠勤';
-
-/**
- * メッセージ末尾に token を入れる（返信が来た時に紐付く）
- * ※キャストが token を消して返信しても、最新未返信通知に紐付ける保険も webhook 側で実装する
- */
-$sentText = $text . "\n\n"
-  . "――――\n"
-  . "返信すると店長画面に自動反映されます。\n"
-  . "ID: {$token}";
-
-$pdo->beginTransaction();
-$actionId = 0;
-
-try {
-  // 履歴保存（押した瞬間に確保）
-  $ins = $pdo->prepare("
-    INSERT INTO line_notice_actions
-      (store_id, business_date, cast_user_id, kind, token, template_text, sent_text,
-       sent_by_user_id, sent_at, status, created_at, updated_at)
-    VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'sent', NOW(), NOW())
-  ");
-  $ins->execute([$storeId, $businessDate, $castUserId, $kind, $token, $text, $sentText, $senderId]);
-  $actionId = (int)$pdo->lastInsertId();
-
-  // LINE push
-  $payload = json_encode([
-    'to' => $lineUserId,
-    'messages' => [[
-      'type' => 'text',
-      'text' => $sentText,
-    ]]
+/** push 送信 */
+function line_push_text(string $accessToken, string $toUserId, string $text): array {
+  $url = 'https://api.line.me/v2/bot/message/push';
+  $body = json_encode([
+    'to' => $toUserId,
+    'messages' => [
+      ['type' => 'text', 'text' => $text]
+    ],
   ], JSON_UNESCAPED_UNICODE);
 
-  $ch = curl_init('https://api.line.me/v2/bot/message/push');
+  $ch = curl_init($url);
   curl_setopt_array($ch, [
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
       'Content-Type: application/json',
       'Authorization: Bearer ' . $accessToken,
     ],
-    CURLOPT_POSTFIELDS => $payload,
+    CURLOPT_POSTFIELDS => $body,
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT => 10,
+    CURLOPT_TIMEOUT => 12,
   ]);
   $res = curl_exec($ch);
   $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
   $err = curl_error($ch);
   curl_close($ch);
 
-  if ($code >= 300) {
-    $pdo->prepare("
+  return ['code'=>$code, 'res'=>(string)$res, 'err'=>(string)$err];
+}
+
+$pdo->beginTransaction();
+try {
+  $sentAt = (new DateTime('now', new DateTimeZone('Asia/Tokyo')))->format('Y-m-d H:i:s');
+
+  /** 先に履歴作成（送信失敗でも残す） */
+  $ins = $pdo->prepare("
+    INSERT INTO line_notice_actions
+      (store_id, business_date, cast_user_id, kind, sent_by_user_id, sent_at, sent_text, status, created_at, updated_at)
+    VALUES
+      (?, ?, ?, ?, ?, ?, ?, 'sent', NOW(), NOW())
+  ");
+  $ins->execute([$storeId, $bizDate, $castUserId, $kind, $senderUserId, $sentAt, $text]);
+  $actionId = (int)$pdo->lastInsertId();
+
+  $ret = line_push_text($accessToken, $lineUserId, $text);
+
+  if ($ret['code'] < 200 || $ret['code'] >= 300) {
+    $up = $pdo->prepare("
       UPDATE line_notice_actions
-      SET status='failed', error_msg=?, updated_at=NOW()
+      SET status='failed', error_message=?, updated_at=NOW()
       WHERE id=?
       LIMIT 1
-    ")->execute([substr(($err ?: (string)$res), 0, 255), $actionId]);
+    ");
+    $errMsg = 'HTTP ' . $ret['code'] . ' ' . substr(($ret['res'] ?: $ret['err']), 0, 180);
+    $up->execute([$errMsg, $actionId]);
 
     $pdo->commit();
-    json_out(['ok'=>false,'error'=>'LINE送信失敗', 'http'=>$code, 'detail'=>substr((string)$res,0,200)], 500);
+    json_out(['ok'=>false,'error'=>$errMsg], 502);
   }
 
   $pdo->commit();
-  json_out(['ok'=>true, 'action_id'=>$actionId, 'token'=>$token]);
+  json_out(['ok'=>true]);
 
 } catch (Throwable $e) {
   if ($pdo->inTransaction()) $pdo->rollBack();
