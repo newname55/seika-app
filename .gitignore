@@ -7,3 +7,5 @@ cache/
 tmp/
 vendor/
 .DS_Store
+# user uploads (runtime data)
+public/uploads/
