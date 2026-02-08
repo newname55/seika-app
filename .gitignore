@@ -1,11 +1,84 @@
+# ==================================================
+# Secrets / Environment (絶対にコミットしない)
+# ==================================================
 .env
 .env.*
-config/db.php
+*.env
+
+*.secret
+secrets/
+
+# DB / credential files
+db.php
+_db.php
 app/db.php
+app/_db.php
+public/api/db.php
+public/api/_db.php
+
+config/db.php
+config/secret.php
+config/secrets.php
+config/*secret*.php
+config/*private*.php
+
+# ==================================================
+# Runtime / Generated data (実行時データ)
+# ==================================================
 logs/
-cache/
+log/
+*.log
+
 tmp/
-vendor/
-.DS_Store
-# user uploads (runtime data)
+cache/
+storage/
+sessions/
+
+# user uploads (容量・個人情報対策)
 public/uploads/
+uploads/
+
+# ==================================================
+# Dependencies
+# ==================================================
+vendor/
+node_modules/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ==================================================
+# Build artifacts
+# ==================================================
+dist/
+build/
+*.map
+
+# ==================================================
+# Editor / OS
+# ==================================================
+.DS_Store
+Thumbs.db
+
+# VSCode: 共有したいものだけ許可
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+.idea/
+*.swp
+*.swo
+*.bak
+*~
+
+# ==================================================
+# その他 念のため
+# ==================================================
+.cache/
+.history/
