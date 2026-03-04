@@ -24,11 +24,11 @@ if ($channelId === '' || $redirectUri === '') {
  * ✅ 招待トークン受け取り（キャスト登録用）
  * line_callback で使うのでセッションに保存
  */
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+
 $invite = trim((string)($_GET['invite'] ?? ''));
 if ($invite !== '') {
-  $_SESSION['line_invite_token'] = $invite;
-} else {
-  unset($_SESSION['line_invite_token']);
+  $_SESSION['invite'] = $invite; // ★コールバックで拾えるように保持
 }
 
 /**

@@ -118,7 +118,7 @@ function render_user_menu_html(): string {
     width:34px; height:34px; border-radius:999px;
     display:flex; align-items:center; justify-content:center;
     font-weight:1000;
-    background: color-mix(in srgb, var(--accent) 25%, transparent);
+    background: color-mix(in srgb, var(--accent) 0%, transparent);
     border:1px solid var(--line);
   }
   .userMenu__who{ display:flex; flex-direction:column; line-height:1.1; text-align:left; }
@@ -126,44 +126,99 @@ function render_user_menu_html(): string {
   .userMenu__role{ font-size:11px; color:var(--muted); }
   .userMenu__chev{ color:var(--muted); font-weight:900; }
 
-  .userMenu__panel{
-    position:absolute; right:0; top: calc(100% + 8px);
-    min-width: 280px;
-    border-radius: 16px;
-    border:1px solid var(--line);
-    background: linear-gradient(180deg, var(--cardA), var(--cardB));
-    box-shadow: var(--shadow);
-    padding: 10px;
-    z-index: 999;
-  }
-  .userMenu__item{
-    display:block;
-    padding: 12px 12px;
-    border-radius: 12px;
-    border:1px solid transparent;
-  }
-  .userMenu__item:hover{ border-color: var(--line); filter: brightness(1.05); }
-  .userMenu__item.danger{ color: var(--ng); font-weight: 1000; }
+/* =========================================
+   user menu dropdown (読みやすさ重視)
+   - Light/Soft: ふんわり
+   - Dark: 不透明 + 高コントラスト
+========================================= */
 
-  .userMenu__sep{ height:1px; background: var(--line); margin: 10px 0; }
+.userMenu__panel{
+  position:absolute; right:0; top: calc(100% + 8px);
+  min-width: 280px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  padding: 10px;
+  z-index: 999;
+}
 
-  .userMenu__label{ font-size:12px; color:var(--muted); font-weight:900; margin: 4px 2px 8px; }
-  .userMenu__grid{ display:grid; grid-template-columns: 1fr; gap:8px; }
-  .userMenu__themeBtn{
-    width:100%;
-    text-align:left;
-    padding: 12px 12px;
-    border-radius: 12px;
-    border:1px solid var(--line);
-    background: rgba(255,255,255,.02);
-    color: var(--txt);
-    cursor:pointer;
-    font-weight:900;
-  }
-  .userMenu__themeBtn.on{
-    border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
-  }
+.userMenu__item{
+  display:block;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  color: var(--txt);
+}
+.userMenu__item:hover{
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--card) 70%, var(--chip));
+}
+.userMenu__item.danger{ color: var(--ng); font-weight: 1000; }
+
+.userMenu__sep{ height:1px; background: var(--line); margin: 10px 0; }
+
+.userMenu__label{
+  font-size:12px;
+  color: var(--muted);
+  font-weight: 900;
+  margin: 4px 2px 8px;
+}
+
+.userMenu__grid{ display:grid; grid-template-columns: 1fr; gap:8px; }
+
+.userMenu__themeBtn{
+  width:100%;
+  text-align:left;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--txt);
+  cursor:pointer;
+  font-weight: 900;
+}
+.userMenu__themeBtn:hover{
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+.userMenu__themeBtn.on{
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 14%, var(--card));
+}
+
+/* ---------- Darkだけ：透けゼロ + くっきり ---------- */
+body[data-theme="dark"] .userMenu__panel{
+  background: #141414;          /* 完全不透明 */
+  border-color: rgba(255,255,255,.14);
+  box-shadow: 0 12px 30px rgba(0,0,0,.55);
+}
+
+body[data-theme="dark"] .userMenu__item:hover{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.14);
+}
+
+body[data-theme="dark"] .userMenu__sep{
+  background: rgba(255,255,255,.12);
+}
+
+body[data-theme="dark"] .userMenu__label{
+  color: rgba(255,255,255,.72);
+}
+
+body[data-theme="dark"] .userMenu__themeBtn{
+  background: #1b1b1b;          /* 透けゼロ */
+  border-color: rgba(255,255,255,.14);
+}
+body[data-theme="dark"] .userMenu__themeBtn:hover{
+  background: #232323;
+  border-color: color-mix(in srgb, var(--accent) 38%, rgba(255,255,255,.14));
+}
+body[data-theme="dark"] .userMenu__themeBtn.on{
+  background: color-mix(in srgb, var(--accent) 18%, #1b1b1b);
+  border-color: color-mix(in srgb, var(--accent) 65%, rgba(255,255,255,.14));
+}
 
   [data-theme="light"] .userMenu__btn{ background:#fff; box-shadow: 0 10px 18px rgba(0,0,0,.06); border:1px solid var(--line); }
   [data-theme="light"] .userMenu__panel{ background:#fff; box-shadow: 0 10px 18px rgba(0,0,0,.10); }
@@ -340,7 +395,30 @@ function render_layout_css(): void {
       --softRed:#ffecec;
       --softPurple:#f3edff;
     }
+    /* ===== Light mode table fix ===== */
+    body.light table {
+      border-collapse: collapse;
+      background: #ffffff;
+    }
 
+    body.light th {
+      background: #f1f5f9;          /* ヘッダを1段濃く */
+      color: #0f172a;
+      font-weight: 600;
+      border-bottom: 2px solid #cbd5e1;
+      padding: 10px 12px;
+    }
+
+    body.light td {
+      color: #1e293b;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 10px 12px;
+    }
+
+    /* 行ホバー（Lightでは必須） */
+    body.light tbody tr:hover {
+      background: #f8fafc;
+    }
     /* ===== high contrast ===== */
     body[data-theme="high_contrast"]{
       --bg1:#000000;

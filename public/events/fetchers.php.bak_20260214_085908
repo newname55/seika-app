@@ -1,0 +1,887 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Event fetchers for Okayama.
+ *
+ * Returns normalized items:
+ * [
+ *   'source' => 'okayama_city'|'okayama_pref'|'mamakari'|'convex',
+ *   'source_id' => string,         // stable id within source (or URL)
+ *   'title' => string,
+ *   'starts_at' => ?string,         // 'Y-m-d H:i:s' (JST) or null
+ *   'ends_at' => ?string,           // 'Y-m-d H:i:s' (JST) or null
+ *   'all_day' => int,               // 0/1
+ *   'venue_name' => ?string,
+ *   'venue_addr' => ?string,
+ *   'organizer_name' => ?string,
+ *   'organizer_contact' => ?string, // tel/email/etc
+ *   'source_url' => string,
+ *   'notes' => ?string,
+ * ]
+ */
+if (!function_exists('normalize_whitespace')) {
+  function normalize_whitespace(string $s): string {
+    $s = preg_replace('/\s+/u', ' ', $s);
+    return trim((string)$s);
+  }
+}
+function http_get(string $url, int $timeoutSec = 15): string {
+  $ch = curl_init($url);
+  if ($ch === false) throw new RuntimeException('curl_init failed');
+
+  curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_MAXREDIRS => 5,
+    CURLOPT_CONNECTTIMEOUT => $timeoutSec,
+    CURLOPT_TIMEOUT => $timeoutSec,
+    CURLOPT_SSL_VERIFYPEER => true,
+    CURLOPT_SSL_VERIFYHOST => 2,
+    CURLOPT_USERAGENT => 'haruto-events-sync/1.0 (+https://example.local)',
+    CURLOPT_HTTPHEADER => [
+      'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language: ja,en;q=0.7',
+    ],
+  ]);
+
+  $body = curl_exec($ch);
+  if ($body === false) {
+    $err = curl_error($ch);
+    curl_close($ch);
+    throw new RuntimeException("HTTP GET failed: {$err}");
+  }
+  $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+  curl_close($ch);
+
+  if ($code >= 400) throw new RuntimeException("HTTP {$code} for {$url}");
+  return (string)$body;
+}
+
+function dom_from_html(string $html): DOMDocument {
+  libxml_use_internal_errors(true);
+  $dom = new DOMDocument();
+  $dom->loadHTML($html, LIBXML_NOWARNING | LIBXML_NOERROR);
+  libxml_clear_errors();
+  return $dom;
+}
+
+function xp_text(DOMNode $node): string {
+  return trim(preg_replace('/\s+/u', ' ', $node->textContent ?? ''));
+}
+
+function norm_ws(string $s): string {
+  $s = preg_replace('/\xC2\xA0/u', ' ', $s); // nbsp
+  $s = preg_replace('/[ \t]+/u', ' ', (string)$s);
+  $s = preg_replace("/\r\n|\r/u", "\n", $s);
+  $s = preg_replace("/\n{3,}/u", "\n\n", $s);
+  return trim($s);
+}
+
+/** Reiwa: 令和1 = 2019 */
+function reiwa_to_ad(int $reiwaYear): int {
+  return 2018 + $reiwaYear;
+}
+
+/**
+ * Parse date range strings commonly seen on Okayama sources.
+ * Returns [starts_date(Y-m-d)|null, ends_date(Y-m-d)|null]
+ */
+function parse_jp_date_range(string $s): array {
+  $s = norm_ws($s);
+
+  // Pattern: 2026年2月14日（土曜日）から 2026年2月15日（日曜日）
+  if (preg_match('/(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日.*?(?:から|〜|～|-)\s*(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日/u', $s, $m)) {
+    $a = sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
+    $b = sprintf('%04d-%02d-%02d', (int)$m[4], (int)$m[5], (int)$m[6]);
+    return [$a, $b];
+  }
+
+  // Pattern: 2026年2月1日（日）〜2026年2月7日（土）
+  if (preg_match('/(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日.*?(?:から|〜|～|-)\s*(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日/u', $s, $m)) {
+    $a = sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
+    $b = sprintf('%04d-%02d-%02d', (int)$m[4], (int)$m[5], (int)$m[6]);
+    return [$a, $b];
+  }
+
+  // Pattern: 令和6年9月4日（水曜日）から12月17日（火曜日）
+  if (preg_match('/令和\s*(\d{1,2})年\s*(\d{1,2})月\s*(\d{1,2})日.*?(?:から|〜|～|-)\s*(?:(\d{1,2})年)?\s*(\d{1,2})月\s*(\d{1,2})日/u', $s, $m)) {
+    $y1 = reiwa_to_ad((int)$m[1]);
+    $m1 = (int)$m[2]; $d1 = (int)$m[3];
+    $y2 = $m[4] !== '' ? reiwa_to_ad((int)$m[4]) : $y1;
+    $m2 = (int)$m[5]; $d2 = (int)$m[6];
+    return [sprintf('%04d-%02d-%02d', $y1,$m1,$d1), sprintf('%04d-%02d-%02d', $y2,$m2,$d2)];
+  }
+
+  // Single date: 2026年2月8日（日）
+  if (preg_match('/(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日/u', $s, $m)) {
+    $a = sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
+    return [$a, $a];
+  }
+
+  // Single date in Reiwa: 令和7年2月1日
+  if (preg_match('/令和\s*(\d{1,2})年\s*(\d{1,2})月\s*(\d{1,2})日/u', $s, $m)) {
+    $y = reiwa_to_ad((int)$m[1]);
+    $a = sprintf('%04d-%02d-%02d', $y, (int)$m[2], (int)$m[3]);
+    return [$a, $a];
+  }
+
+  return [null, null];
+}
+
+/** Parse time like "13：30～15：00" or "13:30-15:00". Returns [start(H:i)|null, end(H:i)|null] */
+function parse_jp_time_range(string $s): array {
+  $s = str_replace(['：','〜','～','－','–','—'], [':','-','-','-','-','-'], $s);
+  $s = preg_replace('/\s+/u', '', $s);
+
+  if (preg_match('/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/u', $s, $m)) {
+    return [sprintf('%02d:%02d', (int)$m[1], (int)$m[2]), sprintf('%02d:%02d', (int)$m[3], (int)$m[4])];
+  }
+  if (preg_match('/(\d{1,2}):(\d{2})-/u', $s, $m)) {
+    return [sprintf('%02d:%02d', (int)$m[1], (int)$m[2]), null];
+  }
+  return [null, null];
+}
+
+function combine_dt(?string $dateYmd, ?string $timeHi, string $defaultTime = '00:00'): ?string {
+  if (!$dateYmd) return null;
+  $t = $timeHi ?: $defaultTime;
+  return $dateYmd . ' ' . $t . ':00';
+}
+
+/** Extract section text from Okayama City article by h2 heading label. */
+function oky_city_section_text(DOMXPath $xp, string $label): ?string {
+  $nodes = $xp->query(sprintf("//h2[contains(normalize-space(.), '%s')]", $label));
+  if (!$nodes || $nodes->length === 0) return null;
+
+  $h2 = $nodes->item(0);
+  $buf = [];
+  for ($n = $h2->nextSibling; $n !== null; $n = $n->nextSibling) {
+    if ($n instanceof DOMElement && strtolower($n->tagName) === 'h2') break;
+    $txt = trim($n->textContent ?? '');
+    if ($txt !== '') $buf[] = $txt;
+  }
+  $out = norm_ws(implode("\n", $buf));
+  return $out !== '' ? $out : null;
+}
+
+/**
+ * Fetcher: Okayama City event list (weekly list -> detail pages)
+ * Example list endpoint: /ft4/event4_list.php?event4_day=9&event4_month=12&event4_range=w&event4_year=2024
+ * Detail pages contain headings like "開催日時/開催場所/主催者・共催者".  [oai_citation:1‡city.okayama.jp](https://www.city.okayama.jp/ft4/event4_list.php?event4_day=9&event4_month=12&event4_range=w&event4_year=2024)
+ */
+function fetch_okayama_city_events(DateTimeImmutable $from, DateTimeImmutable $to): array {
+  $base = 'https://www.city.okayama.jp';
+  $items = [];
+  $seen = [];
+
+  // Start from Monday of the week (roughly)
+  $cursor = $from->modify('monday this week');
+  while ($cursor <= $to) {
+    $url = sprintf(
+      '%s/ft4/event4_list.php?event4_day=%d&event4_month=%d&event4_range=w&event4_year=%d',
+      $base,
+      (int)$cursor->format('j'),
+      (int)$cursor->format('n'),
+      (int)$cursor->format('Y')
+    );
+
+    try {
+      $html = http_get($url);
+    } catch (Throwable $e) {
+      $cursor = $cursor->modify('+7 days');
+      continue;
+    }
+
+    $dom = dom_from_html($html);
+    $xp = new DOMXPath($dom);
+
+    // Collect anchors pointing to detail html pages under city.okayama.jp
+    $as = $xp->query("//a[contains(@href, '.html')]");
+    if ($as) {
+      foreach ($as as $a) {
+        $href = (string)$a->getAttribute('href');
+        $title = xp_text($a);
+        if ($title === '' || $href === '') continue;
+
+        // Normalize URL
+        if (str_starts_with($href, 'http')) {
+          $detailUrl = $href;
+        } else {
+          if (!str_starts_with($href, '/')) $href = '/' . $href;
+          $detailUrl = $base . $href;
+        }
+
+        if (!str_contains($detailUrl, 'city.okayama.jp')) continue;
+        if (str_contains($detailUrl, 'zoomsight.social.or.jp')) continue;
+
+        $key = sha1($detailUrl);
+        if (isset($seen[$key])) continue;
+        $seen[$key] = true;
+
+        // Fetch detail
+        try {
+          $dhtml = http_get($detailUrl);
+        } catch (Throwable $e) {
+          continue;
+        }
+        $ddom = dom_from_html($dhtml);
+        $dxp = new DOMXPath($ddom);
+
+        $h1 = $dxp->query('//h1')->item(0);
+        $dtTitle = $h1 ? xp_text($h1) : $title;
+
+        $when = oky_city_section_text($dxp, '開催日時');
+        $where = oky_city_section_text($dxp, '開催場所');
+        $org = oky_city_section_text($dxp, '主催者') ?? oky_city_section_text($dxp, '主催者・共催者');
+        $contact = oky_city_section_text($dxp, '連絡先') ?? oky_city_section_text($dxp, '連絡先・お問い合わせ');
+
+        [$sd, $ed] = $when ? parse_jp_date_range($when) : [null, null];
+        // If there is an explicit time range inside the "開催日時" section, apply to start/end
+        $allDay = 1;
+        $startsAt = null;
+        $endsAt = null;
+
+        if ($sd) {
+          // Try to find time in the text (often none)
+          [$st, $et] = $when ? parse_jp_time_range($when) : [null, null];
+          if ($st) {
+            $allDay = 0;
+            $startsAt = combine_dt($sd, $st, '00:00');
+            $endsAt = combine_dt($ed ?? $sd, $et, $st);
+          } else {
+            $startsAt = combine_dt($sd, null, '00:00');
+            $endsAt = combine_dt($ed ?? $sd, null, '23:59');
+          }
+        } else {
+          // Patterns like "毎週土曜日…" -> keep null
+          $allDay = 0;
+        }
+
+        $items[] = [
+          'source' => 'okayama_city',
+          'source_id' => (string)preg_replace('/\D+/', '', (string)parse_url($detailUrl, PHP_URL_PATH)) ?: $detailUrl,
+          'title' => $dtTitle,
+          'starts_at' => $startsAt,
+          'ends_at' => $endsAt,
+          'all_day' => $allDay,
+          'venue_name' => $where,
+          'venue_addr' => null,
+          'organizer_name' => $org,
+          'organizer_contact' => $contact,
+          'source_url' => $detailUrl,
+          'notes' => null,
+        ];
+      }
+    }
+
+    $cursor = $cursor->modify('+7 days');
+  }
+
+  return $items;
+}
+
+/**
+ * Fetcher: Okayama Prefecture calendar by month param (?month=2&year=2026)
+ * Page contains event titles + "開催時間/開催場所/お問い合わせ" blocks.  [oai_citation:2‡岡山県ホームページ](https://www.pref.okayama.jp/calendar/?month=2&year=2026)
+ */
+function fetch_okayama_pref_events(DateTimeImmutable $from, DateTimeImmutable $to): array {
+  $items = [];
+
+  // Iterate months between from..to
+  $m = new DateTimeImmutable($from->format('Y-m-01'));
+  $endMonth = new DateTimeImmutable($to->format('Y-m-01'));
+
+  while ($m <= $endMonth) {
+    $url = sprintf('https://www.pref.okayama.jp/calendar/?month=%d&year=%d', (int)$m->format('n'), (int)$m->format('Y'));
+
+    try {
+      $html = http_get($url);
+    } catch (Throwable $e) {
+      $m = $m->modify('+1 month');
+      continue;
+    }
+
+    $dom = dom_from_html($html);
+    $xp = new DOMXPath($dom);
+
+    // Each event title is usually an <a> with surrounding "開催時間/開催場所/お問い合わせ" nearby.
+    // We'll pick links under the main content area that look like event pages (/site/.../*.html)
+    $links = $xp->query("//a[contains(@href, '/site/') and (contains(@href, '.html') or contains(@href, '.htm'))]");
+    if (!$links) {
+      $m = $m->modify('+1 month');
+      continue;
+    }
+
+    foreach ($links as $a) {
+      $title = xp_text($a);
+      $href = (string)$a->getAttribute('href');
+      if ($title === '' || $href === '') continue;
+
+      $eventUrl = str_starts_with($href, 'http') ? $href : ('https://www.pref.okayama.jp' . (str_starts_with($href, '/') ? $href : '/' . $href));
+
+      // Find nearby text (parent block)
+      $block = $a->parentNode;
+      for ($i=0; $i<4 && $block !== null; $i++) {
+        if ($block instanceof DOMElement && in_array(strtolower($block->tagName), ['li','div','section','article'], true)) break;
+        $block = $block->parentNode;
+      }
+      $ctx = $block ? norm_ws($block->textContent ?? '') : '';
+
+      // Try date range from context (often has "2026年2月14日…から…")
+      [$sd, $ed] = parse_jp_date_range($ctx);
+
+      // Filter by from/to if we found dates
+      if ($sd) {
+        $sdDt = new DateTimeImmutable($sd);
+        $edDt = new DateTimeImmutable($ed ?? $sd);
+        if ($edDt < new DateTimeImmutable($from->format('Y-m-d')) || $sdDt > new DateTimeImmutable($to->format('Y-m-d'))) {
+          continue;
+        }
+      }
+
+      // Time / place from context
+      $time = null;
+      if (preg_match('/(\d{1,2}時\d{0,2}分?.{0,3}\d{1,2}時\d{0,2}分?)/u', $ctx, $mm)) {
+        $time = $mm[1];
+      }
+      [$st, $et] = $time ? parse_jp_time_range($time) : [null, null];
+
+      $startsAt = null; $endsAt = null; $allDay = 1;
+      if ($sd) {
+        if ($st) {
+          $allDay = 0;
+          $startsAt = combine_dt($sd, $st, '00:00');
+          $endsAt = combine_dt($ed ?? $sd, $et, $st);
+        } else {
+          $startsAt = combine_dt($sd, null, '00:00');
+          $endsAt = combine_dt($ed ?? $sd, null, '23:59');
+        }
+      }
+
+      $venue = null;
+      if (preg_match('/開催場所\s*([^\n]+?)(?:お問い合わせ|$)/u', str_replace("\n", ' ', $ctx), $mm)) {
+        $venue = trim($mm[1]);
+      }
+      if (!$venue) {
+        // Another common layout: place line contains parentheses with address
+        if (preg_match('/（[^）]+）/u', $ctx, $mm)) $venue = trim($mm[0]);
+      }
+
+      $org = null;
+      if (preg_match('/お問い合わせ\s*([^\n]+)$/u', $ctx, $mm)) $org = trim($mm[1]);
+
+      $items[] = [
+        'source' => 'okayama_pref',
+        'source_id' => sha1($eventUrl),
+        'title' => $title,
+        'starts_at' => $startsAt,
+        'ends_at' => $endsAt,
+        'all_day' => $allDay,
+        'venue_name' => $venue,
+        'venue_addr' => null,
+        'organizer_name' => $org,
+        'organizer_contact' => null,
+        'source_url' => $eventUrl,
+        'notes' => null,
+      ];
+    }
+
+    $m = $m->modify('+1 month');
+  }
+
+  return $items;
+}
+
+/**
+ * Fetcher: Mamakari forum monthly detail page (?month=2&year=2026)
+ * Uses blocks with "開催日/会場/主催".  [oai_citation:3‡mamakari.net](https://www.mamakari.net/event/detail?month=2&year=2026)
+ */
+function fetch_mamakari_events(DateTimeImmutable $from, DateTimeImmutable $to): array {
+  $items = [];
+
+  $m = new DateTimeImmutable($from->format('Y-m-01'));
+  $endMonth = new DateTimeImmutable($to->format('Y-m-01'));
+
+  while ($m <= $endMonth) {
+    $url = sprintf('https://www.mamakari.net/event/detail?month=%d&year=%d', (int)$m->format('n'), (int)$m->format('Y'));
+
+    try {
+      $html = http_get($url);
+    } catch (Throwable $e) {
+      $m = $m->modify('+1 month');
+      continue;
+    }
+
+    $dom = dom_from_html($html);
+    $xp = new DOMXPath($dom);
+
+    // Each event starts with an <h4> title (rendered as "#### ...").  [oai_citation:4‡mamakari.net](https://www.mamakari.net/event/detail?month=2&year=2026)
+    $h4s = $xp->query('//h4');
+    if (!$h4s) {
+      $m = $m->modify('+1 month');
+      continue;
+    }
+
+    foreach ($h4s as $h4) {
+      $title = xp_text($h4);
+      if ($title === '') continue;
+
+      // collect following siblings until next h4
+      $buf = [];
+      for ($n = $h4->nextSibling; $n !== null; $n = $n->nextSibling) {
+        if ($n instanceof DOMElement && strtolower($n->tagName) === 'h4') break;
+        $t = trim($n->textContent ?? '');
+        if ($t !== '') $buf[] = $t;
+      }
+      $ctx = norm_ws(implode("\n", $buf));
+
+      // Parse fields
+      $dateLine = null;
+      if (preg_match('/開催日\s*([^\n]+)/u', $ctx, $mm)) $dateLine = trim($mm[1]);
+
+      [$sd, $ed] = $dateLine ? parse_jp_date_range($dateLine) : [null, null];
+
+      // optional time line directly below date
+      $timeLine = null;
+      if (preg_match('/\n(\d{1,2}[:：]\d{2}.*?)(?:\n|$)/u', "\n".$ctx, $mm)) {
+        $timeLine = trim($mm[1]);
+      }
+      [$st, $et] = $timeLine ? parse_jp_time_range($timeLine) : [null, null];
+
+      $venue = null;
+      if (preg_match('/会場\s*([^\n]+)/u', $ctx, $mm)) $venue = trim($mm[1]);
+
+      $org = null;
+      if (preg_match('/主催\s*([^\n]+)/u', $ctx, $mm)) $org = trim($mm[1]);
+
+      $contact = null;
+      if (preg_match('/連絡先\s*([^\n]+(?:\n[^\n]+){0,6})/u', $ctx, $mm)) $contact = trim($mm[1]);
+
+      $startsAt = null; $endsAt = null; $allDay = 1;
+      if ($sd) {
+        // Filter by from/to
+        $sdDt = new DateTimeImmutable($sd);
+        $edDt = new DateTimeImmutable($ed ?? $sd);
+        if ($edDt < new DateTimeImmutable($from->format('Y-m-d')) || $sdDt > new DateTimeImmutable($to->format('Y-m-d'))) {
+          continue;
+        }
+
+        if ($st) {
+          $allDay = 0;
+          $startsAt = combine_dt($sd, $st, '00:00');
+          $endsAt = combine_dt($ed ?? $sd, $et, $st);
+        } else {
+          $startsAt = combine_dt($sd, null, '00:00');
+          $endsAt = combine_dt($ed ?? $sd, null, '23:59');
+        }
+      }
+
+      $items[] = [
+        'source' => 'mamakari',
+        'source_id' => sha1($url . '|' . $title . '|' . ($sd ?? '')),
+        'title' => $title,
+        'starts_at' => $startsAt,
+        'ends_at' => $endsAt,
+        'all_day' => $allDay,
+        'venue_name' => $venue,
+        'venue_addr' => '岡山県岡山市北区駅元町14-1（岡山コンベンションセンター）',
+        'organizer_name' => $org,
+        'organizer_contact' => $contact,
+        'source_url' => $url,
+        'notes' => null,
+      ];
+    }
+
+    $m = $m->modify('+1 month');
+  }
+
+  return $items;
+}
+
+/**
+ * Fetcher: Convex Okayama (list page + detail page)
+ * List shows title + date like "2/14(土)～2/15(日)" and detail includes "期 間/時 間/お問合わせ先".  [oai_citation:5‡convex-okayama.co.jp](https://www.convex-okayama.co.jp/event/)
+ */
+function fetch_convex_events(DateTimeImmutable $from, DateTimeImmutable $to): array {
+  $items = [];
+  $baseList = 'https://www.convex-okayama.co.jp/event/';
+
+  try {
+    $html = http_get($baseList);
+  } catch (Throwable $e) {
+    return [];
+  }
+
+  $dom = dom_from_html($html);
+  $xp = new DOMXPath($dom);
+
+  // event links are /event/{id}
+  $links = $xp->query("//a[starts-with(@href, '/event/') and string-length(normalize-space(.)) > 0]");
+  if (!$links) return [];
+
+  $seen = [];
+  foreach ($links as $a) {
+    $href = (string)$a->getAttribute('href');
+    $title = xp_text($a);
+    if ($href === '' || $title === '') continue;
+    if (preg_match('/\.\.\.詳細を見る/u', $title)) continue;
+
+    $detailUrl = 'https://www.convex-okayama.co.jp' . $href;
+    $id = trim(str_replace('/event/', '', $href), '/');
+    if ($id === '' || isset($seen[$id])) continue;
+    $seen[$id] = true;
+
+    // detail
+    try {
+      $dhtml = http_get($detailUrl);
+    } catch (Throwable $e) {
+      continue;
+    }
+    $ddom = dom_from_html($dhtml);
+    $dxp = new DOMXPath($ddom);
+
+    $h2 = $dxp->query('//h2')->item(0);
+    $dtTitle = $h2 ? xp_text($h2) : $title;
+
+    $text = norm_ws($ddom->textContent ?? '');
+
+    // period line: "期 間 2/14(土)～2/15(日)"  [oai_citation:6‡convex-okayama.co.jp](https://www.convex-okayama.co.jp/event/957)
+    $period = null;
+    if (preg_match('/期\s*間\s*([0-9]{1,2}\/[0-9]{1,2}.*?)(?:\n|$)/u', $text, $mm)) {
+      $period = trim($mm[1]);
+    }
+
+    // time: "時 間 10：00～17：00" etc.
+    $timeLine = null;
+    if (preg_match('/時\s*間\s*([0-9]{1,2}[:：][0-9]{2}.*?)(?:\n|$)/u', $text, $mm)) {
+      $timeLine = trim($mm[1]);
+    }
+
+    // contact under "お問合わせ先"
+    $contact = null;
+    $org = null;
+    if (preg_match('/お問合わせ先\s*(.+)$/u', $text, $mm)) {
+      $contact = trim($mm[1]);
+      // first line as org
+      $lines = preg_split("/\n/u", $contact);
+      $org = trim((string)($lines[0] ?? ''));
+    } else {
+      // fallback: lines around it
+      if (preg_match('/お問合わせ先\s*\n(.+?)(?:NEWS|$)/us', $text, $mm)) {
+        $contact = trim($mm[1]);
+        $lines = preg_split("/\n/u", $contact);
+        $org = trim((string)($lines[0] ?? ''));
+      }
+    }
+
+    // Parse dates from period like "2/14(土)～2/15(日)" -> assume current/next year around from..to window
+    $sd = null; $ed = null;
+    if ($period && preg_match('/(\d{1,2})\/(\d{1,2}).*?(?:〜|～|-)\s*(\d{1,2})\/(\d{1,2})/u', $period, $mm)) {
+      $yGuess = (int)$from->format('Y');
+      $sd = sprintf('%04d-%02d-%02d', $yGuess, (int)$mm[1], (int)$mm[2]);
+      $ed = sprintf('%04d-%02d-%02d', $yGuess, (int)$mm[3], (int)$mm[4]);
+
+      // if sd is far before 'from' (e.g., year roll), shift +1 year
+      if (new DateTimeImmutable($sd) < $from->modify('-60 days')) {
+        $yGuess++;
+        $sd = sprintf('%04d-%02d-%02d', $yGuess, (int)$mm[1], (int)$mm[2]);
+        $ed = sprintf('%04d-%02d-%02d', $yGuess, (int)$mm[3], (int)$mm[4]);
+      }
+    } elseif ($period && preg_match('/(\d{1,2})\/(\d{1,2})/u', $period, $mm)) {
+      $yGuess = (int)$from->format('Y');
+      $sd = sprintf('%04d-%02d-%02d', $yGuess, (int)$mm[1], (int)$mm[2]);
+      $ed = $sd;
+    }
+
+    // filter window
+    if ($sd) {
+      $sdDt = new DateTimeImmutable($sd);
+      $edDt = new DateTimeImmutable($ed ?? $sd);
+      if ($edDt < new DateTimeImmutable($from->format('Y-m-d')) || $sdDt > new DateTimeImmutable($to->format('Y-m-d'))) {
+        continue;
+      }
+    }
+
+    [$st, $et] = $timeLine ? parse_jp_time_range($timeLine) : [null, null];
+    $startsAt = null; $endsAt = null; $allDay = 1;
+    if ($sd) {
+      if ($st) {
+        $allDay = 0;
+        $startsAt = combine_dt($sd, $st, '00:00');
+        $endsAt = combine_dt($ed ?? $sd, $et, $st);
+      } else {
+        $startsAt = combine_dt($sd, null, '00:00');
+        $endsAt = combine_dt($ed ?? $sd, null, '23:59');
+      }
+    }
+
+    $items[] = [
+      'source' => 'convex',
+      'source_id' => $id,
+      'title' => $dtTitle,
+      'starts_at' => $startsAt,
+      'ends_at' => $endsAt,
+      'all_day' => $allDay,
+      'venue_name' => 'コンベックス岡山',
+      'venue_addr' => '岡山県岡山市北区大内田675',
+      'organizer_name' => $org ?: null,
+      'organizer_contact' => $contact ?: null,
+      'source_url' => $detailUrl,
+      'notes' => null,
+    ];
+  }
+
+  return $items;
+}
+
+/** master */
+function fetch_all_okayama_events(DateTimeImmutable $from, DateTimeImmutable $to): array {
+  $all = [];
+  $fetchers = [
+    fn() => fetch_okayama_city_events($from, $to),
+    fn() => fetch_okayama_pref_events($from, $to),
+    fn() => fetch_mamakari_events($from, $to),
+    fn() => fetch_convex_events($from, $to),
+    fn() => fetch_okayama_kanko_events($from, $to, 2, 0),
+  ];
+
+  foreach ($fetchers as $fx) {
+    try {
+      $res = $fx();
+      if (is_array($res)) $all = array_merge($all, $res);
+    } catch (Throwable $e) {
+      // ignore one source failure
+      continue;
+    }
+  }
+
+  // normalize: trim title, drop empty
+  $out = [];
+  foreach ($all as $it) {
+    $title = trim((string)($it['title'] ?? ''));
+    if ($title === '') continue;
+    $it['title'] = $title;
+    $out[] = $it;
+  }
+  return $out;
+}
+// ===== okayama-kanko.jp fetcher (guarded) =====
+if (!function_exists('fetch_okayama_kanko_detail')) {
+
+  function okayama_kanko_http_get(string $url, int $timeout = 18): string {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_FOLLOWLOCATION => true,
+      CURLOPT_MAXREDIRS => 5,
+      CURLOPT_CONNECTTIMEOUT => $timeout,
+      CURLOPT_TIMEOUT => $timeout,
+      CURLOPT_SSL_VERIFYPEER => true,
+      CURLOPT_SSL_VERIFYHOST => 2,
+      CURLOPT_USERAGENT => 'haruto-events-bot/1.0',
+    ]);
+    $body = curl_exec($ch);
+    $errno = curl_errno($ch);
+    $err = curl_error($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    if ($errno !== 0) throw new RuntimeException("curl error ($errno): $err url=$url");
+    if ($code < 200 || $code >= 300) throw new RuntimeException("http $code url=$url");
+    if (!is_string($body) || $body === '') throw new RuntimeException("empty body url=$url");
+    return $body;
+  }
+
+  function okayama_kanko_dom(string $html): DOMDocument {
+    $prev = libxml_use_internal_errors(true);
+    $dom = new DOMDocument();
+    $dom->loadHTML('<?xml encoding="utf-8" ?>' . $html, LIBXML_NOWARNING | LIBXML_NOERROR);
+    libxml_clear_errors();
+    libxml_use_internal_errors($prev);
+    return $dom;
+  }
+
+  function okayama_kanko_norm(string $s): string {
+    $s = preg_replace('/\s+/u', ' ', $s);
+    return trim((string)$s);
+  }
+
+  function okayama_kanko_parse_date_range(?string $s): array {
+    $s = okayama_kanko_norm((string)$s);
+    if ($s === '') return [null, null];
+
+    if (preg_match('/(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日.*?[～〜\-]\s*(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日/u', $s, $m)) {
+      $start = sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
+      $end   = sprintf('%04d-%02d-%02d', (int)$m[4], (int)$m[5], (int)$m[6]);
+      return [$start, $end];
+    }
+    // 年省略（後半）
+    if (preg_match('/(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日.*?[～〜\-]\s*(\d{1,2})月\s*(\d{1,2})日/u', $s, $m)) {
+      $y=(int)$m[1]; $sm=(int)$m[2]; $sd=(int)$m[3]; $em=(int)$m[4]; $ed=(int)$m[5];
+      $start = sprintf('%04d-%02d-%02d', $y, $sm, $sd);
+      $endY = ($em < $sm) ? $y+1 : $y;
+      $end   = sprintf('%04d-%02d-%02d', $endY, $em, $ed);
+      return [$start, $end];
+    }
+    if (preg_match('/(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日/u', $s, $m)) {
+      $d = sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
+      return [$d, $d];
+    }
+    return [null, null];
+  }
+
+  function okayama_kanko_parse_time_range(?string $s): array {
+    $s = okayama_kanko_norm((string)$s);
+    if ($s === '') return [null, null];
+    if (preg_match('/(\d{1,2}):(\d{2}).*?[～〜\-]\s*(\d{1,2}):(\d{2})/u', $s, $m)) {
+      $t1 = sprintf('%02d:%02d', (int)$m[1], (int)$m[2]);
+      $t2 = sprintf('%02d:%02d', (int)$m[3], (int)$m[4]);
+      return [$t1, $t2];
+    }
+    return [null, null];
+  }
+
+  function okayama_kanko_collect_detail_urls(string $html): array {
+    $urls = [];
+    if (preg_match_all('#/event/(detail_[0-9A-Za-z_]+\.html)#u', $html, $m)) {
+      foreach ($m[1] as $file) $urls[] = 'https://www.okayama-kanko.jp/event/' . $file;
+    }
+    return array_values(array_unique($urls));
+  }
+
+  function fetch_okayama_kanko_detail(string $url): ?array {
+    $html = okayama_kanko_http_get($url);
+    $dom  = okayama_kanko_dom($html);
+
+// title candidates (優先順)
+$title = null;
+
+// 1) og:title
+$xpath = new DOMXPath($dom);
+$og = $xpath->query('//meta[@property="og:title"]/@content');
+if ($og && $og->length > 0) {
+  $t = okayama_kanko_norm((string)$og->item(0)->nodeValue);
+  if ($t !== '') $title = $t;
+}
+
+// 2) mainのh1/h2（h1が共通ならh2へフォールバック）
+if (!$title) {
+  foreach (['h1','h2'] as $tag) {
+    foreach ($dom->getElementsByTagName($tag) as $n) {
+      $t = okayama_kanko_norm($n->textContent ?? '');
+      if ($t === '') continue;
+      // 共通っぽい文言は除外（今回見えてるやつ）
+      if (mb_strpos($t, '岡山観光WEB') !== false) continue;
+      if (mb_strpos($t, '晴れの国') !== false) continue;
+      $title = $t;
+      break 2;
+    }
+  }
+}
+
+// 3) 最後の保険：h1（共通でも仕方ない）
+if (!$title) {
+  foreach ($dom->getElementsByTagName('h1') as $h1) {
+    $t = okayama_kanko_norm($h1->textContent ?? '');
+    if ($t !== '') { $title = $t; break; }
+  }
+}
+
+if (!$title) return null;
+
+    $text = okayama_kanko_norm($dom->textContent ?? '');
+
+    $dateText = null;
+    if (preg_match('/開催期間\s*(.+?)開催時間/u', $text, $m)) $dateText = trim($m[1]);
+    if (!$dateText && preg_match('/開催期間\s*(.+?)開催場所/u', $text, $m)) $dateText = trim($m[1]);
+
+    $timeText = null;
+    if (preg_match('/開催時間\s*(.+?)開催場所/u', $text, $m)) $timeText = trim($m[1]);
+
+    $placeText = null;
+    if (preg_match('/開催場所\s*(.+?)所在地/u', $text, $m)) $placeText = trim($m[1]);
+
+    $addrText = null;
+    if (preg_match('/所在地\s*(.+?)電話番号/u', $text, $m)) $addrText = trim($m[1]);
+
+    $telText = null;
+    if (preg_match('/電話番号\s*(.+?)(?:車でのアクセス|公共交通機関でのアクセス|ウェブサイト|$)/u', $text, $m)) $telText = trim($m[1]);
+
+    [$sd, $ed] = okayama_kanko_parse_date_range($dateText);
+    [$t1, $t2] = okayama_kanko_parse_time_range($timeText);
+
+    $all_day = (!$t1 && !$t2) ? 1 : 0;
+
+    $starts_at = null; $ends_at = null;
+    if ($sd) {
+      if ($all_day) {
+        $starts_at = $sd . ' 00:00:00';
+        $ends_at   = ($ed ?? $sd) . ' 23:59:59';
+      } else {
+        $starts_at = $sd . ' ' . ($t1 ?? '00:00') . ':00';
+        $ends_at   = ($ed ?? $sd) . ' ' . ($t2 ?? ($t1 ?? '23:59')) . ':00';
+      }
+    }
+
+    $source_id = null;
+    if (preg_match('#/event/(detail_[0-9A-Za-z_]+)\.html#', $url, $m)) $source_id = $m[1];
+    if (!$source_id) $source_id = 'url:' . $url;
+
+    return [
+      'source' => 'okayama_kanko',
+      'source_id' => $source_id,
+      'title' => $title,
+      'starts_at' => $starts_at,
+      'ends_at' => $ends_at,
+      'all_day' => $all_day,
+      'venue_name' => $placeText ? okayama_kanko_norm($placeText) : null,
+      'venue_addr' => $addrText ? okayama_kanko_norm($addrText) : null,
+      'organizer_name' => null,
+      'organizer_contact' => $telText ? okayama_kanko_norm($telText) : null,
+      'source_url' => $url,
+    ];
+  }
+
+  function fetch_okayama_kanko_events(DateTimeImmutable $fromDt, DateTimeImmutable $toDt, int $max_pages = 10, int $sleep_ms = 250): array {
+    $out = [];
+    $seen = [];
+
+    for ($page=1; $page<=$max_pages; $page++) {
+      $listUrl = ($page===1)
+        ? "https://www.okayama-kanko.jp/event/index.html"
+        : "https://www.okayama-kanko.jp/event/index_{$page}_1____0____.html";
+
+      try {
+        $html = okayama_kanko_http_get($listUrl);
+      } catch (Throwable $e) {
+        break;
+      }
+
+      $detailUrls = okayama_kanko_collect_detail_urls($html);
+      if (!$detailUrls) break;
+
+      foreach ($detailUrls as $u) {
+        if (isset($seen[$u])) continue;
+        $seen[$u]=true;
+
+        try {
+          $ev = fetch_okayama_kanko_detail($u);
+        } catch (Throwable $e) {
+          continue;
+        }
+        if (!$ev) continue;
+
+        if (!empty($ev['starts_at'])) {
+          $sd = new DateTimeImmutable((string)$ev['starts_at']);
+          $ed = !empty($ev['ends_at']) ? new DateTimeImmutable((string)$ev['ends_at']) : $sd;
+          if ($ed < $fromDt || $sd > $toDt) continue;
+        }
+
+        $out[] = $ev;
+        if ($sleep_ms>0) usleep($sleep_ms*1000);
+      }
+    }
+    return $out;
+  }
+}
+// ===== end guarded okayama-kanko =====

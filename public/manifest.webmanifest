@@ -1,6 +1,6 @@
 {
-  "name": "Seika",
-  "short_name": "Seika",
+  "name": "WB支援システム",
+  "short_name": "WBSS",
   "start_url": "/seika-app/public/dashboard.php",
   "scope": "/seika-app/public/",
   "display": "standalone",

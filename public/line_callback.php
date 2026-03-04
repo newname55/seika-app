@@ -99,9 +99,15 @@ $pdo = db();
 /* =========================
    招待トークン（startで保存済み）
 ========================= */
-$invite = trim((string)($_SESSION['line_invite_token'] ?? ''));
-error_log('[line_callback] invite=' . ($invite !== '' ? $invite : 'EMPTY'));
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
+$invite = trim((string)($_GET['invite'] ?? ''));
+if ($invite === '') {
+  $invite = trim((string)($_SESSION['invite'] ?? ''));
+}
+
+// ログ
+error_log('[line_callback] invite=' . ($invite !== '' ? 'SET' : 'EMPTY'));
 /* =========================
    既存の LINE 紐付けを取得
    （is_active=0 も含めて取得）

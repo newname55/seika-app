@@ -58,6 +58,9 @@ if (!is_array($payload) || !isset($payload['events']) || !is_array($payload['eve
 
 $pdo = db();
 
+/* =========================
+   LINE API helpers
+========================= */
 function line_api_post(string $accessToken, string $path, array $body): array {
   $url = 'https://api.line.me/v2/bot/' . ltrim($path, '/');
 
@@ -81,10 +84,8 @@ function line_api_post(string $accessToken, string $path, array $body): array {
 }
 
 function reply_text(string $accessToken, string $replyToken, string $text, bool $askLocation=false): void {
-  $msg = [
-    'type' => 'text',
-    'text' => $text,
-  ];
+  $msg = ['type' => 'text', 'text' => $text];
+
   if ($askLocation) {
     $msg['quickReply'] = [
       'items' => [[
@@ -107,6 +108,9 @@ function reply_text(string $accessToken, string $replyToken, string $text, bool 
   }
 }
 
+/* =========================
+   domain helpers
+========================= */
 function haversine_m(float $lat1, float $lon1, float $lat2, float $lon2): float {
   $R = 6371000.0;
   $phi1 = deg2rad($lat1); $phi2 = deg2rad($lat2);
@@ -162,11 +166,23 @@ function business_date_for_store(array $storeRow, ?DateTime $now=null): string {
   return $now->format('Y-m-d');
 }
 
+function fetch_attendance_today(PDO $pdo, int $userId, int $storeId, string $bizDate): ?array {
+  $st = $pdo->prepare("
+    SELECT id, clock_in, clock_out, status
+    FROM attendances
+    WHERE user_id=? AND store_id=? AND business_date=?
+    LIMIT 1
+  ");
+  $st->execute([$userId, $storeId, $bizDate]);
+  $row = $st->fetch(PDO::FETCH_ASSOC);
+  return $row ?: null;
+}
+
 function attendance_clock_in(PDO $pdo, int $userId, int $storeId, string $bizDate, string $source='line'): void {
   $pdo->beginTransaction();
   try {
     $st = $pdo->prepare("
-      SELECT id, clock_in
+      SELECT id, clock_in, clock_out
       FROM attendances
       WHERE user_id=? AND store_id=? AND business_date=?
       LIMIT 1
@@ -183,6 +199,7 @@ function attendance_clock_in(PDO $pdo, int $userId, int $storeId, string $bizDat
       ");
       $st->execute([$userId, $storeId, $bizDate, $source]);
     } else {
+      // すでにclock_inがある場合は何もしない（安全）
       if (empty($row['clock_in'])) {
         $st = $pdo->prepare("
           UPDATE attendances
@@ -274,6 +291,93 @@ function pop_pending(PDO $pdo, string $lineUserId): ?array {
 }
 
 /* =========================
+   notice reply (late/absent)
+   - line_notice_actions を「返信待ち親」として扱う
+========================= */
+
+function find_pending_notice_action(PDO $pdo, int $storeId, int $castUserId, string $bizDate): ?array {
+  // 直近の遅刻/欠勤通知で、まだ返信がないもの（優先：当日）
+  $st = $pdo->prepare("
+    SELECT *
+    FROM line_notice_actions
+    WHERE store_id=?
+      AND cast_user_id=?
+      AND business_date=?
+      AND kind IN ('late','absent')
+      AND status='sent'
+      AND responded_at IS NULL
+    ORDER BY sent_at DESC, id DESC
+    LIMIT 1
+  ");
+  $st->execute([$storeId, $castUserId, $bizDate]);
+  $row = $st->fetch(PDO::FETCH_ASSOC);
+  if ($row) return $row;
+
+  // 保険：日付がズレる店（営業日境界）でも拾えるように、12時間以内で再検索
+  $st = $pdo->prepare("
+    SELECT *
+    FROM line_notice_actions
+    WHERE store_id=?
+      AND cast_user_id=?
+      AND kind IN ('late','absent')
+      AND status='sent'
+      AND responded_at IS NULL
+      AND sent_at >= (NOW() - INTERVAL 12 HOUR)
+    ORDER BY sent_at DESC, id DESC
+    LIMIT 1
+  ");
+  $st->execute([$storeId, $castUserId]);
+  $row = $st->fetch(PDO::FETCH_ASSOC);
+  return $row ?: null;
+}
+
+function save_notice_reply(PDO $pdo, array $actionRow, int $storeId, string $bizDate, int $castUserId, string $text, array $rawEvent): bool {
+  $actionId = (int)($actionRow['id'] ?? 0);
+  if ($actionId <= 0) throw new RuntimeException('notice action id not found');
+
+  // ✅ 先に「返信済みか」を確定させる（再送対策）
+  $pdo->beginTransaction();
+  try {
+    // 行ロックして responded_at を見る
+    $st = $pdo->prepare("SELECT responded_at FROM line_notice_actions WHERE id=? FOR UPDATE");
+    $st->execute([$actionId]);
+    $respondedAt = $st->fetchColumn();
+
+    // すでに返信済みなら、INSERTも返信もスキップ
+    if ($respondedAt !== null && (string)$respondedAt !== '') {
+      $pdo->commit();
+      return false; // ←今回のイベントは重複
+    }
+
+    // 1) replies へ保存
+    $rawJson = json_encode($rawEvent, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $st = $pdo->prepare("
+      INSERT INTO line_notice_replies
+        (action_id, store_id, business_date, cast_user_id, message_text, received_at, raw_json)
+      VALUES
+        (?, ?, ?, ?, ?, NOW(), ?)
+    ");
+    $st->execute([$actionId, $storeId, $bizDate, $castUserId, $text, $rawJson]);
+
+    // 2) actions に反映
+    $st = $pdo->prepare("
+      UPDATE line_notice_actions
+      SET responded_at = NOW(),
+          last_reply_text = ?,
+          updated_at = NOW()
+      WHERE id = ?
+      LIMIT 1
+    ");
+    $st->execute([$text, $actionId]);
+
+    $pdo->commit();
+    return true; // ←初回だけtrue
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    throw $e;
+  }
+}
+/* =========================
    events loop
 ========================= */
 foreach ($payload['events'] as $ev) {
@@ -301,36 +405,202 @@ foreach ($payload['events'] as $ev) {
 
     $userId = resolve_user_id_by_line($pdo, $lineUserId);
     if ($userId <= 0) {
-      reply_text($accessToken, $replyToken, "このLINEはまだシステムに登録されていません。\n管理者に招待QRで登録してもらってください。");
+      reply_text($accessToken, $replyToken,
+        "このLINEはまだシステムに登録されていません。\n"
+        . "管理者に招待QRで登録してもらってください。"
+      );
       continue;
     }
 
     $storeId = resolve_cast_store_id($pdo, $userId);
     if ($storeId <= 0) {
-      reply_text($accessToken, $replyToken, "店舗が未設定です。\n管理者に所属店舗を設定してもらってください。");
+      reply_text($accessToken, $replyToken,
+        "店舗が未設定です。\n"
+        . "管理者に所属店舗を設定してもらってください。"
+      );
       continue;
     }
 
+    $store = fetch_store_geo($pdo, $storeId);
+    $bizDate = business_date_for_store($store);
+
+    // ✅ すでに状態が確定しているなら、pendingを作らず優しく案内して終了
+    $today = fetch_attendance_today($pdo, $userId, $storeId, $bizDate);
+    $alreadyIn  = ($today && !empty($today['clock_in']));
+    $alreadyOut = ($today && !empty($today['clock_out']));
+
+    if ($att === 'clock_in' && $alreadyIn && !$alreadyOut) {
+      reply_text($accessToken, $replyToken,
+        "✅ 今日はすでに出勤済みです。\n"
+        . "退勤する時は「退勤」を押してください。"
+      );
+      continue;
+    }
+    if ($att === 'clock_in' && $alreadyIn && $alreadyOut) {
+      reply_text($accessToken, $replyToken,
+        "✅ 今日は出勤・退勤ともに記録済みです。\n"
+        . "修正が必要なら管理者に連絡してください。"
+      );
+      continue;
+    }
+    if ($att === 'clock_out' && $alreadyOut) {
+      reply_text($accessToken, $replyToken,
+        "✅ 今日はすでに退勤済みです。\n"
+        . "修正が必要なら管理者に連絡してください。"
+      );
+      continue;
+    }
+    if ($att === 'clock_out' && !$alreadyIn) {
+      reply_text($accessToken, $replyToken,
+        "⚠️ まだ出勤記録がありません。\n"
+        . "先に「出勤」を押してから、退勤をお願いします。"
+      );
+      continue;
+    }
+
+    // ✅ ここまで来たら「位置情報要求」へ
     set_pending($pdo, $lineUserId, $att, $storeId);
 
     $label = ($att === 'clock_in') ? '出勤' : '退勤';
-    reply_text($accessToken, $replyToken, "{$label}処理です。\n「位置情報を送る」を押して送信してください。", true);
+    reply_text(
+      $accessToken,
+      $replyToken,
+      "📍 {$label}処理です。\n"
+      . "店舗に着いたら【位置情報を送る】を押してください。",
+      true
+    );
     continue;
   }
 
-  // 位置情報
-  if ($type === 'message') {
-    $msg = $ev['message'] ?? [];
-    if (($msg['type'] ?? '') !== 'location') {
-      reply_text($accessToken, $replyToken, "出勤/退勤はボタンからお願いします。\n（位置情報が必要です）");
+// 位置情報
+if ($type === 'message') {
+  $msg = $ev['message'] ?? [];
+
+  // ✅ まず「遅刻/欠勤通知への返信」を吸収する（textだけ対象）
+  if (($msg['type'] ?? '') === 'text') {
+    $text = trim((string)($msg['text'] ?? ''));
+
+    if ($text !== '') {
+      $userId = resolve_user_id_by_line($pdo, $lineUserId);
+      if ($userId > 0) {
+        $storeId = resolve_cast_store_id($pdo, $userId);
+        if ($storeId > 0) {
+        }
+      }
+    }
+  }
+
+  // ✅ ここから先は “出勤/退勤用” の location だけ扱う
+  if (($msg['type'] ?? '') !== 'location') {
+    // location以外は何もしない（遅刻/欠勤返信は上で吸収済み）
+    reply_text($accessToken, $replyToken, '未対応のメッセージです。');
+    continue;
+  }
+
+  // 1) LINE→user_id
+  $userId = resolve_user_id_by_line($pdo, $lineUserId);
+  if ($userId <= 0) {
+    reply_text($accessToken, $replyToken, "このLINEはまだ登録されていません。");
+    continue;
+  }
+
+  // 2) ✅ pending を取り出す（ここが今、抜けてる）
+  $pending = pop_pending($pdo, $lineUserId);
+  if (!$pending) {
+    reply_text($accessToken, $replyToken,
+      "⚠️ まだ出勤記録がありません。\n先に「出勤」をお願いします。"
+    );
+    continue;
+  }
+
+  // 3) store_id / action は pending が正
+  $storeId = (int)($pending['store_id'] ?? 0);
+  if ($storeId <= 0) {
+    // 保険：万が一 pending に無い時だけ cast所属から解決
+    $storeId = resolve_cast_store_id($pdo, $userId);
+  }
+  if ($storeId <= 0) {
+    reply_text($accessToken, $replyToken, "店舗が未設定です。管理者に確認してください。");
+    continue;
+  }
+
+  $store = fetch_store_geo($pdo, $storeId);
+  if (!$store || $store['lat'] === null || $store['lon'] === null) {
+    reply_text($accessToken, $replyToken,
+      "店舗の位置情報が未設定です。\n管理者が stores.lat/lon を設定してください。"
+    );
+    continue;
+  }
+
+  // 4) 距離チェック
+  $lat = (float)($msg['latitude'] ?? 0);
+  $lon = (float)($msg['longitude'] ?? 0);
+  $dist = haversine_m((float)$store['lat'], (float)$store['lon'], $lat, $lon);
+  $radius = (int)($store['radius_m'] ?? 150);
+
+  if ($dist > $radius) {
+    $m = (int)round($dist);
+    // ✅ 距離NGなら pending を戻す（これ超重要：やり直せるように）
+    set_pending($pdo, $lineUserId, (string)$pending['action'], $storeId);
+
+    reply_text(
+      $accessToken,
+      $replyToken,
+      "📍 まだ店舗から少し離れています（約{$m}m）\n"
+      . "店舗の近くで、もう一度【位置情報を送る】を押してください。",
+      true
+    );
+    continue;
+  }
+
+  // 5) 出勤/退勤確定
+  $bizDate = business_date_for_store($store);
+  $action = (string)($pending['action'] ?? '');
+
+  $today = fetch_attendance_today($pdo, $userId, $storeId, $bizDate);
+  $alreadyIn  = ($today && !empty($today['clock_in']));
+  $alreadyOut = ($today && !empty($today['clock_out']));
+
+  try {
+    if ($action === 'clock_in') {
+      if ($alreadyIn) {
+        reply_text($accessToken, $replyToken,
+          "✅ 今日はすでに出勤済みです。\n退勤する時は「退勤」を押してください。"
+        );
+        continue;
+      }
+      attendance_clock_in($pdo, $userId, $storeId, $bizDate, 'line');
+      reply_text($accessToken, $replyToken, "✅ 出勤しました\n営業日: {$bizDate}");
       continue;
     }
 
-    $pending = pop_pending($pdo, $lineUserId);
-    if (!$pending) {
-      reply_text($accessToken, $replyToken, "出勤/退勤の操作が見つかりません。\nもう一度ボタンから押してください。");
+    if ($action === 'clock_out') {
+      if ($alreadyOut) {
+        reply_text($accessToken, $replyToken,
+          "✅ 今日はすでに退勤済みです。\n修正が必要なら管理者に連絡してください。"
+        );
+        continue;
+      }
+      if (!$alreadyIn) {
+        reply_text($accessToken, $replyToken,
+          "⚠️ まだ出勤記録がありません。\n先に「出勤」をお願いします。"
+        );
+        continue;
+      }
+      attendance_clock_out($pdo, $userId, $storeId, $bizDate, 'line');
+      reply_text($accessToken, $replyToken, "✅ 退勤しました\n営業日: {$bizDate}");
       continue;
     }
+
+    // action不明
+    reply_text($accessToken, $replyToken, "不明な操作です。もう一度やり直してください。");
+    continue;
+
+  } catch (Throwable $e) {
+    error_log('[line_webhook attendance] ' . $e->getMessage());
+    reply_text($accessToken, $replyToken, "処理に失敗しました。\n管理者に連絡してください。");
+    continue;
+  }
 
     $userId = resolve_user_id_by_line($pdo, $lineUserId);
     if ($userId <= 0) {
@@ -347,7 +617,9 @@ foreach ($payload['events'] as $ev) {
 
     $store = fetch_store_geo($pdo, $storeId);
     if (!$store || $store['lat'] === null || $store['lon'] === null) {
-      reply_text($accessToken, $replyToken, "店舗の位置情報が未設定です。\n管理者が stores.lat/lon を設定してください。");
+      reply_text($accessToken, $replyToken,
+        "店舗の位置情報が未設定です。\n管理者が stores.lat/lon を設定してください。"
+      );
       continue;
     }
 
@@ -358,18 +630,47 @@ foreach ($payload['events'] as $ev) {
 
     if ($dist > $radius) {
       $m = (int)round($dist);
-      reply_text($accessToken, $replyToken, "店舗の近くではないため受付できません。\n距離: 約{$m}m / 許可: {$radius}m以内");
+      reply_text(
+        $accessToken,
+        $replyToken,
+        "📍 まだ店舗から少し離れています（約{$m}m）\n"
+        . "店舗の近くで、もう一度【位置情報を送る】を押してください。"
+      );
       continue;
     }
 
     $bizDate = business_date_for_store($store);
     $action = (string)$pending['action'];
 
+    // ✅ 位置情報が届いた時点でも二重押しを吸収（安全）
+    $today = fetch_attendance_today($pdo, $userId, $storeId, $bizDate);
+    $alreadyIn  = ($today && !empty($today['clock_in']));
+    $alreadyOut = ($today && !empty($today['clock_out']));
+
     try {
       if ($action === 'clock_in') {
+        if ($alreadyIn) {
+          reply_text($accessToken, $replyToken,
+            "✅ 今日はすでに出勤済みです。\n"
+            . "退勤する時は「退勤」を押してください。"
+          );
+          continue;
+        }
         attendance_clock_in($pdo, $userId, $storeId, $bizDate, 'line');
         reply_text($accessToken, $replyToken, "✅ 出勤しました\n営業日: {$bizDate}");
       } else {
+        if ($alreadyOut) {
+          reply_text($accessToken, $replyToken,
+            "✅ 今日はすでに退勤済みです。\n修正が必要なら管理者に連絡してください。"
+          );
+          continue;
+        }
+        if (!$alreadyIn) {
+          reply_text($accessToken, $replyToken,
+            "⚠️ まだ出勤記録がありません。\n先に「出勤」をお願いします。"
+          );
+          continue;
+        }
         attendance_clock_out($pdo, $userId, $storeId, $bizDate, 'line');
         reply_text($accessToken, $replyToken, "✅ 退勤しました\n営業日: {$bizDate}");
       }
@@ -380,6 +681,7 @@ foreach ($payload['events'] as $ev) {
     continue;
   }
 
+  // その他イベント
   reply_text($accessToken, $replyToken, '未対応のイベントです。');
 }
 

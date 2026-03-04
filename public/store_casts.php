@@ -5,8 +5,9 @@ require_once __DIR__ . '/../app/auth.php';
 require_once __DIR__ . '/../app/db.php';
 require_once __DIR__ . '/../app/layout.php';
 
+
 require_login();
-require_role(['admin','super_user']);
+require_role(['admin','manager','super_user']);
 
 $pdo = db();
 
@@ -21,13 +22,13 @@ function has_role(string $role): bool {
   return isset($_SESSION['roles']) && in_array($role, $_SESSION['roles'], true);
 }
 
-function current_admin_store_id(PDO $pdo, int $userId): int {
+function current_manageable_store_id(PDO $pdo, int $userId): int {
   $st = $pdo->prepare("
     SELECT ur.store_id
     FROM user_roles ur
     JOIN roles r ON r.id = ur.role_id
     WHERE ur.user_id = ?
-      AND r.code = 'admin'
+      AND r.code IN ('admin','manager')
       AND ur.store_id IS NOT NULL
     LIMIT 1
   ");
@@ -51,7 +52,7 @@ if ($isSuper) {
     if ($storeId <= 0) throw new RuntimeException('有効な店舗がありません');
   }
 } else {
-  $storeId = current_admin_store_id($pdo, current_user_id());
+  $storeId = current_manageable_store_id($pdo, current_user_id());
 }
 
 /* =========================
@@ -62,23 +63,24 @@ $stores = $isSuper
   : [];
 
 /* =========================
-   キャスト一覧
+   キャスト一覧（B: 店番は cast_profiles.shop_tag）
 ========================= */
 $st = $pdo->prepare("
   SELECT
-    u.id, u.display_name,
-    MAX(CASE WHEN ui.provider='line' AND ui.is_active=1 THEN 1 ELSE 0 END) AS has_line
-  FROM user_roles ur
-  JOIN users u ON u.id=ur.user_id
-  JOIN roles r ON r.id=ur.role_id AND r.code='cast'
-  LEFT JOIN user_identities ui ON ui.user_id=u.id
-  WHERE ur.store_id=?
-  GROUP BY u.id
-  ORDER BY u.id DESC
+    user_id AS id,
+    display_name,
+    CASE WHEN shop_tag='' THEN '-' ELSE shop_tag END AS shop_tag,
+    employment_type,
+    has_line
+  FROM v_store_casts_active
+  WHERE store_id=?
+  ORDER BY
+    CASE WHEN shop_tag='' THEN 999999 ELSE CAST(shop_tag AS UNSIGNED) END ASC,
+    display_name ASC,
+    user_id ASC
 ");
 $st->execute([$storeId]);
-$casts = $st->fetchAll(PDO::FETCH_ASSOC);
-
+$casts = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
 /* =========================
    招待リンク一覧
 ========================= */
@@ -212,18 +214,154 @@ if ($showInviteId > 0) {
 <?php endif; ?>
 
 <div class="card">
-<h3>👥 キャスト一覧</h3>
-<table class="tbl">
-<tr><th>名前</th><th>LINE</th></tr>
-<?php foreach($casts as $c): ?>
-<tr>
-<td><?=h($c['display_name'])?></td>
-<td><?= $c['has_line'] ? 'OK' : '⚠ 未連携' ?></td>
-</tr>
-<?php endforeach; ?>
-</table>
+  <h3>👥 キャスト一覧</h3>
+
+  <div class="tblWrap">
+    <table class="tblCast">
+      <thead>
+        <tr>
+          <th class="col-id">ID</th>
+          <th>名前</th>
+          <th class="col-tag">店番</th>
+          <th class="col-etype">レギュラー・アルバイト</th>
+          <th class="col-line">LINE</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach($casts as $c): ?>
+          <?php
+            $etype = (string)($c['employment_type'] ?? 'part_time');
+            $etypeLabel = ($etype === 'regular') ? 'レギュラー' : 'バイト';
+            $etypeCls   = ($etype === 'regular') ? 'badge badge-strong' : 'badge';
+
+            $hasLine = ((int)($c['has_line'] ?? 0) === 1);
+            $lineLabel = $hasLine ? '連携済' : '未連携';
+            $lineCls   = $hasLine ? 'badge badge-ok' : 'badge badge-ng';
+          ?>
+          <tr>
+            <td class="col-id mono muted"><?= (int)$c['id'] ?></td>
+            <td><b><?= h((string)$c['display_name']) ?></b></td>
+            <td class="col-tag mono"><?= h((string)$c['shop_tag']) ?></td>
+            <td class="col-etype"><span class="<?= h($etypeCls) ?>"><?= h($etypeLabel) ?></span></td>
+            <td class="col-line"><span class="<?= h($lineCls) ?>"><?= h($lineLabel) ?></span></td>
+          </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+  <div class="muted" style="margin-top:10px;">
+    ※ 店番は <code>users.shop_tag</code> が存在する場合のみ表示されます（無ければ “-”）。
+  </div>
 </div>
 
 </div>
 </div>
+<style>
+/* =========================
+  Cast table: 強制コントラスト（最優先）
+  ※ store_casts.php の style の一番最後に置く
+========================= */
+
+/* 文字色を必ず濃くする（テーマに負けない） */
+.tblWrap,
+.tblCast,
+.tblCast th,
+.tblCast td{
+  color:#0f172a !important; /* slate-900 */
+}
+
+/* コンテナ */
+.tblWrap{
+  overflow:auto;
+  border:1px solid rgba(15,23,42,.14) !important;
+  border-radius:14px;
+  background:#ffffff !important;
+}
+
+/* テーブル */
+.tblCast{
+  width:100%;
+  min-width:720px;
+  border-collapse:separate;
+  border-spacing:0;
+}
+
+/* ヘッダー：濃い背景＋白文字（最も見やすい） */
+.tblCast thead th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:#0f172a !important; /* 濃紺 */
+  color:#ffffff !important;
+  font-weight:900;
+  padding:12px 14px;
+  border-bottom:1px solid rgba(255,255,255,.18) !important;
+  white-space:nowrap;
+}
+
+/* 行 */
+.tblCast tbody td{
+  padding:12px 14px;
+  border-bottom:1px solid rgba(15,23,42,.08) !important;
+  vertical-align:middle;
+  background:#ffffff !important;
+}
+
+.tblCast tbody tr:hover td{
+  background:#f8fafc !important; /* very light */
+}
+
+/* 列：IDは“読めるけど目立たない” */
+.col-id{
+  width:64px;
+  text-align:right;
+  font-size:12px;
+  color:#64748b !important; /* slate-500 */
+  letter-spacing:.2px;
+}
+
+.col-tag{ width:84px; text-align:center; }
+.col-etype{ width:120px; }
+.col-line{ width:120px; }
+
+/* バッジ：薄くしない（枠・背景・文字を強く） */
+.badge{
+  display:inline-flex;
+  align-items:center;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+  border:1px solid rgba(15,23,42,.18) !important;
+  background:#f1f5f9 !important; /* slate-100 */
+  color:#0f172a !important;
+  white-space:nowrap;
+}
+
+.badge-strong{
+  border-color:rgba(37,99,235,.30) !important;
+  background:rgba(37,99,235,.12) !important;
+  color:#1d4ed8 !important;
+}
+
+.badge-ok{
+  border-color:rgba(34,197,94,.35) !important;
+  background:rgba(34,197,94,.14) !important;
+  color:#166534 !important;
+}
+
+.badge-ng{
+  border-color:rgba(239,68,68,.35) !important;
+  background:rgba(239,68,68,.12) !important;
+  color:#991b1b !important;
+}
+
+/* モバイル：ID列は非表示でスッキリ */
+@media (max-width:520px){
+  .col-id{ display:none; }
+  .tblCast{ min-width:520px; }
+}
+</style>
 <?php render_page_end(); ?>

@@ -1,70 +1,61 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/db.php';
+/**
+ * Store context helper (session-based)
+ * - super_user/admin/manager: store can be selected (superは必須にしてもOK)
+ * - cast: 基本この仕組みは使わない（cast側は自分のstore固定ロジックが別にある）
+ *
+ * 互換のため:
+ * - current_store_id() を用意（stock側が呼んでても落ちない）
+ * - require_store_selected_for_super() を提供
+ */
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
   session_start();
 }
 
+const STORE_SESSION_KEY = '__store_id';
+
+function set_current_store_id(int $storeId): void {
+  if ($storeId <= 0) {
+    unset($_SESSION[STORE_SESSION_KEY]);
+    return;
+  }
+  $_SESSION[STORE_SESSION_KEY] = $storeId;
+}
+
+function get_current_store_id(): int {
+  return (int)($_SESSION[STORE_SESSION_KEY] ?? 0);
+}
+
+/** 互換：古いコードが current_store_id() を呼ぶ想定がある */
+function current_store_id(): int {
+  return get_current_store_id();
+}
+
 /**
- * store系は色々なページから require_once されるので、
- * 二重定義で死なないよう function_exists ガード必須。
+ * super_user が「店舗未選択のまま」ダッシュボード等へ来たら
+ * store_select.php に飛ばして選択させる（return付き）
  */
+function require_store_selected_for_super(bool $isSuper, string $returnTo): void {
+  if (!$isSuper) return;
+  if (get_current_store_id() > 0) return;
 
-if (!function_exists('current_store_id')) {
-  function current_store_id(): ?int {
-    $v = $_SESSION['store_id'] ?? null;
-    if ($v === null || $v === '') return null;
-    $id = (int)$v;
-    return ($id > 0) ? $id : null;
-  }
+  $ret = $returnTo !== '' ? $returnTo : '/seika-app/public/dashboard.php';
+  header('Location: /seika-app/public/store_select.php?return=' . rawurlencode($ret));
+  exit;
 }
 
-if (!function_exists('set_current_store_id')) {
-  function set_current_store_id(int $store_id): void {
-    if ($store_id <= 0) {
-      unset($_SESSION['store_id']);
-      return;
-    }
-    $_SESSION['store_id'] = $store_id;
-  }
-}
+/**
+ * 一般用途：ストア未選択なら store_select へ（return付き）
+ * ※admin/manager でも「必須」にしたいページで呼ぶ用
+ */
+function require_store_selected(string $returnTo): int {
+  $sid = get_current_store_id();
+  if ($sid > 0) return $sid;
 
-if (!function_exists('clear_current_store_id')) {
-  function clear_current_store_id(): void {
-    unset($_SESSION['store_id']);
-  }
-}
-
-if (!function_exists('list_stores')) {
-  /** @return array<int, array{id:int,name:string}> */
-  function list_stores(): array {
-    $pdo = db();
-    $rows = $pdo->query("SELECT id, name FROM stores ORDER BY id ASC")->fetchAll();
-    $out = [];
-    foreach ($rows as $r) {
-      $out[] = [
-        'id' => (int)($r['id'] ?? 0),
-        'name' => (string)($r['name'] ?? ''),
-      ];
-    }
-    return $out;
-  }
-}
-
-if (!function_exists('get_store')) {
-  /** @return array{id:int,name:string}|null */
-  function get_store(int $store_id): ?array {
-    if ($store_id <= 0) return null;
-    $pdo = db();
-    $st = $pdo->prepare("SELECT id, name FROM stores WHERE id = ? LIMIT 1");
-    $st->execute([$store_id]);
-    $r = $st->fetch();
-    if (!$r) return null;
-    return [
-      'id' => (int)$r['id'],
-      'name' => (string)$r['name'],
-    ];
-  }
+  $ret = $returnTo !== '' ? $returnTo : '/seika-app/public/dashboard.php';
+  header('Location: /seika-app/public/store_select.php?return=' . rawurlencode($ret));
+  exit;
 }

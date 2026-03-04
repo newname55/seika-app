@@ -11,7 +11,7 @@ require_role(['manager','admin','super_user']);
 $pdo = db();
 
 /* =========================
-   Utils (fallback)
+   Utils (safe)
 ========================= */
 if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
@@ -39,21 +39,21 @@ if (!function_exists('csrf_verify')) {
   }
 }
 
+if (!function_exists('has_role')) {
+  function has_role(string $role): bool {
+    return isset($_SESSION['roles']) && in_array($role, $_SESSION['roles'], true);
+  }
+}
+if (!function_exists('current_user_id')) {
+  function current_user_id(): int {
+    return (int)($_SESSION['user_id'] ?? 0);
+  }
+}
+
 function conf(string $key): string {
   if (defined($key)) return (string)constant($key);
   $v = getenv($key);
   return is_string($v) ? $v : '';
-}
-
-function has_role(string $role): bool {
-  return isset($_SESSION['roles']) && in_array($role, $_SESSION['roles'], true);
-}
-$isSuper   = has_role('super_user');
-$isAdmin   = has_role('admin');
-$isManager = has_role('manager');
-
-function current_user_id_safe(): int {
-  return function_exists('current_user_id') ? (int)current_user_id() : (int)($_SESSION['user_id'] ?? 0);
 }
 
 function jst_now(): DateTime { return new DateTime('now', new DateTimeZone('Asia/Tokyo')); }
@@ -62,22 +62,25 @@ function dow0(DateTime $d): int { return (int)$d->format('w'); } // 0=Sun..6=Sat
 function normalize_date(string $ymd, ?string $fallback=null): string {
   $ymd = trim($ymd);
   if ($ymd === '') $ymd = (string)$fallback;
-  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ymd)) return (new DateTime('today', new DateTimeZone('Asia/Tokyo')))->format('Y-m-d');
+  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ymd)) {
+    return (new DateTime('today', new DateTimeZone('Asia/Tokyo')))->format('Y-m-d');
+  }
   return $ymd;
 }
 
-function week_start_date(string $anyDateYmd, int $weekStartDow0): string {
-  $dt = new DateTime($anyDateYmd, new DateTimeZone('Asia/Tokyo'));
-  $cur = dow0($dt);
-  $diff = ($cur - $weekStartDow0 + 7) % 7;
-  if ($diff > 0) $dt->modify("-{$diff} days");
-  return $dt->format('Y-m-d');
-}
 function week_dates(string $weekStartYmd): array {
   $dt = new DateTime($weekStartYmd, new DateTimeZone('Asia/Tokyo'));
   $out = [];
   for ($i=0; $i<7; $i++) { $out[] = $dt->format('Y-m-d'); $dt->modify('+1 day'); }
   return $out;
+}
+
+function week_start_by_dow(string $baseYmd, int $weekStartDow0): string {
+  $dt = new DateTime($baseYmd, new DateTimeZone('Asia/Tokyo'));
+  $cur = (int)$dt->format('w');
+  $diff = ($cur - $weekStartDow0 + 7) % 7;
+  if ($diff > 0) $dt->modify("-{$diff} days");
+  return $dt->format('Y-m-d');
 }
 
 function business_date_for_store(array $storeRow, ?DateTime $now=null): string {
@@ -94,7 +97,7 @@ function current_staff_store_id(PDO $pdo, int $userId): int {
     FROM user_roles ur
     JOIN roles r ON r.id = ur.role_id
     WHERE ur.user_id = ?
-      AND r.code IN ('admin','manager')
+      AND r.code IN ('admin','manager','super_user')
       AND ur.store_id IS NOT NULL
     ORDER BY ur.store_id ASC
     LIMIT 1
@@ -106,13 +109,16 @@ function current_staff_store_id(PDO $pdo, int $userId): int {
 /* =========================
    Store resolve
 ========================= */
-$userId = current_user_id_safe();
+$isSuper   = has_role('super_user');
+$isAdmin   = has_role('admin');
+$isManager = has_role('manager');
+
+$userId = (int)current_user_id();
 
 if ($isSuper) {
   $storeId = (int)($_GET['store_id'] ?? ($_POST['store_id'] ?? 0));
   if ($storeId <= 0) {
-    $st = $pdo->query("SELECT id FROM stores WHERE is_active=1 ORDER BY id ASC LIMIT 1");
-    $storeId = (int)$st->fetchColumn();
+    $storeId = (int)($pdo->query("SELECT id FROM stores WHERE is_active=1 ORDER BY id ASC LIMIT 1")->fetchColumn() ?: 0);
   }
 } else {
   $storeId = current_staff_store_id($pdo, $userId);
@@ -131,11 +137,17 @@ $st->execute([$storeId]);
 $store = $st->fetch(PDO::FETCH_ASSOC) ?: null;
 if (!$store) exit('店舗が見つかりません');
 
+/* =========================
+   Business date (GET優先)
+========================= */
+$bizDate = (string)($_GET['business_date'] ?? '');
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $bizDate)) {
+  $bizDate = business_date_for_store($store);
+}
 $now = jst_now();
-$bizDate = business_date_for_store($store);
 
 /* =========================
-   LINE push helper
+   LINE helpers
 ========================= */
 function line_api_post(string $accessToken, string $path, array $body): array {
   $url = 'https://api.line.me/v2/bot/' . ltrim($path, '/');
@@ -175,7 +187,7 @@ function resolve_line_user_id(PDO $pdo, int $castUserId): string {
 }
 
 /* =========================
-   AJAX: send notice (same file)
+   AJAX: send_notice
 ========================= */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') === 'send_notice') {
   header('Content-Type: application/json; charset=UTF-8');
@@ -240,7 +252,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
     exit;
   }
 
-  // save action first (token is internal)
   $token = bin2hex(random_bytes(12)); // 24 chars
   $templateText = (string)($_POST['template_text'] ?? $text);
 
@@ -258,7 +269,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
       $templateText, $text, $userId
     ]);
 
-    // push
     $api = line_api_post($accessToken, 'message/push', [
       'to' => $lineTo,
       'messages' => [
@@ -296,43 +306,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
 }
 
 /* =========================
-   Week range (today's week)
-   - holiday翌日を週開始にする
+   Week range (holiday翌日を週開始)
 ========================= */
 $holidayDow = $store['weekly_holiday_dow'];
 $holidayDow = ($holidayDow === null) ? null : (int)$holidayDow; // 0=Sun..6=Sat
 $weekStartDow0 = ($holidayDow === null) ? 1 : (($holidayDow + 1) % 7);
 
-$baseDate = normalize_date((string)($_GET['date'] ?? ''), $bizDate);
-$weekStart = week_start_date($baseDate, $weekStartDow0);
+$calDate  = (new DateTime('today', new DateTimeZone('Asia/Tokyo')))->format('Y-m-d');
+$weekStart = week_start_by_dow($calDate, $weekStartDow0);
 $dates = week_dates($weekStart);
 
 /* =========================
-   今日（予定×実績）
+   今日（予定×実績） + 店番(shop_tag)
+   - has_plan を作る
+   - 母集団は v_store_casts_active（store_users.status='active' + users.is_active）
 ========================= */
 $st = $pdo->prepare("
   SELECT
-    u.id AS user_id,
-    u.display_name,
-    COALESCE(cp.employment_type,'part_time') AS employment_type,
+    c.user_id,
+    c.display_name,
+    c.user_is_active AS is_active,
+    c.employment_type,
+    c.shop_tag,
+
     sp.start_time AS plan_start_time,
-    sp.is_off AS plan_is_off,
+    sp.is_off     AS plan_is_off,
+    (sp.user_id IS NOT NULL) AS has_plan,
+
     a.clock_in,
     a.clock_out
-  FROM user_roles ur
-  JOIN roles r ON r.id=ur.role_id AND r.code='cast'
-  JOIN users u ON u.id=ur.user_id
-  LEFT JOIN cast_profiles cp ON cp.user_id=u.id
+  FROM v_store_casts_active c
+
   LEFT JOIN cast_shift_plans sp
-    ON sp.store_id=ur.store_id
-   AND sp.user_id=u.id
-   AND sp.business_date=?
+    ON sp.store_id = c.store_id
+   AND sp.user_id  = c.user_id
+   AND sp.business_date = ?
+
   LEFT JOIN attendances a
-    ON a.store_id=ur.store_id
-   AND a.user_id=u.id
-   AND a.business_date=?
-  WHERE ur.store_id=?
-  ORDER BY u.is_active DESC, u.id ASC
+    ON a.store_id = c.store_id
+   AND a.user_id  = c.user_id
+   AND a.business_date = ?
+
+  WHERE c.store_id = ?
+
+  ORDER BY
+    CASE WHEN c.shop_tag='' THEN 999999 ELSE CAST(c.shop_tag AS UNSIGNED) END ASC,
+    c.display_name ASC,
+    c.user_id ASC
 ");
 $st->execute([$bizDate, $bizDate, $storeId]);
 $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -356,7 +376,7 @@ foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $a) {
 }
 
 /* =========================
-   今週予定（7日）ロード
+   今週予定（7日）
 ========================= */
 $weekPlans = []; // [user_id][ymd] => ['start_time'=>'21:00', 'is_off'=>1]
 $st = $pdo->prepare("
@@ -393,13 +413,25 @@ foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $a) {
 }
 
 /* =========================
-   KPI
+   KPI（予定行がある人だけ）
 ========================= */
-$cnt = ['not_in'=>0,'working'=>0,'finished'=>0,'off'=>0,'late'=>0];
+$cnt = [
+  'planned'  => 0,
+  'not_in'   => 0,
+  'working'  => 0,
+  'finished' => 0,
+  'off'      => 0,
+  'late'     => 0,
+];
 
 foreach ($rows as $r) {
-  $planOff = ((int)($r['plan_is_off'] ?? 0) === 1);
-  if ($planOff) { $cnt['off']++; continue; }
+  $hasPlan = ((int)($r['has_plan'] ?? 0) === 1);
+  if (!$hasPlan) continue; // 予定が無い人は計算対象外
+
+  $isOff = ((int)($r['plan_is_off'] ?? 0) === 1);
+  if ($isOff) { $cnt['off']++; continue; }
+
+  $cnt['planned']++;
 
   $clockIn  = $r['clock_in'] ?? null;
   $clockOut = $r['clock_out'] ?? null;
@@ -411,7 +443,7 @@ foreach ($rows as $r) {
 
   $pst = (string)($r['plan_start_time'] ?? '');
   if ($pst !== '') {
-    $planDT = new DateTime($bizDate . ' ' . substr($pst,0,5) . ':00', new DateTimeZone('Asia/Tokyo'));
+    $planDT = new DateTime($bizDate.' '.substr($pst,0,5).':00', new DateTimeZone('Asia/Tokyo'));
     if ($now > $planDT) $cnt['late']++;
   }
 }
@@ -430,15 +462,18 @@ render_header('本日の予定');
       <div class="title">🗓 本日の予定 × 実績</div>
     </div>
 
-    <div class="muted" style="margin-top:6px;">
-      店舗：<b><?= h((string)$store['name']) ?> (#<?= (int)$storeId ?>)</b>
-      / 営業日：<b><?= h($bizDate) ?></b>
-      <span class="muted">（現在 <?= h($now->format('Y-m-d H:i')) ?>）</span>
+    <div class="subInfo">
+      <div class="muted">
+        店舗：<b><?= h((string)$store['name']) ?> (#<?= (int)$storeId ?>)</b>
+        / 営業日：<b><?= h($bizDate) ?></b>
+        <span class="muted">（現在 <?= h($now->format('Y-m-d H:i')) ?>）</span>
+      </div>
     </div>
 
     <?php if ($isSuper): ?>
       <?php $stores = $pdo->query("SELECT id,name,is_active FROM stores ORDER BY is_active DESC, id ASC")->fetchAll(PDO::FETCH_ASSOC) ?: []; ?>
       <form method="get" class="searchRow">
+        <label class="muted">店舗</label>
         <select name="store_id" class="sel">
           <?php foreach ($stores as $s): ?>
             <option value="<?= (int)$s['id'] ?>" <?= ((int)$s['id']===$storeId)?'selected':'' ?>>
@@ -446,141 +481,191 @@ render_header('本日の予定');
             </option>
           <?php endforeach; ?>
         </select>
-        <button class="btn">切替</button>
+
+        <label class="muted">営業日</label>
+        <input class="sel" type="date" name="business_date" value="<?= h($bizDate) ?>">
+
+        <button class="btn">表示</button>
       </form>
     <?php endif; ?>
 
-    <div class="kpi">
-      <div class="k">未出勤<br><b><?= $cnt['not_in'] ?></b></div>
-      <div class="k">出勤中<br><b><?= $cnt['working'] ?></b></div>
-      <div class="k">退勤済<br><b><?= $cnt['finished'] ?></b></div>
-      <div class="k">休み<br><b><?= $cnt['off'] ?></b></div>
-      <div class="k">遅刻<br><b><?= $cnt['late'] ?></b></div>
+    <!-- KPI（後でボタン化/フィルタ化する前提で class を付けておく） -->
+    <div class="kpi kpiBtns" id="kpi">
+      <div class="k" data-filter="planned">出勤予定<br><b><?= (int)$cnt['planned'] ?></b></div>
+      <div class="k" data-filter="wait">未出勤<br><b><?= (int)$cnt['not_in'] ?></b></div>
+      <div class="k" data-filter="in">出勤中<br><b><?= (int)$cnt['working'] ?></b></div>
+      <div class="k" data-filter="done">退勤済<br><b><?= (int)$cnt['finished'] ?></b></div>
+      <div class="k" data-filter="off">休み<br><b><?= (int)$cnt['off'] ?></b></div>
+      <div class="k" data-filter="late">遅刻<br><b><?= (int)$cnt['late'] ?></b></div>
     </div>
 
     <!-- 今日 -->
     <div class="card" style="margin-top:14px;">
       <div class="cardTitle">今日（予定と実績＋返信）</div>
 
-      <table class="tbl">
-        <thead>
-          <tr>
-            <th>状態</th>
-            <th>名前</th>
-            <th>予定</th>
-            <th>実績</th>
-            <th>遅刻</th>
-            <th>返信</th>
-            <th>連絡</th>
-            <th>送信</th>
-          </tr>
-        </thead>
-        <tbody>
-        <?php foreach ($rows as $r):
-          $uid = (int)$r['user_id'];
-          $name = (string)$r['display_name'];
+      <div class="tblWrap" aria-label="今日の予定と実績">
+        <table class="tbl tblToday">
+          <thead>
+            <tr>
+              <th class="col-status">状態</th>
+              <th class="col-cast">キャスト</th>
+              <th class="col-plan">予定</th>
+              <th class="col-actual">実績</th>
+              <th class="col-late">遅刻</th>
+              <th class="col-reply">返信</th>
+              <th class="col-action">連絡</th>
+              <th class="col-sent">送信</th>
+            </tr>
+          </thead>
 
-          $planOff   = ((int)($r['plan_is_off'] ?? 0) === 1);
-          $planStart = (string)($r['plan_start_time'] ?? '');
+          <tbody>
+          <?php foreach ($rows as $r):
+            $uid  = (int)$r['user_id'];
+            $name = (string)$r['display_name'];
 
-          $clockIn  = $r['clock_in'] ? substr((string)$r['clock_in'], 11, 5) : '';
-          $clockOut = $r['clock_out'] ? substr((string)$r['clock_out'], 11, 5) : '';
+            $shopTag  = trim((string)($r['shop_tag'] ?? ''));
+            $tagLabel = ($shopTag !== '') ? $shopTag : (string)$uid; // 空の間の保険
 
-          $statusLabel = '未出勤';
-          if ($planOff) $statusLabel = '休み';
-          else if ($r['clock_out']) $statusLabel = '退勤済';
-          else if ($r['clock_in']) $statusLabel = '出勤中';
+            $hasPlan   = ((int)($r['has_plan'] ?? 0) === 1);
+            $planOff   = $hasPlan && ((int)($r['plan_is_off'] ?? 0) === 1);
+            $planStart = $hasPlan ? (string)($r['plan_start_time'] ?? '') : '';
 
-          $isLate = false;
-          if (!$planOff && $planStart !== '' && empty($r['clock_in'])) {
-            $planDT = new DateTime($bizDate . ' ' . substr($planStart,0,5) . ':00', new DateTimeZone('Asia/Tokyo'));
-            if ($now > $planDT) $isLate = true;
-          }
+            $clockIn  = $r['clock_in'] ? substr((string)$r['clock_in'], 11, 5) : '';
+            $clockOut = $r['clock_out'] ? substr((string)$r['clock_out'], 11, 5) : '';
 
-          $lateNotice = $noticeMap[$uid]['late'] ?? null;
-          $absNotice  = $noticeMap[$uid]['absent'] ?? null;
+            // 状態ラベル
+            $statusLabel = '未出勤';
+            if (!$hasPlan) $statusLabel = '予定なし';
+            else if ($planOff) $statusLabel = '休み';
+            else if ($r['clock_out']) $statusLabel = '退勤済';
+            else if ($r['clock_in']) $statusLabel = '出勤中';
 
-          // 返信は「最後に来た返信」を表示
-          $replyText = '';
-          $replyWhen = '';
-          $cand = [];
-          if ($lateNotice && !empty($lateNotice['last_reply_text'])) $cand[] = $lateNotice;
-          if ($absNotice  && !empty($absNotice['last_reply_text']))  $cand[] = $absNotice;
-          if ($cand) {
-            usort($cand, fn($a,$b)=>strcmp((string)$b['responded_at'], (string)$a['responded_at']));
-            $replyText = (string)($cand[0]['last_reply_text'] ?? '');
-            $replyWhen = (string)($cand[0]['responded_at'] ?? '');
-          }
+            // 遅刻判定
+            $isLate = false;
+            if ($hasPlan && !$planOff && $planStart !== '' && empty($r['clock_in'])) {
+              $planDT = new DateTime($bizDate . ' ' . substr($planStart, 0, 5) . ':00', new DateTimeZone('Asia/Tokyo'));
+              if ($now > $planDT) $isLate = true;
+            }
 
-          $tplLate = "{$name}さん\n遅刻の連絡をお願いします。\n到着予定時刻と理由を返信してください。";
-          $tplAbs  = "{$name}さん\n本日欠勤の場合は理由を返信してください。";
-        ?>
-          <tr>
-            <td><?= h($statusLabel) ?></td>
-            <td>
-              <b><?= h($name) ?></b>
-              <div class="muted"><?= h((string)($r['employment_type'] ?? '')) ?></div>
-            </td>
-            <td>
-              <?= $planOff ? '<span class="muted">OFF</span>' : '<b>'.h(substr($planStart,0,5)).'</b>' ?>
-            </td>
-            <td>
-              <?= h($clockIn ?: '--:--') ?> → <?= h($clockOut ?: '--:--') ?>
-            </td>
-            <td>
-              <?= $isLate ? '<span class="badge-red">遅刻</span>' : '<span class="muted">-</span>' ?>
-            </td>
+            // 状態キー（CSS/JS用）
+            $state = 'wait';
+            if (!$hasPlan) $state = 'noplan';
+            else if ($planOff) $state = 'off';
+            else if ($r['clock_out']) $state = 'done';
+            else if ($r['clock_in']) $state = 'in';
+            else $state = ($isLate ? 'late' : 'wait');
 
-            <td style="max-width:360px;">
-              <?php if ($replyText !== ''): ?>
-                <div class="replyBox">
-                  <div class="replyText"><?= nl2br(h(mb_strimwidth($replyText, 0, 160, '…', 'UTF-8'))) ?></div>
-                  <div class="muted">返信: <?= h(substr($replyWhen, 11, 5)) ?></div>
+            $lateNotice = $noticeMap[$uid]['late'] ?? null;
+            $absNotice  = $noticeMap[$uid]['absent'] ?? null;
+
+            $replyText = '';
+            $replyWhen = '';
+            $cand = [];
+            if ($lateNotice && !empty($lateNotice['last_reply_text'])) $cand[] = $lateNotice;
+            if ($absNotice  && !empty($absNotice['last_reply_text']))  $cand[] = $absNotice;
+            if ($cand) {
+              usort($cand, fn($a,$b)=>strcmp((string)$b['responded_at'], (string)$a['responded_at']));
+              $replyText = (string)($cand[0]['last_reply_text'] ?? '');
+              $replyWhen = (string)($cand[0]['responded_at'] ?? '');
+            }
+
+            $tplLate = "{$name}さん\n遅刻の連絡をお願いします。\n到着予定時刻と理由を返信してください。";
+            $tplAbs  = "{$name}さん\n本日欠勤の場合は理由を返信してください。";
+
+            // 直近送信
+            $lastSent = null;
+            if ($lateNotice) $lastSent = $lateNotice;
+            if ($absNotice && (!$lastSent || (string)$absNotice['sent_at'] > (string)$lastSent['sent_at'])) $lastSent = $absNotice;
+
+          ?>
+            <tr class="row row-state-<?= h($state) ?>" data-state="<?= h($state) ?>" data-user-id="<?= (int)$uid ?>">
+              <td class="col-status">
+                <span class="badgeState s-<?= h($state) ?>"><?= h($statusLabel) ?></span>
+              </td>
+
+              <td class="col-cast">
+                <div class="castMain">
+                  <b class="castName">【<?= h($tagLabel) ?>】<?= h($name) ?></b>
                 </div>
-              <?php else: ?>
-                <span class="muted">（返信なし）</span>
-              <?php endif; ?>
-            </td>
+                <div class="castSub muted"><?= h((string)($r['employment_type'] ?? 'part')) ?></div>
+              </td>
 
-            <td>
-              <div class="btnRow">
-                <button type="button" class="btn ghost js-open-modal"
-                  data-kind="late"
-                  data-cast="<?= (int)$uid ?>"
-                  data-name="<?= h($name) ?>"
-                  data-text="<?= h($tplLate) ?>"
-                >遅刻LINE</button>
-
-                <button type="button" class="btn ghost js-open-modal"
-                  data-kind="absent"
-                  data-cast="<?= (int)$uid ?>"
-                  data-name="<?= h($name) ?>"
-                  data-text="<?= h($tplAbs) ?>"
-                >欠勤LINE</button>
-              </div>
-            </td>
-
-            <td class="muted" style="white-space:nowrap;">
-              <?php
-                $lastSent = null;
-                if ($lateNotice) $lastSent = $lateNotice;
-                if ($absNotice && (!$lastSent || (string)$absNotice['sent_at'] > (string)$lastSent['sent_at'])) $lastSent = $absNotice;
-              ?>
-              <?php if ($lastSent): ?>
-                <?= h(substr((string)$lastSent['sent_at'], 11, 5)) ?>
-                <div class="muted">by <?= h((string)($lastSent['sender_login'] ?? '')) ?></div>
-                <?php if (($lastSent['status'] ?? '') === 'failed'): ?>
-                  <div class="badge-red">送信失敗</div>
-                  <div class="muted"><?= h((string)($lastSent['error_message'] ?? '')) ?></div>
+              <td class="col-plan">
+                <?php if (!$hasPlan): ?>
+                  <span class="muted">（予定なし）</span>
+                <?php elseif ($planOff): ?>
+                  <span class="muted">OFF</span>
+                <?php else: ?>
+                  <span class="timePlan"><b><?= h(substr($planStart,0,5)) ?></b></span>
                 <?php endif; ?>
-              <?php else: ?>
-                -
-              <?php endif; ?>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-        </tbody>
-      </table>
+              </td>
+
+              <td class="col-actual">
+                <span class="timeActual">
+                  <?= h($clockIn ?: '--:--') ?>
+                  <span class="muted">→</span>
+                  <?= h($clockOut ?: '--:--') ?>
+                </span>
+              </td>
+
+              <td class="col-late">
+                <?php if ($hasPlan && !$planOff && $isLate): ?>
+                  <span class="badgeLate">遅刻</span>
+                <?php else: ?>
+                  <span class="muted">-</span>
+                <?php endif; ?>
+              </td>
+
+              <td class="col-reply">
+                <?php if ($replyText !== ''): ?>
+                  <div class="replyBox">
+                    <div class="replyText"><?= nl2br(h(mb_strimwidth($replyText, 0, 160, '…', 'UTF-8'))) ?></div>
+                    <div class="muted">返信: <?= h(substr($replyWhen, 11, 5)) ?></div>
+                  </div>
+                <?php else: ?>
+                  <span class="muted">（返信なし）</span>
+                <?php endif; ?>
+              </td>
+
+              <td class="col-action">
+                <?php if ($hasPlan && !$planOff): ?>
+                  <div class="btnRow">
+                    <button type="button" class="btn ghost js-open-modal"
+                      data-kind="late"
+                      data-cast="<?= (int)$uid ?>"
+                      data-name="<?= h($name) ?>"
+                      data-text="<?= h($tplLate) ?>"
+                    >遅刻LINE</button>
+
+                    <button type="button" class="btn ghost js-open-modal"
+                      data-kind="absent"
+                      data-cast="<?= (int)$uid ?>"
+                      data-name="<?= h($name) ?>"
+                      data-text="<?= h($tplAbs) ?>"
+                    >欠勤LINE</button>
+                  </div>
+                <?php else: ?>
+                  <span class="muted">-</span>
+                <?php endif; ?>
+              </td>
+
+              <td class="col-sent">
+                <?php if ($lastSent): ?>
+                  <div class="sentWhen"><?= h(substr((string)$lastSent['sent_at'], 11, 5)) ?></div>
+                  <div class="muted">by <?= h((string)($lastSent['sender_login'] ?? '')) ?></div>
+                  <?php if (($lastSent['status'] ?? '') === 'failed'): ?>
+                    <div class="badgeErr">送信失敗</div>
+                    <div class="muted"><?= h((string)($lastSent['error_message'] ?? '')) ?></div>
+                  <?php endif; ?>
+                <?php else: ?>
+                  <span class="muted">-</span>
+                <?php endif; ?>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- 今週 -->
@@ -594,26 +679,30 @@ render_header('本日の予定');
         <table class="tbl weekTbl">
           <thead>
             <tr>
-              <th style="min-width:140px;">キャスト</th>
+              <th style="min-width:220px;">キャスト</th>
               <?php foreach ($dates as $d): ?>
-                <?php
-                  $dt = new DateTime($d, new DateTimeZone('Asia/Tokyo'));
-                  $w = ['日','月','火','水','木','金','土'][(int)$dt->format('w')];
-                ?>
+                <?php $dt = new DateTime($d, new DateTimeZone('Asia/Tokyo')); ?>
+                <?php $w = ['日','月','火','水','木','金','土'][(int)$dt->format('w')]; ?>
                 <th><?= h(substr($d,5)) ?><div class="muted"><?= h($w) ?></div></th>
               <?php endforeach; ?>
             </tr>
           </thead>
           <tbody>
             <?php foreach ($rows as $r): $uid=(int)$r['user_id']; ?>
+              <?php
+                $shopTag = trim((string)($r['shop_tag'] ?? ''));
+                $tagLabel = ($shopTag !== '') ? $shopTag : (string)$uid;
+              ?>
               <tr>
-                <td><b><?= h((string)$r['display_name']) ?></b></td>
+                <td><b>【<?= h($tagLabel) ?>】<?= h((string)$r['display_name']) ?></b></td>
                 <?php foreach ($dates as $d): ?>
                   <?php
-                    $p = $weekPlans[$uid][$d] ?? ['start_time'=>'','is_off'=>false];
+                    $p = $weekPlans[$uid][$d] ?? null;
                     $a = $weekAtt[$uid][$d] ?? ['in'=>'','out'=>''];
-                    $cell = '';
-                    if (!empty($p['is_off'])) {
+
+                    if ($p === null) {
+                      $cell = '<span class="muted">--</span>';
+                    } else if (!empty($p['is_off'])) {
                       $cell = '<span class="muted">OFF</span>';
                     } else {
                       $stt = (string)($p['start_time'] ?? '');
@@ -653,7 +742,6 @@ render_header('本日の予定');
       <input type="hidden" name="cast_user_id" id="m_cast_user_id" value="">
       <input type="hidden" name="kind" id="m_kind" value="">
       <input type="hidden" name="template_text" id="m_template_text" value="">
-
       <textarea name="text" id="m_text" class="ta" rows="7" required></textarea>
 
       <div class="modalFoot">
@@ -666,14 +754,12 @@ render_header('本日の予定');
 </div>
 
 <style>
-.rowTop{ display:flex; align-items:center; gap:12px; }
+.rowTop{ display:flex; align-items:center; gap:12px; justify-content:space-between; }
 .title{ font-weight:1000; font-size:18px; }
-
 .btn{ display:inline-flex; align-items:center; gap:6px; padding:10px 14px; border-radius:12px; border:1px solid var(--line); background:var(--cardA); color:inherit; text-decoration:none; cursor:pointer; }
 .btn.primary{ background:rgba(59,130,246,.18); border-color:rgba(59,130,246,.35); }
 .btn.ghost{ background:transparent; }
-
-.searchRow{ margin-top:10px; display:flex; gap:10px; align-items:center; }
+.searchRow{ margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .sel{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:var(--cardA); color:inherit; }
 
 .kpi{ margin-top:10px; display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; }
@@ -691,37 +777,247 @@ render_header('本日の予定');
 .replyBox{ padding:8px 10px; border:1px solid rgba(255,255,255,.12); border-radius:12px; background:rgba(255,255,255,.04); }
 .replyText{ font-size:13px; white-space:normal; line-height:1.35; }
 
-.modalBg[hidden]{ display:none !important; } /* ← これが大事（script内に書かない） */
-.modalBg{
-  position:fixed; inset:0;
-  background:rgba(0,0,0,.55);
-  display:flex; align-items:center; justify-content:center;
-  padding:16px;
-  z-index:1000;
-}
-.modal{
-  width:min(720px, 96vw);
-  border:1px solid rgba(255,255,255,.14);
-  border-radius:16px;
-  background:#0f1730;
-  padding:14px;
-}
+.modalBg[hidden]{ display:none !important; }
+.modalBg{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px; z-index:1000; }
+.modal{ width:min(720px, 96vw); border:1px solid rgba(255,255,255,.14); border-radius:16px; background:#0f1730; padding:14px; }
 .modalHead{ display:flex; justify-content:space-between; align-items:center; }
 .modalTitle{ font-weight:1000; font-size:16px; }
-.ta{
-  width:100%;
-  margin-top:10px;
-  padding:12px;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,.16);
-  background:rgba(255,255,255,.04);
-  color:#e8ecff;
-  resize:vertical;
-}
+.ta{ width:100%; margin-top:10px; padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.04); color:#e8ecff; resize:vertical; }
 .modalFoot{ display:flex; justify-content:flex-end; gap:10px; margin-top:10px; }
 
 .weekWrap{ overflow:auto; }
 .weekTbl th{ position:sticky; top:0; background:var(--cardA); }
+/* =========================================================
+   manager_today_schedule: Lightでも読める強制コントラスト
+   - 既存CSSの上書き用（末尾に追加）
+========================================================= */
+
+/* 0) ベース：カード/テーブルの文字色を「確実に濃く」 */
+.card, .tblWrap, .tbl, .tbl th, .tbl td,
+.k, .btn, .sel, .replyBox{
+  color: #0f172a; /* slate-900 */
+}
+
+/* muted は薄くしすぎない（Lightで消えるのを防ぐ） */
+.muted{
+  opacity: 0.82;
+  color: #334155; /* slate-700 */
+}
+
+/* 1) KPI：押せる雰囲気（後でJSでフィルタにする前提） */
+.kpiBtns .k{
+  cursor: pointer;
+  user-select: none;
+  transition: transform .05s ease, background .15s ease, border-color .15s ease;
+}
+.kpiBtns .k:hover{ transform: translateY(-1px); border-color: rgba(59,130,246,.35); }
+.kpiBtns .k.active{ outline: 2px solid rgba(59,130,246,.35); }
+
+/* 2) テーブルコンテナ（白背景に寄せてLightで見えるように） */
+.tblWrap{
+  overflow:auto;
+  border: 1px solid rgba(15,23,42,.14);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+/* 3) 今日テーブル：見出しを濃い背景＋白文字で固定 */
+.tblToday{
+  width:100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 980px; /* ボタン列があるので最低幅を確保 */
+}
+
+.tblToday thead th{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #0f172a;  /* 濃紺 */
+  color: #ffffff;
+  font-weight: 900;
+  border-bottom: 1px solid rgba(255,255,255,.18);
+  white-space: nowrap;
+}
+
+/* 行：白ベース＋ホバー */
+.tblToday tbody td{
+  background:#ffffff;
+  border-bottom: 1px solid rgba(15,23,42,.08);
+  vertical-align: middle;
+}
+.tblToday tbody tr:hover td{
+  background: #f8fafc; /* very light */
+}
+
+/* 4) 列の横幅（見やすく） */
+.tblToday .col-status{ width: 110px; }
+.tblToday .col-cast{ min-width: 240px; }
+.tblToday .col-plan{ width: 90px; text-align:center; }
+.tblToday .col-actual{ width: 140px; text-align:center; }
+.tblToday .col-late{ width: 80px; text-align:center; }
+.tblToday .col-reply{ min-width: 320px; }
+.tblToday .col-action{ width: 190px; }
+.tblToday .col-sent{ width: 150px; white-space: nowrap; }
+
+/* 5) 状態バッジ（Lightで見える配色） */
+.badgeState{
+  display:inline-flex;
+  align-items:center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid rgba(15,23,42,.18);
+  background: #f1f5f9;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+/* 状態別 */
+.badgeState.s-noplan{ background:#f1f5f9; color:#475569; }
+.badgeState.s-off   { background:#eef2ff; color:#3730a3; border-color: rgba(99,102,241,.25); }
+.badgeState.s-wait  { background: rgba(251,191,36,.18); color:#92400e; border-color: rgba(251,191,36,.35); }
+.badgeState.s-late  { background: rgba(239,68,68,.14); color:#991b1b; border-color: rgba(239,68,68,.35); }
+.badgeState.s-in    { background: rgba(34,197,94,.16); color:#166534; border-color: rgba(34,197,94,.35); }
+.badgeState.s-done  { background: rgba(59,130,246,.14); color:#1d4ed8; border-color: rgba(59,130,246,.30); }
+
+/* 6) 行の左ラインで “今見るべき” を強調 */
+.row{ position: relative; }
+.row-state-wait td{ box-shadow: inset 4px 0 0 rgba(251,191,36,.65); }
+.row-state-late td{ box-shadow: inset 4px 0 0 rgba(239,68,68,.80); }
+.row-state-in   td{ box-shadow: inset 4px 0 0 rgba(34,197,94,.70); }
+.row-state-done td{ box-shadow: inset 4px 0 0 rgba(59,130,246,.65); }
+
+/* 7) 遅刻バッジ（既存 badge-red と分離） */
+.badgeLate{
+  display:inline-block;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(239,68,68,.14);
+  color: #991b1b;
+  border: 1px solid rgba(239,68,68,.35);
+}
+
+/* 8) 返信ボックス：Lightでも見える */
+.replyBox{
+  border: 1px solid rgba(15,23,42,.14);
+  background: #f8fafc;
+}
+.replyText{
+  color:#0f172a;
+}
+
+/* 9) 送信失敗の表示 */
+.badgeErr{
+  display:inline-block;
+  margin-top:6px;
+  font-size:11px;
+  font-weight:900;
+  padding:3px 10px;
+  border-radius:999px;
+  background: rgba(239,68,68,.14);
+  color:#991b1b;
+  border: 1px solid rgba(239,68,68,.35);
+}
+.sentWhen{ font-weight: 900; }
+
+/* 10) ボタン：Lightで“薄すぎ”を防ぐ */
+.btn{
+  border-color: rgba(15,23,42,.14);
+  background: #ffffff;
+}
+.btn.ghost{
+  background: #ffffff;
+}
+.btn.primary{
+  background: rgba(59,130,246,.12);
+  border-color: rgba(59,130,246,.30);
+}
+.btn:disabled{
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* 11) 週テーブル：見出しを固定しつつ見やすく */
+.weekTbl th{
+  background: #0f172a;
+  color: #ffffff;
+  border-bottom: 1px solid rgba(255,255,255,.18);
+}
+
+/* 12) スマホ最適化：返信列を少し縮める */
+@media (max-width: 900px){
+  .tblToday{ min-width: 860px; }
+  .tblToday .col-reply{ min-width: 260px; }
+}
+/* 状態セルを強調 */
+.col-status{
+  font-weight:900;
+}
+
+/* 状態バッジ */
+.badgeState{
+  min-width:72px;
+  justify-content:center;
+}
+
+/* 状態別アイコン風 */
+.badgeState.s-wait::before{ content:"⏳ "; }
+.badgeState.s-in::before{ content:"🟢 "; }
+.badgeState.s-done::before{ content:"✔ "; }
+.badgeState.s-off::before{ content:"🌙 "; }
+.badgeState.s-noplan::before{ content:"— "; }
+.badgeState.s-late::before{ content:"⚠ "; }
+
+/* 要対応行 */
+.row-state-wait td{
+  background: linear-gradient(
+    to right,
+    rgba(251,191,36,.12),
+    #ffffff 40%
+  );
+}
+
+.row-state-late td{
+  background: linear-gradient(
+    to right,
+    rgba(239,68,68,.12),
+    #ffffff 40%
+  );
+}
+/* 休み行は少し引く */
+.row-state-off{
+  opacity: .65;
+}
+
+.row-state-off td{
+  background:#fafafa;
+}
+/* LINE系ボタン */
+.btn.line-late{
+  border-color: rgba(239,68,68,.35);
+  background: rgba(239,68,68,.10);
+  color:#991b1b;
+  font-weight:800;
+}
+
+.btn.line-abs{
+  border-color: rgba(251,191,36,.40);
+  background: rgba(251,191,36,.14);
+  color:#92400e;
+  font-weight:800;
+}
+.tblToday thead th{
+  text-align:center;
+}
+
+.tblToday thead th:first-child{
+  text-align:left;
+}
+
 </style>
 
 <script>
@@ -745,11 +1041,9 @@ render_header('本日の予定');
     inCast.value = castId;
     inKind.value = kind;
     inTpl.value  = text;
-
     title.textContent = (kind === 'late') ? '遅刻LINE 送信' : '欠勤LINE 送信';
     sub.textContent = `宛先：${name}（user_id=${castId}）`;
     ta.value = text;
-
     bg.hidden = false;
     setTimeout(() => ta.focus(), 50);
   }

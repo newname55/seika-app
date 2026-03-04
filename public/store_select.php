@@ -6,138 +6,98 @@ require_once __DIR__ . '/../app/db.php';
 require_once __DIR__ . '/../app/layout.php';
 require_once __DIR__ . '/../app/store.php';
 
-ensure_session();
 require_login();
-
-if (!function_exists('h')) {
-  function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
-}
-
-/* CSRF */
-if (!function_exists('csrf_token')) {
-  function csrf_token(): string {
-    if (session_status() !== PHP_SESSION_ACTIVE) session_start();
-    if (empty($_SESSION['_csrf'])) $_SESSION['_csrf'] = bin2hex(random_bytes(16));
-    return (string)$_SESSION['_csrf'];
-  }
-}
-function verify_csrf(): void {
-  $t = (string)($_POST['csrf_token'] ?? '');
-  if ($t === '' || !hash_equals((string)($_SESSION['_csrf'] ?? ''), $t)) {
-    http_response_code(400);
-    exit('Bad Request (csrf)');
-  }
-}
+require_role(['admin','manager','super_user']);
 
 $pdo = db();
-$uid = (int)($_SESSION['user_id'] ?? 0);
-$msg = '';
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+
+function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+function has_role(string $role): bool { return isset($_SESSION['roles']) && in_array($role, $_SESSION['roles'], true); }
+
+$userId  = function_exists('current_user_id') ? (int)current_user_id() : (int)($_SESSION['user_id'] ?? 0);
+$isSuper = has_role('super_user');
+$isAdmin = has_role('admin');
+$isMgr   = has_role('manager');
+
+$returnTo = (string)($_GET['return'] ?? '/seika-app/public/dashboard.php');
+if ($returnTo === '') $returnTo = '/seika-app/public/dashboard.php';
+
+$stores = [];
+if ($isSuper || $isAdmin) {
+  $stores = $pdo->query("SELECT id,name FROM stores WHERE is_active=1 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} else {
+  // manager: 紐づく店だけ
+  $st = $pdo->prepare("
+    SELECT DISTINCT s.id, s.name
+    FROM user_roles ur
+    JOIN roles r ON r.id=ur.role_id AND r.code='manager'
+    JOIN stores s ON s.id=ur.store_id AND s.is_active=1
+    WHERE ur.user_id=? AND ur.store_id IS NOT NULL
+    ORDER BY s.id ASC
+  ");
+  $st->execute([$userId]);
+  $stores = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+if (!$stores) {
+  http_response_code(403);
+  exit('店舗に紐付いていません');
+}
+
 $err = '';
 
-$next = (string)($_GET['next'] ?? '/seika-app/public/dashboard.php');
-
-/* POST: 選択 */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  verify_csrf();
   $sid = (int)($_POST['store_id'] ?? 0);
-  if ($sid <= 0) {
-    $err = '店舗を選択してください';
+  $allowed = array_map(fn($s)=>(int)$s['id'], $stores);
+
+  if ($sid <= 0 || !in_array($sid, $allowed, true)) {
+    $err = '店舗が不正です';
   } else {
-    // アクセス可能か確認
-    $isAdmin = function_exists('is_role') ? (is_role('super_user') || is_role('admin')) : false;
-
-    if ($isAdmin) {
-      $ok = (bool)$pdo->prepare("SELECT 1 FROM stores WHERE id=? AND is_active=1 LIMIT 1")
-                      ->execute([$sid]) ?: true;
-    } else {
-      $st = $pdo->prepare("
-        SELECT 1
-        FROM stores s
-        WHERE s.id=? AND s.is_active=1
-          AND EXISTS (
-            SELECT 1
-            FROM user_roles ur
-            WHERE ur.user_id=?
-              AND (ur.store_id = s.id OR ur.store_id IS NULL)
-          )
-        LIMIT 1
-      ");
-      $st->execute([$sid, $uid]);
-      $ok = (bool)$st->fetchColumn();
-    }
-
-    if (!$ok) {
-      $err = 'この店舗への権限がありません';
-    } else {
-      // store.php 側に setter があるなら使う（無ければセッション直書き）
-      if (function_exists('set_current_store_id')) {
-        set_current_store_id($sid);
-      } else {
-        $_SESSION['store_id'] = $sid;
-      }
-      header('Location: ' . $next);
-      exit;
-    }
+    set_current_store_id($sid);
+    header('Location: ' . $returnTo);
+    exit;
   }
 }
 
-/* 店舗一覧 */
-$isAdmin = function_exists('is_role') ? (is_role('super_user') || is_role('admin')) : false;
-
-if ($isAdmin) {
-  $stores = $pdo->query("SELECT id,name,is_active FROM stores WHERE is_active=1 ORDER BY id")->fetchAll();
-} else {
-  $st = $pdo->prepare("
-    SELECT s.id, s.name, s.is_active
-    FROM stores s
-    WHERE s.is_active=1
-      AND EXISTS (
-        SELECT 1
-        FROM user_roles ur
-        WHERE ur.user_id=?
-          AND (ur.store_id = s.id OR ur.store_id IS NULL)
-      )
-    ORDER BY s.id
-  ");
-  $st->execute([$uid]);
-  $stores = $st->fetchAll();
-}
+$selected = get_current_store_id();
+if ($selected <= 0) $selected = (int)$stores[0]['id'];
 
 render_page_start('店舗選択');
 render_header('店舗選択', [
-  'back_href' => '/seika-app/public/dashboard.php',
-  'back_label' => '← 戻る',
+  'back_href'  => '/seika-app/public/logout.php',
+  'back_label' => 'ログアウト',
 ]);
 ?>
-<div class="page">
-
-  <?php if ($msg): ?><div class="card" style="border-color:rgba(52,211,153,.35);"><?= h($msg) ?></div><?php endif; ?>
-  <?php if ($err): ?><div class="card" style="border-color:rgba(251,113,133,.45);"><?= h($err) ?></div><?php endif; ?>
+<div class="page"><div class="admin-wrap">
   <div class="card">
-    <div style="font-weight:1000; font-size:16px;">入る店舗を選んでください</div>
-    <div class="muted" style="margin-top:6px;">
-      このユーザーが権限を持つ店舗だけ表示します（応援・兼務もOK）。
-    </div>
-<?php if (is_role('admin') || is_role('super_user')): ?>
-  <a class="btn" href="/seika-app/public/admin/index.php">管理</a>
-<?php endif; ?>
-    <form method="post" style="margin-top:12px;">
-      <input type="hidden" name="csrf_token" value="<?= h(csrf_token()) ?>">
-      <input type="hidden" name="next" value="<?= h($next) ?>">
+    <div style="font-weight:900;font-size:18px;">🏪 店舗を選択</div>
+    <div class="muted" style="margin-top:6px;">この選択はセッションに保持されます。</div>
 
-      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; margin-top:10px;">
+    <?php if ($err): ?>
+      <div class="card" style="margin-top:10px;border-color:#ef4444;"><?= h($err) ?></div>
+    <?php endif; ?>
+
+    <form method="post" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <select name="store_id" class="sel">
         <?php foreach ($stores as $s): ?>
-          <button class="btn" type="submit" name="store_id" value="<?= (int)$s['id'] ?>" style="justify-content:flex-start;">
-            🏪 <?= h((string)$s['name']) ?> <span class="muted" style="margin-left:auto;">#<?= (int)$s['id'] ?></span>
-          </button>
+          <option value="<?= (int)$s['id'] ?>" <?= ((int)$s['id']===$selected)?'selected':'' ?>>
+            <?= h((string)$s['name']) ?> (#<?= (int)$s['id'] ?>)
+          </option>
         <?php endforeach; ?>
-      </div>
-
-      <?php if (!$stores): ?>
-        <div class="muted" style="margin-top:12px;">権限のある店舗がありません（管理者に権限付与を依頼してください）</div>
-      <?php endif; ?>
+      </select>
+      <button class="btn primary">この店舗で入る</button>
     </form>
-  </div>
 
-</div>
+    <div class="muted" style="margin-top:10px;">戻り先：<?= h($returnTo) ?></div>
+  </div>
+</div></div>
+
+<style>
+.card{padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--cardA)}
+.muted{opacity:.75;font-size:12px}
+.sel{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--cardA);color:inherit}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:var(--cardA);color:inherit;text-decoration:none;cursor:pointer}
+.btn.primary{background:rgba(59,130,246,.18);border-color:rgba(59,130,246,.35)}
+</style>
 <?php render_page_end(); ?>
