@@ -93,6 +93,7 @@ function service_applicants_person_payload(array $input, int $actorUserId): arra
     'previous_job' => service_applicants_nullable_string($input['previous_job'] ?? null),
     'desired_hourly_wage' => service_applicants_nullable_decimal($input['desired_hourly_wage'] ?? null),
     'desired_daily_wage' => service_applicants_nullable_decimal($input['desired_daily_wage'] ?? null),
+    'current_stage_name' => service_applicants_nullable_string($input['genji_name'] ?? null),
     'notes' => service_applicants_nullable_string($input['notes'] ?? null),
     'created_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
     'updated_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
@@ -243,6 +244,7 @@ function service_applicants_refresh_summary(PDO $pdo, int $personId, int $actorU
   $latestInterview = repo_applicants_find_latest_interview($pdo, $personId);
   $primaryPhoto = repo_applicants_find_primary_photo($pdo, $personId);
   $hasAssignments = repo_applicants_count_assignments($pdo, $personId) > 0;
+  $person = repo_applicants_find_person($pdo, $personId);
 
   $currentStatus = 'interviewing';
   $isCurrent = 0;
@@ -270,6 +272,10 @@ function service_applicants_refresh_summary(PDO $pdo, int $personId, int $actorU
     }
   }
 
+  if ($currentStageName === null && $person) {
+    $currentStageName = service_applicants_nullable_string($person['current_stage_name'] ?? null);
+  }
+
   repo_applicants_update_person_summary($pdo, $personId, [
     'current_status' => $currentStatus,
     'is_currently_employed' => $isCurrent,
@@ -288,11 +294,21 @@ function service_applicants_save_person(PDO $pdo, array $input, ?array $photoFil
   $payload = service_applicants_person_payload($input, $actorUserId);
   service_applicants_assert_person_payload($payload);
   $personId = (int)($input['person_id'] ?? 0);
+  $genjiName = service_applicants_nullable_string($input['genji_name'] ?? null);
 
   $pdo->beginTransaction();
   try {
     if ($personId > 0) {
       repo_applicants_update_person($pdo, $personId, $payload);
+      $currentAssignment = repo_applicants_find_current_assignment($pdo, $personId);
+      if ($currentAssignment) {
+        repo_applicants_update_assignment_genji_name(
+          $pdo,
+          (int)$currentAssignment['id'],
+          $genjiName,
+          $actorUserId > 0 ? $actorUserId : null
+        );
+      }
       service_applicants_log($pdo, [
         'person_id' => $personId,
         'action_type' => 'person_updated',
@@ -509,6 +525,7 @@ function service_applicants_change_status(PDO $pdo, int $personId, string $actio
     if ($action === 'active') {
       $storeId = service_applicants_nullable_int($input['store_id'] ?? null);
       $startDate = service_applicants_nullable_string($input['effective_date'] ?? null);
+      $genjiName = service_applicants_nullable_string($input['genji_name'] ?? null);
       if ($storeId === null || $startDate === null) {
         throw new InvalidArgumentException('在籍化には店舗と入店日が必要です');
       }
@@ -518,21 +535,31 @@ function service_applicants_change_status(PDO $pdo, int $personId, string $actio
         throw new RuntimeException('別店舗に現在在籍中です。店舗移動を使用してください');
       }
 
-      $assignmentId = $current ? (int)$current['id'] : repo_applicants_insert_assignment($pdo, [
-        'person_id' => $personId,
-        'store_id' => $storeId,
-        'source_interview_id' => $latestInterview ? (int)$latestInterview['id'] : null,
-        'assignment_status' => 'active',
-        'transition_type' => repo_applicants_count_assignments($pdo, $personId) > 0 ? 'rejoin' : 'join',
-        'start_date' => $startDate,
-        'end_date' => null,
-        'genji_name' => service_applicants_nullable_string($input['genji_name'] ?? null),
-        'move_reason' => null,
-        'leave_reason' => null,
-        'is_current' => 1,
-        'created_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
-        'updated_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
-      ]);
+      if ($current) {
+        $assignmentId = (int)$current['id'];
+        repo_applicants_update_assignment_genji_name(
+          $pdo,
+          $assignmentId,
+          $genjiName,
+          $actorUserId > 0 ? $actorUserId : null
+        );
+      } else {
+        $assignmentId = repo_applicants_insert_assignment($pdo, [
+          'person_id' => $personId,
+          'store_id' => $storeId,
+          'source_interview_id' => $latestInterview ? (int)$latestInterview['id'] : null,
+          'assignment_status' => 'active',
+          'transition_type' => repo_applicants_count_assignments($pdo, $personId) > 0 ? 'rejoin' : 'join',
+          'start_date' => $startDate,
+          'end_date' => null,
+          'genji_name' => $genjiName,
+          'move_reason' => null,
+          'leave_reason' => null,
+          'is_current' => 1,
+          'created_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
+          'updated_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        ]);
+      }
 
       if ($latestInterview) {
         $st = $pdo->prepare("

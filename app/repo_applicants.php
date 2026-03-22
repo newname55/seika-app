@@ -260,7 +260,7 @@ function repo_applicants_insert_person(PDO $pdo, array $data): int {
       birth_date, age_cached, phone, postal_code, current_address, previous_address,
       blood_type, zodiac_sign, body_height_cm, body_weight_kg, bust_cm, waist_cm, hip_cm,
       cup_size, shoe_size, clothing_top_size, clothing_bottom_size,
-      previous_job, desired_hourly_wage, desired_daily_wage, notes,
+      previous_job, desired_hourly_wage, desired_daily_wage, current_stage_name, notes,
       created_by_user_id, updated_by_user_id
     ) VALUES (
       :legacy_source, :legacy_record_no, :person_code,
@@ -268,7 +268,7 @@ function repo_applicants_insert_person(PDO $pdo, array $data): int {
       :birth_date, :age_cached, :phone, :postal_code, :current_address, :previous_address,
       :blood_type, :zodiac_sign, :body_height_cm, :body_weight_kg, :bust_cm, :waist_cm, :hip_cm,
       :cup_size, :shoe_size, :clothing_top_size, :clothing_bottom_size,
-      :previous_job, :desired_hourly_wage, :desired_daily_wage, :notes,
+      :previous_job, :desired_hourly_wage, :desired_daily_wage, :current_stage_name, :notes,
       :created_by_user_id, :updated_by_user_id
     )
   ";
@@ -309,6 +309,7 @@ function repo_applicants_update_person(PDO $pdo, int $personId, array $data): vo
       previous_job = :previous_job,
       desired_hourly_wage = :desired_hourly_wage,
       desired_daily_wage = :desired_daily_wage,
+      current_stage_name = :current_stage_name,
       notes = :notes,
       updated_by_user_id = :updated_by_user_id,
       updated_at = NOW()
@@ -427,6 +428,23 @@ function repo_applicants_close_assignment(PDO $pdo, int $assignmentId, array $da
     LIMIT 1
   ";
   $pdo->prepare($sql)->execute($data);
+}
+
+function repo_applicants_update_assignment_genji_name(PDO $pdo, int $assignmentId, ?string $genjiName, ?int $updatedByUserId): void {
+  $sql = "
+    UPDATE wbss_applicant_store_assignments
+    SET
+      genji_name = :genji_name,
+      updated_by_user_id = :updated_by_user_id,
+      updated_at = NOW()
+    WHERE id = :id
+    LIMIT 1
+  ";
+  $pdo->prepare($sql)->execute([
+    'id' => $assignmentId,
+    'genji_name' => $genjiName,
+    'updated_by_user_id' => $updatedByUserId,
+  ]);
 }
 
 function repo_applicants_update_person_summary(PDO $pdo, int $personId, array $data): void {

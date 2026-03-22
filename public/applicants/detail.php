@@ -704,7 +704,7 @@ render_header($person ? '面接者詳細 / 編集' : '面接者新規作成', [
           <div class="field"><label class="label">現在ステータス</label><input class="input" value="<?= h($statusText) ?>" disabled></div>
 
           <div class="field"><label class="label">現在店舗</label><input class="input" value="<?= detail_display($person['current_store_name'] ?? '', '') ?>" disabled></div>
-          <div class="field"><label class="label">現在の源氏名</label><input class="input" value="<?= person_value($person, 'current_stage_name') ?>" disabled></div>
+          <div class="field"><label class="label">源氏名</label><input class="input" name="genji_name" value="<?= person_value($person, 'current_stage_name') ?>" placeholder="在籍中ならここで更新できます"></div>
           <div class="field"><label class="label">最新面接日</label><input class="input" value="<?= person_value($person, 'latest_interviewed_at') ?>" disabled></div>
           <div class="field"><label class="label">最新結果</label><input class="input" value="<?= h(detail_result_label($person['latest_interview_result'] ?? null)) ?>" disabled></div>
 
