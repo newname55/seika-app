@@ -559,9 +559,14 @@ try {
     LIMIT 12
   ");
   $st->execute([$storeId]);
+  $lastRecentPlanChangeUserId = null;
   foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
     $payload = json_decode((string)($row['payload_json'] ?? ''), true);
     if (!is_array($payload)) {
+      continue;
+    }
+    $recentUserId = (int)($row['user_id'] ?? 0);
+    if ($lastRecentPlanChangeUserId === $recentUserId) {
       continue;
     }
     $recentPlanChanges[] = [
@@ -571,6 +576,10 @@ try {
       'business_date' => (string)($payload['business_date'] ?? ''),
       'summary' => shift_plan_change_summary($payload),
     ];
+    $lastRecentPlanChangeUserId = $recentUserId;
+    if (count($recentPlanChanges) >= 12) {
+      break;
+    }
   }
 } catch (Throwable $e) {}
 
@@ -798,23 +807,14 @@ render_header('本日の勤務予定', [
         <div class="sectionHead recentPlanCard__head">
           <div>
             <div class="cardTitle">直近の予定変更</div>
-            <div class="muted">急なシフト変更の把握用です。まずは一度決めた予定を維持する前提で運用し、やむを得ない変更時は事前連絡を徹底してください。</div>
+            <div class="muted">変更内容は省略し、予定を変更したキャストだけを表示しています。</div>
           </div>
         </div>
         <div class="recentPlanList">
           <?php foreach ($recentPlanChanges as $log): ?>
             <div class="recentPlanItem">
-              <div class="recentPlanItem__top">
-                <div class="recentPlanItem__cast"><?= h($log['cast_name']) ?></div>
-                <div class="recentPlanItem__time"><?= h(substr($log['created_at'], 5, 11)) ?></div>
-              </div>
-              <div class="recentPlanItem__summary">
-                <span class="recentPlanItem__date"><?= h(substr($log['business_date'], 5, 5)) ?></span>
-                <span><?= h($log['summary']) ?></span>
-              </div>
-              <?php if ($log['actor_name'] !== ''): ?>
-                <div class="recentPlanItem__meta">更新者: <?= h($log['actor_name']) ?></div>
-              <?php endif; ?>
+              <div class="recentPlanItem__cast"><?= h($log['cast_name']) ?></div>
+              <div class="recentPlanItem__time"><?= h(substr($log['created_at'], 5, 11)) ?></div>
             </div>
           <?php endforeach; ?>
         </div>
@@ -1289,58 +1289,29 @@ render_header('本日の勤務予定', [
 }
 .recentPlanList{
   display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
-  gap:10px;
+  grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+  gap:8px;
 }
 .recentPlanItem{
-  padding:10px 12px;
-  border-radius:14px;
-  border:1px solid rgba(15,23,42,.08);
-  background:rgba(255,255,255,.74);
-}
-.recentPlanItem__top{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:8px;
+  gap:10px;
+  padding:9px 12px;
+  border-radius:12px;
+  border:1px solid rgba(15,23,42,.08);
+  background:rgba(255,255,255,.74);
 }
 .recentPlanItem__cast{
-  font-size:14px;
+  font-size:13px;
   font-weight:900;
   color:#0f172a;
+  line-height:1.35;
 }
 .recentPlanItem__time{
   font-size:11px;
   color:#64748b;
   white-space:nowrap;
-}
-.recentPlanItem__summary{
-  margin-top:8px;
-  display:flex;
-  gap:8px;
-  align-items:center;
-  flex-wrap:wrap;
-  color:#334155;
-  font-size:13px;
-  line-height:1.5;
-}
-.recentPlanItem__date{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-height:24px;
-  padding:0 8px;
-  border-radius:999px;
-  border:1px solid rgba(124,92,255,.18);
-  background:rgba(124,92,255,.06);
-  color:#5b47c8;
-  font-size:11px;
-  font-weight:900;
-}
-.recentPlanItem__meta{
-  margin-top:6px;
-  color:#64748b;
-  font-size:11px;
 }
 .sectionHead{
   display:flex;
@@ -1687,18 +1658,9 @@ body[data-theme="dark"] .recentPlanItem__cast{
   color:#eef2ff;
 }
 html[data-theme="dark"] .recentPlanItem__time,
-html[data-theme="dark"] .recentPlanItem__summary,
-html[data-theme="dark"] .recentPlanItem__meta,
 body[data-theme="dark"] .recentPlanItem__time,
-body[data-theme="dark"] .recentPlanItem__summary,
-body[data-theme="dark"] .recentPlanItem__meta{
+body[data-theme="dark"] .recentPlanItem__time{
   color:#aab3d6;
-}
-html[data-theme="dark"] .recentPlanItem__date,
-body[data-theme="dark"] .recentPlanItem__date{
-  background: rgba(124,92,255,.16);
-  border-color: rgba(124,92,255,.28);
-  color:#d9d1ff;
 }
 
 /* 12) スマホ最適化：返信列を少し縮める */
