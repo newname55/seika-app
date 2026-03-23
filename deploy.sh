@@ -12,7 +12,7 @@ LINE_TOKEN="${LINE_DEPLOY_TOKEN:-}"
 LINE_USER="${LINE_DEPLOY_USER:-}"
 CRON_SECRET_VALUE="${CRON_SECRET:-}"
 
-APP_BASE_URL="${APP_BASE_URL:-https://haruto.asuscomm.com/wbss}"
+APP_BASE_URL="${APP_BASE_URL:-https://haruto.asuscomm.com/wbss/public}"
 
 send_line() {
   local msg="$1"
