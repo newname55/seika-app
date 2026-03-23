@@ -20,44 +20,17 @@ if (!function_exists('h')) {
 /** env/const getter */
 if (!function_exists('conf')) {
   function conf(string $key): string {
-    $source = 'default';
-    $value = '';
-
     if (defined($key)) {
-      $source = 'defined';
-      $value = (string)constant($key);
-    } elseif (array_key_exists($key, $_SERVER)) {
-      $source = '$_SERVER';
-      $value = (string)$_SERVER[$key];
-    } elseif (array_key_exists($key, $_ENV)) {
-      $source = '$_ENV';
-      $value = (string)$_ENV[$key];
-    } else {
-      $v = getenv($key);
-      if (is_string($v)) {
-        $source = 'getenv';
-        $value = $v;
-      }
+      return (string)constant($key);
     }
-
-    if (preg_match('/^(SEIKA|WBSS)_DB_/', $key)) {
-      static $logged = [];
-      if (!isset($logged[$key])) {
-        $masked = in_array($key, ['SEIKA_DB_PASS', 'SEIKA_DB_RO_PASS', 'WBSS_DB_PASS', 'WBSS_DB_RO_PASS'], true)
-          ? '[masked]'
-          : $value;
-        error_log(sprintf(
-          '[conf debug] key=%s source=%s len=%d value=%s',
-          $key,
-          $source,
-          strlen($value),
-          $masked === '' ? '[empty]' : $masked
-        ));
-        $logged[$key] = true;
-      }
+    if (array_key_exists($key, $_SERVER)) {
+      return (string)$_SERVER[$key];
     }
-
-    return $value;
+    if (array_key_exists($key, $_ENV)) {
+      return (string)$_ENV[$key];
+    }
+    $v = getenv($key);
+    return is_string($v) ? $v : '';
   }
 }
 
