@@ -7,13 +7,6 @@ require_once __DIR__ . '/../../app/db.php';
 require_login();
 require_role(['admin','manager','super_user']);
 
-if (!function_exists('conf')) {
-  function conf(string $key): string {
-    if (defined($key)) return (string)constant($key);
-    $v = getenv($key);
-    return is_string($v) ? $v : '';
-  }
-}
 if (!function_exists('h')) {
   function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 }

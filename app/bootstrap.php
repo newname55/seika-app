@@ -21,6 +21,8 @@ if (!function_exists('h')) {
 if (!function_exists('conf')) {
   function conf(string $key): string {
     if (defined($key)) return (string)constant($key);
+    if (array_key_exists($key, $_SERVER)) return (string)$_SERVER[$key];
+    if (array_key_exists($key, $_ENV)) return (string)$_ENV[$key];
     $v = getenv($key);
     return is_string($v) ? $v : '';
   }

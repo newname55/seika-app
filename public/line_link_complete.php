@@ -5,16 +5,10 @@ require_once __DIR__ . '/../app/auth.php';
 
 ensure_session();
 
-function h(string $s): string {
-  return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
-}
-
-function conf(string $key): string {
-  if (defined($key)) {
-    return (string) constant($key);
+if (!function_exists('h')) {
+  function h(string $s): string {
+    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
   }
-  $v = getenv($key);
-  return is_string($v) ? $v : '';
 }
 
 function csrf_token_local(): string {

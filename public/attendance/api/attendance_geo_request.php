@@ -18,11 +18,6 @@ function jexit(int $code, string $msg, array $extra=[]): void {
   exit;
 }
 
-function conf(string $key): string {
-  if (defined($key)) return (string)constant($key);
-  $v = getenv($key);
-  return is_string($v) ? $v : '';
-}
 if (!function_exists('normalize_whitespace')) {
   function normalize_whitespace(string $s): string {
     $s = preg_replace('/\s+/u', ' ', $s);

@@ -58,12 +58,6 @@ if (!function_exists('current_user_id')) {
   }
 }
 
-function conf(string $key): string {
-  if (defined($key)) return (string)constant($key);
-  $v = getenv($key);
-  return is_string($v) ? $v : '';
-}
-
 function jst_now(): DateTime { return new DateTime('now', new DateTimeZone('Asia/Tokyo')); }
 function dow0(DateTime $d): int { return (int)$d->format('w'); } // 0=Sun..6=Sat
 
@@ -91,12 +85,14 @@ function week_start_by_dow(string $baseYmd, int $weekStartDow0): string {
   return $dt->format('Y-m-d');
 }
 
-function business_date_for_store(array $storeRow, ?DateTime $now=null): string {
-  $now = $now ?: jst_now();
-  $cut = (string)($storeRow['business_day_start'] ?? '06:00:00');
-  $cutDT = new DateTime($now->format('Y-m-d') . ' ' . $cut, new DateTimeZone('Asia/Tokyo'));
-  if ($now < $cutDT) $now->modify('-1 day');
-  return $now->format('Y-m-d');
+if (!function_exists('business_date_for_store')) {
+  function business_date_for_store(array $storeRow, ?DateTime $now=null): string {
+    $now = $now ?: jst_now();
+    $cut = (string)($storeRow['business_day_start'] ?? '06:00:00');
+    $cutDT = new DateTime($now->format('Y-m-d') . ' ' . $cut, new DateTimeZone('Asia/Tokyo'));
+    if ($now < $cutDT) $now->modify('-1 day');
+    return $now->format('Y-m-d');
+  }
 }
 
 function current_staff_store_id(PDO $pdo, int $userId): int {

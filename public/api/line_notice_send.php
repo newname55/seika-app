@@ -36,12 +36,6 @@ if (!function_exists('csrf_verify')) {
   }
 }
 
-function conf(string $key): string {
-  if (defined($key)) return (string)constant($key);
-  $v = getenv($key);
-  return is_string($v) ? $v : '';
-}
-
 function json_out(array $a, int $code=200): void {
   http_response_code($code);
   header('Content-Type: application/json; charset=utf-8');

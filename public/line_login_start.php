@@ -5,11 +5,6 @@ require_once __DIR__ . '/../app/auth.php';
 
 ensure_session();
 
-function conf(string $key): string {
-  if (defined($key)) return (string)constant($key);
-  $v = getenv($key);
-  return is_string($v) ? $v : '';
-}
 function current_origin(): string {
   $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || ((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');

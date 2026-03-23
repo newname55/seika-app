@@ -9,11 +9,6 @@ ensure_session();
 /* =========================
    util
 ========================= */
-function conf(string $key): string {
-  if (defined($key)) return (string)constant($key);
-  $v = getenv($key);
-  return is_string($v) ? $v : '';
-}
 function current_origin(): string {
   $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || ((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
@@ -34,8 +29,10 @@ function normalize_line_redirect_uri(string $uri): string {
   }
   return $uri;
 }
-function h(string $s): string {
-  return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+if (!function_exists('h')) {
+  function h(string $s): string {
+    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+  }
 }
 function redirect_login(string $qs=''): never {
   header('Location: /wbss/public/login.php' . ($qs ? ('?' . $qs) : ''));

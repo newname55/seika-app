@@ -12,13 +12,6 @@ ensure_session();
 if (!function_exists('h')) {
   function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 }
-if (!function_exists('conf')) {
-  function conf(string $key): string {
-    if (defined($key)) return (string)constant($key);
-    $v = getenv($key);
-    return is_string($v) ? $v : '';
-  }
-}
 
 /** CSRF（プロジェクトの関数があれば使う。なければ簡易） */
 function csrf_ok(): bool {

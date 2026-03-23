@@ -3,12 +3,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../../app/db.php';
 
-function conf(string $key): string {
-  if (defined($key)) return (string)constant($key);
-  $v = getenv($key);
-  return is_string($v) ? $v : '';
-}
-
 $secret = conf('CRON_SECRET');
 if ($secret === '') { http_response_code(500); exit('CRON_SECRET missing'); }
 

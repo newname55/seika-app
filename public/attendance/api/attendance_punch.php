@@ -22,13 +22,6 @@ $pdo = db();
 if (!function_exists('h')) {
   function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 }
-if (!function_exists('conf')) {
-  function conf(string $key): string {
-    if (defined($key)) return (string)constant($key);
-    $v = getenv($key);
-    return is_string($v) ? $v : '';
-  }
-}
 function has_role(string $role): bool {
   return isset($_SESSION['roles']) && in_array($role, $_SESSION['roles'], true);
 }

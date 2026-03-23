@@ -3,13 +3,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../app/db.php';
 
-/** env/define から読む */
-function conf(string $key): string {
-  if (defined($key)) return (string)constant($key);
-  $v = getenv($key);
-  return is_string($v) ? $v : '';
-}
-
 /** ログ：どのファイルが叩かれているか */
 error_log('[line_webhook HIT] uri=' . ($_SERVER['REQUEST_URI'] ?? '') . ' file=' . __FILE__);
 
@@ -174,12 +167,14 @@ function table_has_column(PDO $pdo, string $table, string $column): bool {
   }
 }
 
-function business_date_for_store(array $storeRow, ?DateTime $now=null): string {
-  $now = $now ?: new DateTime('now', new DateTimeZone('Asia/Tokyo'));
-  $cut = (string)($storeRow['business_day_start'] ?? '06:00:00');
-  $cutDT = new DateTime($now->format('Y-m-d') . ' ' . $cut, new DateTimeZone('Asia/Tokyo'));
-  if ($now < $cutDT) $now->modify('-1 day');
-  return $now->format('Y-m-d');
+if (!function_exists('business_date_for_store')) {
+  function business_date_for_store(array $storeRow, ?DateTime $now=null): string {
+    $now = $now ?: new DateTime('now', new DateTimeZone('Asia/Tokyo'));
+    $cut = (string)($storeRow['business_day_start'] ?? '06:00:00');
+    $cutDT = new DateTime($now->format('Y-m-d') . ' ' . $cut, new DateTimeZone('Asia/Tokyo'));
+    if ($now < $cutDT) $now->modify('-1 day');
+    return $now->format('Y-m-d');
+  }
 }
 
 function detect_notice_reply_choice(string $kind, string $text): ?string {
