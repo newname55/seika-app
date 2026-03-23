@@ -1884,7 +1884,7 @@ render_page_start('ダッシュボード');
   }
 
   .dashboard-hero-tools{
-    grid-template-columns:minmax(0, .56fr) minmax(132px, 1.44fr);
+    grid-template-columns:repeat(2, minmax(0, 1fr));
     gap:7px;
   }
 
