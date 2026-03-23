@@ -12,7 +12,13 @@ LINE_TOKEN="${LINE_DEPLOY_TOKEN:-}"
 LINE_USER="${LINE_DEPLOY_USER:-}"
 CRON_SECRET_VALUE="${CRON_SECRET:-}"
 
-APP_BASE_URL="${APP_BASE_URL:-https://haruto.asuscomm.com/wbss/}"
+APP_BASE_URL="${APP_BASE_URL:-https://haruto.asuscomm.com/wbss}"
+
+echo "LINE_TOKEN_SET=$([ -n "$LINE_TOKEN" ] && echo yes || echo no)"
+echo "LINE_USER_SET=$([ -n "$LINE_USER" ] && echo yes || echo no)"
+echo "MSG_BEGIN"
+printf '%s\n' "$MSG"
+echo "MSG_END"
 
 send_line() {
   local msg="$1"
@@ -81,7 +87,9 @@ git pull origin dev || R4_STATUS=$?
 AFTER_R4="$(git log --oneline -1 2>/dev/null || echo 'unknown')"
 
 echo "===== RASPI5 DEPLOY (main) ====="
-R5_RESULT="$(ssh raspi5-deploy 'cd /var/www/html/wbss && ./deploy_prod.sh' 2>&1)" || R5_STATUS=$?
+#R5_RESULT="$(ssh raspi5-deploy 'cd /var/www/html/wbss && ./deploy_prod.sh' 2>&1)" || R5_STATUS=$?
+R5_RESULT="skip"
+R5_STATUS=0
 
 END="$(date '+%Y-%m-%d %H:%M:%S')"
 
