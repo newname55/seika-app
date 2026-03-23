@@ -38,7 +38,7 @@ PY
 }
 
 log_deploy() {
-  local env_name="$1"
+  local env_name="$1"exit
   local branch_name="$2"
   local before_commit="$3"
   local after_commit="$4"
