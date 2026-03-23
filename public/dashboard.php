@@ -690,8 +690,22 @@ render_page_start('ダッシュボード');
           <div class="dashboard-hero-tools">
             <?php if (($isSuper || $isAdmin || $isManager) && !empty($stores) && $canSwitchStores): ?>
             <form method="get" class="store-switch dashboard-inline-panel">
-              <div class="store-switch-label">店舗切り替え</div>
-              <div class="store-switch-row">
+              <div class="store-switch-compact-row">
+                <div class="store-switch-compact-meta">
+                  <span class="store-switch-compact-label">現在の店舗</span>
+                  <span class="store-switch-compact-name"><?= h($storeName ?: ('#' . $storeId)) ?> <small>(#<?= (int)$storeId ?>)</small></span>
+                </div>
+                <button
+                  type="button"
+                  class="store-switch-toggle"
+                  data-store-switch-toggle
+                  aria-expanded="false"
+                  aria-controls="dashboard-store-switch-panel"
+                >変更</button>
+              </div>
+              <div class="store-switch-panel" id="dashboard-store-switch-panel" data-store-switch-panel>
+                <div class="store-switch-label">店舗切り替え</div>
+                <div class="store-switch-row">
                 <select id="store_id" name="store_id" class="sel store-switch-select" onchange="this.form.submit()">
                   <?php foreach ($stores as $s): ?>
                     <option value="<?= (int)$s['id'] ?>" <?= ((int)$s['id'] === $storeId) ? 'selected' : '' ?>>
@@ -699,8 +713,9 @@ render_page_start('ダッシュボード');
                     </option>
                   <?php endforeach; ?>
                 </select>
+                </div>
+                <div class="store-switch-help">この店舗が、在庫や顧客など他の画面でも使われます。</div>
               </div>
-              <div class="store-switch-help">この店舗が、在庫や顧客など他の画面でも使われます。</div>
             </form>
             <?php endif; ?>
 
@@ -708,8 +723,8 @@ render_page_start('ダッシュボード');
               <summary class="dashboard-user-menu__summary dashboard-user-menu__summary--compact">
                 <span class="dashboard-user-menu__avatar"><?= h($currentUserInitial) ?></span>
                 <span class="dashboard-user-menu__meta">
-                  <span class="dashboard-user-menu__label">ログイン中</span>
                   <span class="dashboard-user-menu__name"><?= h($currentUserName !== '' ? $currentUserName : '-') ?></span>
+                  <span class="dashboard-user-menu__label">ログイン中</span>
                 </span>
                 <span class="dashboard-user-menu__hamburger" aria-hidden="true">☰</span>
               </summary>
@@ -918,6 +933,59 @@ render_page_start('ダッシュボード');
 .store-switch{
   display:flex;
   flex-direction:column;
+  gap:6px;
+}
+
+.store-switch-compact-row{
+  display:none;
+}
+
+.store-switch-compact-meta{
+  min-width:0;
+  display:grid;
+  gap:2px;
+}
+
+.store-switch-compact-label{
+  font-size:11px;
+  font-weight:800;
+  color:var(--muted);
+}
+
+.store-switch-compact-name{
+  font-size:14px;
+  font-weight:900;
+  color:var(--txt);
+  line-height:1.2;
+}
+
+.store-switch-compact-name small{
+  font-size:11px;
+  font-weight:800;
+  color:var(--muted);
+}
+
+.store-switch-toggle{
+  appearance:none;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.04);
+  color:var(--txt);
+  border-radius:999px;
+  min-height:34px;
+  padding:0 12px;
+  font-size:12px;
+  font-weight:900;
+  line-height:1;
+  cursor:pointer;
+}
+
+.store-switch-toggle:hover{
+  border-color:color-mix(in srgb, var(--accent) 40%, var(--line));
+  background:color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.store-switch-panel{
+  display:grid;
   gap:6px;
 }
 
@@ -1651,7 +1719,7 @@ render_page_start('ダッシュボード');
   }
 
   .store-switch{
-    gap:4px;
+    gap:0;
   }
 
   .store-switch-label{
@@ -1673,12 +1741,23 @@ render_page_start('ダッシュボード');
     font-size:14px;
   }
 
+  .dashboard-user-menu__summary{
+    gap:8px;
+    align-items:center;
+  }
+
+  .dashboard-user-menu__meta{
+    gap:1px;
+    align-items:flex-start;
+  }
+
   .dashboard-user-menu__label{
     font-size:10px;
   }
 
   .dashboard-user-menu__name{
-    font-size:13px;
+    font-size:14px;
+    line-height:1.15;
   }
 
   .dashboard-user-menu__hamburger{
@@ -1807,6 +1886,22 @@ render_page_start('ダッシュボード');
     padding:8px 9px;
   }
 
+  .store-switch-compact-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+
+  .store-switch-panel{
+    display:none;
+    margin-top:8px;
+  }
+
+  .store-switch.is-open .store-switch-panel{
+    display:grid;
+  }
+
   .store-switch-label{
     font-size:11px;
   }
@@ -1816,12 +1911,23 @@ render_page_start('ダッシュボード');
     font-size:13px;
   }
 
+  .dashboard-user-menu{
+    width:100%;
+  }
+
   .dashboard-user-menu__meta{
     gap:1px;
   }
 
+  .dashboard-user-menu__summary{
+    display:grid;
+    grid-template-columns:32px minmax(0, 1fr) 28px;
+    gap:8px;
+    align-items:center;
+  }
+
   .dashboard-user-menu__name{
-    font-size:12px;
+    font-size:15px;
   }
 
   .dashboard-user-menu__summary--compact{
@@ -1897,6 +2003,16 @@ document.addEventListener('click', async function(e){
 });
 
 document.addEventListener('click', function(e){
+  const storeToggle = e.target.closest('[data-store-switch-toggle]');
+  if (storeToggle) {
+    const form = storeToggle.closest('.store-switch');
+    if (!form) return;
+    const nextOpen = !form.classList.contains('is-open');
+    form.classList.toggle('is-open', nextOpen);
+    storeToggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+    return;
+  }
+
   const tab = e.target.closest('[data-tab-button]');
   if (!tab) return;
 
