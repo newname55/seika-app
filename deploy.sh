@@ -12,7 +12,7 @@ LINE_TOKEN="${LINE_DEPLOY_TOKEN:-}"
 LINE_USER="${LINE_DEPLOY_USER:-}"
 CRON_SECRET_VALUE="${CRON_SECRET:-}"
 
-APP_BASE_URL="${APP_BASE_URL:-https://haruto.asuscomm.com/wbss/public}"
+APP_BASE_URL="${APP_BASE_URL:-https://haruto.asuscomm.com/wbss/}"
 
 send_line() {
   local msg="$1"
@@ -35,7 +35,7 @@ PY
   curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
     -H "Authorization: Bearer ${LINE_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "$json" >/dev/null
+    -d "$json"
 }
 
 log_deploy() {
@@ -60,7 +60,7 @@ log_deploy() {
     -d "after_commit=${after_commit}" \
     -d "status=${status}" \
     -d "executed_by=${EXECUTED_BY}" \
-    --data-urlencode "detail_text=${detail}" >/dev/null
+    --data-urlencode "detail_text=${detail}"
 }
 
 START="$(date '+%Y-%m-%d %H:%M:%S')"
