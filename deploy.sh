@@ -1,25 +1,34 @@
 #!/bin/bash
 
-set -u
+# ===== 安定設定 =====
+set +u
 
 cd /var/www/html/wbss || exit 1
 
-# ===== 環境変数読み込み =====
+# ===== 環境変数 =====
 ENV_FILE="/var/www/.wbss_env"
-[ -f "$ENV_FILE" ] && source "$ENV_FILE"
+if [ -f "$ENV_FILE" ]; then
+  source "$ENV_FILE"
+else
+  echo "[WARN] ENVファイルなし: $ENV_FILE"
+fi
 
 LINE_TOKEN="${LINE_DEPLOY_TOKEN:-}"
 LINE_USER="${LINE_DEPLOY_USER:-}"
 CRON_SECRET_VALUE="${CRON_SECRET:-}"
-
 APP_BASE_URL="${APP_BASE_URL:-https://haruto.asuscomm.com/wbss}"
 
-echo "LINE_TOKEN_SET=$([ -n "$LINE_TOKEN" ] && echo yes || echo no)"
-echo "LINE_USER_SET=$([ -n "$LINE_USER" ] && echo yes || echo no)"
-echo "MSG_BEGIN"
-printf '%s\n' "$MSG"
-echo "MSG_END"
+# ===== 基本情報 =====
+START="$(date '+%Y-%m-%d %H:%M:%S')"
+END=""
+HOSTNAME_SHORT="$(hostname)"
+EXECUTED_BY="$(whoami)"
 
+BEFORE_R4="$(git log --oneline -1 2>/dev/null || echo 'unknown')"
+AFTER_R4=""
+R4_STATUS=0
+
+# ===== LINE送信 =====
 send_line() {
   local msg="$1"
 
@@ -41,9 +50,10 @@ PY
   curl -sS -X POST "https://api.line.me/v2/bot/message/push" \
     -H "Authorization: Bearer ${LINE_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "$json"
+    -d "$json" >/dev/null
 }
 
+# ===== deployログ保存 =====
 log_deploy() {
   local env_name="$1"
   local branch_name="$2"
@@ -66,74 +76,59 @@ log_deploy() {
     -d "after_commit=${after_commit}" \
     -d "status=${status}" \
     -d "executed_by=${EXECUTED_BY}" \
-    --data-urlencode "detail_text=${detail}"
+    --data-urlencode "detail_text=${detail}" >/dev/null
 }
 
-START="$(date '+%Y-%m-%d %H:%M:%S')"
-HOSTNAME_SHORT="$(hostname)"
-EXECUTED_BY="$(whoami)"
-
-BEFORE_R4="$(git log --oneline -1 2>/dev/null || echo 'unknown')"
-AFTER_R4=""
-R4_STATUS=0
-R5_STATUS=0
-R5_RESULT=""
-
+# ===== DEPLOY開始 =====
 echo "===== RASPI4 DEPLOY (dev) ====="
 date
+
 git reset --hard HEAD || R4_STATUS=$?
-git pull origin dev || R4_STATUS=$?
+git fetch origin dev || R4_STATUS=$?
+git reset --hard origin/dev || R4_STATUS=$?
 
 AFTER_R4="$(git log --oneline -1 2>/dev/null || echo 'unknown')"
 
-echo "===== RASPI5 DEPLOY (main) ====="
-#R5_RESULT="$(ssh raspi5-deploy 'cd /var/www/html/wbss && ./deploy_prod.sh' 2>&1)" || R5_STATUS=$?
-R5_RESULT="skip"
-R5_STATUS=0
-
 END="$(date '+%Y-%m-%d %H:%M:%S')"
 
-if [ "$R4_STATUS" -eq 0 ] && [ "$R5_STATUS" -eq 0 ]; then
+# ===== 判定 =====
+if [ "$R4_STATUS" -eq 0 ]; then
+
   if [ "$BEFORE_R4" = "$AFTER_R4" ]; then
-    MSG="ℹ️ WBSS deploy完了（更新なし）
+    MSG="ℹ️ WBSS dev deploy（更新なし）
 host: $HOSTNAME_SHORT
 by: $EXECUTED_BY
 start: $START
 end: $END
-raspi4(dev): $AFTER_R4
-raspi5(main): OK
+commit: $AFTER_R4
 ${APP_BASE_URL}/"
 
-    log_deploy "dev_to_main" "dev/main" "$BEFORE_R4" "$AFTER_R4" "success" "更新なし / raspi5(main) 同期成功"
+    log_deploy "dev" "dev" "$BEFORE_R4" "$AFTER_R4" "success" "更新なし"
   else
-    MSG="✅ WBSS deploy成功
+    MSG="✅ WBSS dev deploy成功
 host: $HOSTNAME_SHORT
 by: $EXECUTED_BY
 start: $START
 end: $END
-raspi4(dev): $AFTER_R4
-raspi5(main): OK
+before: $BEFORE_R4
+after:  $AFTER_R4
 ${APP_BASE_URL}/"
 
-    log_deploy "dev_to_main" "dev/main" "$BEFORE_R4" "$AFTER_R4" "success" "raspi4(dev) 更新・raspi5(main) 同期成功"
-  fi
-else
-  DETAIL="raspi4_status=$R4_STATUS / raspi5_status=$R5_STATUS"
-  if [ -n "$R5_RESULT" ]; then
-    DETAIL="$DETAIL / raspi5_log=$(printf '%s' "$R5_RESULT" | tail -n 5 | tr '\n' ' ')"
+    log_deploy "dev" "dev" "$BEFORE_R4" "$AFTER_R4" "success" "更新あり"
   fi
 
-  MSG="❌ WBSS deploy失敗
+else
+  MSG="❌ WBSS dev deploy失敗
 host: $HOSTNAME_SHORT
 by: $EXECUTED_BY
 start: $START
 end: $END
-raspi4_status: $R4_STATUS
-raspi5_status: $R5_STATUS"
+status: $R4_STATUS"
 
-  log_deploy "dev_to_main" "dev/main" "$BEFORE_R4" "$AFTER_R4" "failed" "$DETAIL"
+  log_deploy "dev" "dev" "$BEFORE_R4" "$AFTER_R4" "failed" "gitエラー"
 fi
 
+# ===== LINE送信 =====
 send_line "$MSG"
 
 echo "===== DONE ====="
