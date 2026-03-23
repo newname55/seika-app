@@ -701,7 +701,9 @@ render_page_start('ダッシュボード');
                   data-store-switch-toggle
                   aria-expanded="false"
                   aria-controls="dashboard-store-switch-panel"
-                >変更</button>
+                  aria-label="店舗を変更"
+                  title="店舗を変更"
+                >✎</button>
               </div>
               <div class="store-switch-panel" id="dashboard-store-switch-panel" data-store-switch-panel>
                 <div class="store-switch-label">店舗切り替え</div>
@@ -972,8 +974,10 @@ render_page_start('ダッシュボード');
   color:var(--txt);
   border-radius:999px;
   min-height:32px;
-  padding:0 12px;
-  font-size:12px;
+  width:32px;
+  min-width:32px;
+  padding:0;
+  font-size:14px;
   font-weight:900;
   line-height:1;
   cursor:pointer;
@@ -1126,6 +1130,7 @@ render_page_start('ダッシュボード');
     linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02)),
     var(--cardA);
   box-shadow:0 14px 28px rgba(0,0,0,.14);
+  min-width:220px;
 }
 
 .dashboard-user-menu__section-title{
@@ -1914,13 +1919,15 @@ render_page_start('ダッシュボード');
   }
 
   .store-switch-toggle{
-    min-height:30px;
-    padding:0 10px;
-    font-size:11px;
+    width:28px;
+    min-width:28px;
+    min-height:28px;
+    font-size:13px;
   }
 
   .dashboard-user-menu{
     width:100%;
+    position:relative;
   }
 
   .dashboard-user-menu__meta{
@@ -1946,6 +1953,49 @@ render_page_start('ダッシュボード');
     width:28px;
     height:28px;
     font-size:13px;
+  }
+
+  .dashboard-user-menu__panel{
+    position:absolute;
+    top:calc(100% + 8px);
+    right:0;
+    width:min(264px, calc(100vw - 44px));
+    min-width:0;
+    padding:12px;
+    z-index:12;
+  }
+
+  .theme-inline-row{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:8px;
+  }
+
+  .theme-chip{
+    width:100%;
+    min-height:38px;
+    padding:8px 10px;
+    text-align:center;
+  }
+
+  .dashboard-user-push__row{
+    align-items:flex-start;
+    gap:10px;
+  }
+
+  .dashboard-user-push__status{
+    flex:1;
+    font-size:10px;
+    line-height:1.45;
+  }
+
+  .dashboard-user-push__actions{
+    flex:0 0 auto;
+    gap:8px;
+  }
+
+  .dashboard-user-menu__logout{
+    min-height:40px;
   }
 
   .dashboard-message-strip,
