@@ -60,6 +60,15 @@ render_header('管理ランチャー', [
     </div>
 
     <div class="grid3" style="margin-top:12px;">
+      <a class="tile tile-warn" href="/wbss/public/admin/deploy_history.php">
+        <div class="tile__icon">🧯</div>
+        <div class="tile__main">
+          <div class="tile__title">本番 deploy / rollback</div>
+          <div class="tile__desc">本番履歴の確認と直前成功 deploy への rollback</div>
+        </div>
+        <div class="tile__hint">本番</div>
+      </a>
+
       <a class="tile tile-primary" href="/wbss/public/applicants/index.php">
         <div class="tile__icon">🧾</div>
         <div class="tile__main">
@@ -158,6 +167,13 @@ render_header('管理ランチャー', [
     border-color: color-mix(in srgb, var(--ok) 35%, var(--line));
     background: linear-gradient(180deg,
       color-mix(in srgb, var(--ok) 14%, var(--cardA)),
+      var(--cardB)
+    );
+  }
+  .tile-warn{
+    border-color: color-mix(in srgb, var(--warn) 35%, var(--line));
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--warn) 14%, var(--cardA)),
       var(--cardB)
     );
   }
