@@ -19,6 +19,10 @@ $userId  = function_exists('current_user_id') ? (int)current_user_id() : (int)($
 $isSuper = has_role('super_user');
 $isAdmin = has_role('admin');
 $isMgr   = has_role('manager');
+$loginId = (string)($_SESSION['login_id'] ?? '');
+$displayName = (string)($_SESSION['display_name'] ?? '');
+$roleLabel = (string)($_SESSION['role'] ?? '');
+$who = $displayName !== '' ? $displayName : $loginId;
 
 $returnRaw = (string)($_GET['return'] ?? $_GET['next'] ?? '/wbss/public/dashboard.php');
 $returnTo = normalize_internal_wbss_path($returnRaw, '/wbss/public/dashboard.php');
@@ -83,11 +87,10 @@ foreach ($stores as $store) {
 
 render_page_start('店舗選択');
 render_header('店舗選択', [
-  'back_href'  => '/wbss/public/logout.php',
-  'back_label' => 'ログアウト',
-  'right_html' => $selectedStore
-    ? '<span class="pill"><span class="pill__label">現在</span><span class="pill__value">' . h((string)$selectedStore['name']) . ' (#' . (int)$selectedStore['id'] . ')</span></span>'
-    : '',
+  'back_href'  => $returnTo,
+  'back_label' => '戻る',
+  'show_store' => false,
+  'show_user'  => false,
 ]);
 ?>
 <div class="page">
@@ -95,6 +98,29 @@ render_header('店舗選択', [
     <?php if ($err): ?>
       <div class="store-select-flash is-error"><?= h($err) ?></div>
     <?php endif; ?>
+
+    <section class="store-select-overview" aria-label="現在の選択情報">
+      <div class="store-select-overview__grid">
+        <?php if ($selectedStore): ?>
+          <div class="store-select-overview__item">
+            <span class="store-select-overview__label">現在の店舗</span>
+            <strong class="store-select-overview__value"><?= h((string)$selectedStore['name']) ?> (#<?= (int)$selectedStore['id'] ?>)</strong>
+          </div>
+        <?php endif; ?>
+        <div class="store-select-overview__item">
+          <span class="store-select-overview__label">ユーザー</span>
+          <strong class="store-select-overview__value"><?= h($who !== '' ? $who : '-') ?></strong>
+        </div>
+        <div class="store-select-overview__item">
+          <span class="store-select-overview__label">権限</span>
+          <strong class="store-select-overview__value"><?= h($roleLabel !== '' ? $roleLabel : '-') ?></strong>
+        </div>
+      </div>
+      <div class="store-select-overview__actions">
+        <a class="btn btn-primary" href="<?= h($returnTo) ?>">戻る</a>
+        <a class="btn" href="/wbss/public/logout.php">ログアウト</a>
+      </div>
+    </section>
 
     <section class="store-select-hero">
       <div class="store-select-hero__main">
@@ -115,11 +141,6 @@ render_header('店舗選択', [
             <span class="store-select-chip">権限 manager</span>
           <?php endif; ?>
         </div>
-      </div>
-
-      <div class="store-select-hero__side">
-        <a class="btn" href="/wbss/public/logout.php">ログアウト</a>
-        <a class="btn btn-primary" href="<?= h($returnTo) ?>">戻る</a>
       </div>
     </section>
 
@@ -163,6 +184,7 @@ render_header('店舗選択', [
   padding-bottom:28px;
 }
 .store-select-flash,
+.store-select-overview,
 .store-select-hero,
 .store-select-card{
   border:1px solid var(--line);
@@ -174,15 +196,49 @@ render_header('店舗選択', [
   padding:12px 14px;
   margin-bottom:12px;
 }
+.store-select-overview{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto;
+  gap:14px;
+  padding:16px 18px;
+  margin-bottom:14px;
+}
+.store-select-overview__grid{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:10px;
+}
+.store-select-overview__item{
+  min-width:0;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:rgba(255,255,255,.04);
+  display:grid;
+  gap:6px;
+}
+.store-select-overview__label{
+  font-size:12px;
+  font-weight:800;
+  color:var(--muted);
+}
+.store-select-overview__value{
+  min-width:0;
+  font-size:16px;
+  font-weight:1000;
+  line-height:1.35;
+  word-break:break-word;
+}
+.store-select-overview__actions{
+  min-width:180px;
+  display:grid;
+  gap:10px;
+}
 .store-select-flash.is-error{
   border-color:rgba(239,68,68,.40);
 }
 .store-select-hero{
   padding:20px;
-  display:grid;
-  grid-template-columns:minmax(0, 1.3fr) auto;
-  gap:16px;
-  align-items:start;
 }
 .store-select-kicker{
   font-size:12px;
@@ -313,6 +369,7 @@ render_header('店舗選択', [
   font-weight:800;
 }
 body[data-theme="light"] .store-select-flash,
+body[data-theme="light"] .store-select-overview,
 body[data-theme="light"] .store-select-hero,
 body[data-theme="light"] .store-select-card,
 body[data-theme="light"] .store-card{
@@ -321,7 +378,8 @@ body[data-theme="light"] .store-card{
   box-shadow:0 12px 24px rgba(15,18,34,.08);
 }
 body[data-theme="light"] .store-select-chip,
-body[data-theme="light"] .store-card__id{
+body[data-theme="light"] .store-card__id,
+body[data-theme="light"] .store-select-overview__item{
   background:#fff;
   border-color:var(--line);
 }
@@ -329,15 +387,22 @@ body[data-theme="light"] .store-card.is-current{
   background:var(--softBlue);
 }
 @media (max-width: 720px){
-  .store-select-hero{
+  .store-select-overview{
     grid-template-columns:1fr;
+    padding:14px;
+  }
+  .store-select-overview__grid{
+    grid-template-columns:1fr;
+  }
+  .store-select-overview__actions{
+    min-width:0;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+  .store-select-hero{
     padding:16px;
   }
   .store-select-hero h1{
     font-size:24px;
-  }
-  .store-select-hero__side{
-    min-width:0;
   }
   .store-grid{
     grid-template-columns:1fr;
@@ -349,6 +414,27 @@ body[data-theme="light"] .store-card.is-current{
   }
   .store-card__name{
     font-size:19px;
+  }
+}
+@media (max-width: 480px){
+  .store-select-shell{
+    padding-bottom:20px;
+  }
+  .store-select-overview__actions{
+    grid-template-columns:1fr;
+  }
+  .store-select-hero h1{
+    font-size:22px;
+  }
+  .store-select-hero p{
+    font-size:14px;
+  }
+  .store-select-summary{
+    gap:6px;
+  }
+  .store-select-chip{
+    width:100%;
+    justify-content:center;
   }
 }
 </style>
