@@ -1647,6 +1647,10 @@ render_header('本日の勤務予定', [
 .mobileSimpleCard:active{
   transform:translateY(1px);
 }
+.row-is-highlighted{
+  outline:2px solid rgba(59,130,246,.42);
+  outline-offset:4px;
+}
 .mobileSimpleCard .badgeState{
   min-width:0;
   width:100%;
@@ -2323,11 +2327,14 @@ body.today-density-compact .col-action .btn{
   const form = document.getElementById('modalForm');
   const sendBtn = document.getElementById('modalSend');
   const searchInput = document.getElementById('castSearch');
+  const searchForm = document.getElementById('castSearchForm');
+  const searchClear = document.getElementById('castSearchClear');
   const filterButtons = Array.from(document.querySelectorAll('[data-toolbar-filter]'));
   const kpiButtons = Array.from(document.querySelectorAll('.kpiBtns .k[data-filter]'));
   const densityToggle = document.getElementById('densityToggle');
   const visibleCount = document.getElementById('visibleCount');
   const rows = Array.from(document.querySelectorAll('.tblToday tbody tr.row'));
+  const simpleCards = Array.from(document.querySelectorAll('.js-simple-scroll'));
   const densityKey = 'managerTodayDensityCompact';
   let activeFilter = 'all';
 
@@ -2386,7 +2393,32 @@ body.today-density-compact .col-action .btn{
     if (visibleCount) {
       visibleCount.textContent = String(shown);
     }
+
+    simpleCards.forEach((card) => {
+      const targetRow = card.dataset.target ? document.getElementById(card.dataset.target) : null;
+      const rowVisible = !!(targetRow && !targetRow.hidden);
+      const cardText = `${card.dataset.tag || ''} ${card.dataset.name || ''}`;
+      const matchesSearch = q === '' || cardText.includes(q);
+      const matchesFilter = activeFilter === 'all'
+        ? true
+        : activeFilter === 'wait'
+          ? (card.dataset.state === 'wait' || card.dataset.state === 'late')
+          : activeFilter === 'late'
+            ? card.dataset.state === 'late'
+            : false;
+      card.hidden = !(rowVisible && matchesSearch && matchesFilter);
+    });
+
     syncActiveButtons();
+  }
+
+  function scrollToDetail(targetId){
+    const row = targetId ? document.getElementById(targetId) : null;
+    if (!row) return;
+
+    row.scrollIntoView({ behavior:'smooth', block:'start' });
+    row.classList.add('row-is-highlighted');
+    window.setTimeout(() => row.classList.remove('row-is-highlighted'), 1600);
   }
 
   function openModal(kind, castId, name, text){
@@ -2450,6 +2482,12 @@ body.today-density-compact .col-action .btn{
     });
   });
 
+  simpleCards.forEach((card) => {
+    card.addEventListener('click', () => {
+      scrollToDetail(card.dataset.target || '');
+    });
+  });
+
   filterButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       activeFilter = btn.dataset.toolbarFilter || 'all';
@@ -2466,6 +2504,29 @@ body.today-density-compact .col-action .btn{
 
   if (searchInput) {
     searchInput.addEventListener('input', applyBoardFilters);
+  }
+
+  if (searchForm) {
+    searchForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      applyBoardFilters();
+      if (searchInput && searchInput.value.trim() !== '') {
+        const firstVisible = rows.find((row) => !row.hidden);
+        if (firstVisible) {
+          scrollToDetail(firstVisible.id);
+        }
+      }
+    });
+  }
+
+  if (searchClear) {
+    searchClear.addEventListener('click', () => {
+      if (searchInput) {
+        searchInput.value = '';
+      }
+      activeFilter = 'all';
+      applyBoardFilters();
+    });
   }
 
   if (densityToggle) {
