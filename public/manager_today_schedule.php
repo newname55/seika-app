@@ -680,10 +680,6 @@ foreach ($rows as $r) {
   $attendanceConfirmed = $attendanceConfirmNotice
     && (string)($attendanceConfirmNotice['reply_choice'] ?? '') === 'confirm'
     && !empty($attendanceConfirmNotice['responded_at']);
-  $showConfirmButton = $attendanceConfirmNotice
-    && (string)($attendanceConfirmNotice['reply_choice'] ?? '') === 'confirm'
-    && !empty($attendanceConfirmNotice['responded_at'])
-    && empty($attendanceConfirmNotice['manager_confirmed_at']);
 
   $hasReply = false;
   foreach (['late', 'absent', 'attendance_confirm'] as $kind) {
@@ -696,10 +692,10 @@ foreach ($rows as $r) {
   if ($hasReply) {
     $replyCount++;
   }
-  if ($showConfirmButton) {
+  if ($attendanceConfirmed) {
     $confirmPendingCount++;
   }
-  if ($isLate || $attendanceStatus === 'absent' || $showConfirmButton || $attendanceConfirmed) {
+  if ($isLate || $attendanceStatus === 'absent' || $attendanceConfirmed) {
     $attentionCount++;
   }
 }
@@ -999,7 +995,7 @@ render_header('本日の勤務予定', [
           ?>
             <?php
               $hasReply = ($replyText !== '');
-              $needsAttention = ($isLate || $attendanceStatus === 'absent' || $showConfirmButton);
+              $needsAttention = ($isLate || $attendanceStatus === 'absent' || $attendanceConfirmed);
             ?>
             <tr
               id="detail-<?= (int)$uid ?>"
@@ -1009,7 +1005,7 @@ render_header('本日の勤務予定', [
               data-name="<?= h(mb_strtolower($name, 'UTF-8')) ?>"
               data-tag="<?= h(mb_strtolower($tagLabel, 'UTF-8')) ?>"
               data-replied="<?= $hasReply ? '1' : '0' ?>"
-              data-confirm-pending="<?= $showConfirmButton ? '1' : '0' ?>"
+              data-confirm-pending="<?= $attendanceConfirmed ? '1' : '0' ?>"
               data-attention="<?= $needsAttention ? '1' : '0' ?>"
             >
               <td class="col-status">
