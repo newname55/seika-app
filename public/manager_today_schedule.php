@@ -782,11 +782,7 @@ render_header('本日の勤務予定', [
         <div class="boardToolbar__actions">
           <form class="boardSearch" id="castSearchForm">
             <span class="boardSearch__label">検索</span>
-            <div class="boardSearch__controls">
-              <input type="search" id="castSearch" class="boardSearch__input" placeholder="店番・名前で絞り込み">
-              <button type="submit" class="btn boardSearch__submit">検索</button>
-              <button type="button" class="btn boardSearch__clear" id="castSearchClear">解除</button>
-            </div>
+            <input type="search" id="castSearch" class="boardSearch__input" placeholder="店番・名前で絞り込み">
           </form>
           <button type="button" class="btn boardDensityBtn" id="densityToggle" aria-pressed="false">高密度表示</button>
         </div>
@@ -1727,15 +1723,6 @@ render_header('本日の勤務予定', [
   display:grid;
   gap:6px;
 }
-.boardSearch__controls{
-  display:flex;
-  align-items:center;
-  gap:8px;
-}
-.boardSearch__submit,
-.boardSearch__clear{
-  white-space:nowrap;
-}
 .weekRow td{
   background:#f8fafc;
   border-bottom: 1px solid rgba(15,23,42,.08);
@@ -2066,11 +2053,6 @@ body.today-density-compact .col-action .btn{
   .boardSearch{
     width:100%;
   }
-  .boardSearch__controls{
-    display:grid;
-    grid-template-columns:minmax(0, 1fr) auto auto;
-    gap:8px;
-  }
   .boardSearch__input{
     width:100%;
   }
@@ -2328,7 +2310,6 @@ body.today-density-compact .col-action .btn{
   const sendBtn = document.getElementById('modalSend');
   const searchInput = document.getElementById('castSearch');
   const searchForm = document.getElementById('castSearchForm');
-  const searchClear = document.getElementById('castSearchClear');
   const filterButtons = Array.from(document.querySelectorAll('[data-toolbar-filter]'));
   const kpiButtons = Array.from(document.querySelectorAll('.kpiBtns .k[data-filter]'));
   const densityToggle = document.getElementById('densityToggle');
@@ -2504,28 +2485,29 @@ body.today-density-compact .col-action .btn{
 
   if (searchInput) {
     searchInput.addEventListener('input', applyBoardFilters);
-  }
-
-  if (searchForm) {
-    searchForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      applyBoardFilters();
-      if (searchInput && searchInput.value.trim() !== '') {
+    searchInput.addEventListener('search', applyBoardFilters);
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyBoardFilters();
         const firstVisible = rows.find((row) => !row.hidden);
-        if (firstVisible) {
+        if (firstVisible && searchInput.value.trim() !== '') {
           scrollToDetail(firstVisible.id);
         }
       }
     });
   }
 
-  if (searchClear) {
-    searchClear.addEventListener('click', () => {
-      if (searchInput) {
-        searchInput.value = '';
+  if (searchForm) {
+    searchForm.addEventListener('submit', (e) => {
+      if (document.activeElement === searchInput) {
+        e.preventDefault();
+        applyBoardFilters();
+        const firstVisible = rows.find((row) => !row.hidden);
+        if (firstVisible && searchInput && searchInput.value.trim() !== '') {
+          scrollToDetail(firstVisible.id);
+        }
       }
-      activeFilter = 'all';
-      applyBoardFilters();
     });
   }
 
