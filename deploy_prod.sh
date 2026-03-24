@@ -71,7 +71,7 @@ log_deploy() {
 START="$(date '+%Y-%m-%d %H:%M:%S')"
 HOSTNAME_SHORT="$(hostname)"
 EXECUTED_BY="$(whoami)"
-BEFORE_MAIN="$(git log --oneline -1 2>/dev/null || echo 'unknown')"
+BEFORE_MAIN="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
 
 MAIN_STATUS=0
 
@@ -82,7 +82,7 @@ git checkout main || MAIN_STATUS=$?
 git fetch origin || MAIN_STATUS=$?
 git reset --hard origin/main || MAIN_STATUS=$?
 
-AFTER_MAIN="$(git log --oneline -1 2>/dev/null || echo 'unknown')"
+AFTER_MAIN="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
 END="$(date '+%Y-%m-%d %H:%M:%S')"
 
 if [ "$MAIN_STATUS" -eq 0 ]; then
