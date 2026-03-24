@@ -717,6 +717,8 @@ render_header('本日の勤務予定', [
   'back_href' => $dashboardUrl,
   'back_label' => '← ダッシュボード',
   'right_html' => $headerActions,
+  'show_store' => false,
+  'show_user' => false,
 ]);
 ?>
 <div class="page">
@@ -940,8 +942,14 @@ render_header('本日の勤務予定', [
               </td>
 
               <td class="col-cast">
+                <div class="mobileCastHead" aria-hidden="true">
+                  <span class="mobileCastHead__status badgeState s-<?= h($state) ?>"><?= h($statusLabel) ?></span>
+                  <span class="mobileCastHead__tag">店番 <?= h($tagLabel) ?></span>
+                  <span class="mobileCastHead__name"><?= h($name) ?></span>
+                </div>
                 <div class="castMain">
-                  <b class="castName">【<?= h($tagLabel) ?>】<?= h($name) ?></b>
+                  <span class="castTag">【<?= h($tagLabel) ?>】</span>
+                  <b class="castName"><?= h($name) ?></b>
                 </div>
                 <div class="castSub muted"><?= h($employmentType) ?></div>
                 <button type="button" class="weekToggleBtn js-week-toggle" aria-expanded="false" data-target="week-<?= (int)$uid ?>">
@@ -1006,7 +1014,7 @@ render_header('本日の勤務予定', [
 
               <td class="col-action">
                 <?php if ($hasPlan && !$planOff): ?>
-                  <div class="btnRow">
+                  <div class="actionStack">
                     <?php if ($showConfirmButton): ?>
                       <form method="post" style="margin:0;">
                         <input type="hidden" name="action" value="confirm_attendance_response">
@@ -1017,19 +1025,24 @@ render_header('本日の勤務予定', [
                         <button type="submit" class="btn ghost btn-confirm-attendance">出勤確定</button>
                       </form>
                     <?php endif; ?>
-                    <button type="button" class="btn ghost line-late js-open-modal"
-                      data-kind="late"
-                      data-cast="<?= (int)$uid ?>"
-                      data-name="<?= h($name) ?>"
-                      data-text="<?= h($tplLate) ?>"
-                    >遅刻LINE</button>
+                    <details class="lineActionsDetails">
+                      <summary>LINE連絡を開く</summary>
+                      <div class="btnRow">
+                        <button type="button" class="btn ghost line-late js-open-modal"
+                          data-kind="late"
+                          data-cast="<?= (int)$uid ?>"
+                          data-name="<?= h($name) ?>"
+                          data-text="<?= h($tplLate) ?>"
+                        >遅刻LINE</button>
 
-                    <button type="button" class="btn ghost line-abs js-open-modal"
-                      data-kind="absent"
-                      data-cast="<?= (int)$uid ?>"
-                      data-name="<?= h($name) ?>"
-                      data-text="<?= h($tplAbs) ?>"
-                    >欠勤LINE</button>
+                        <button type="button" class="btn ghost line-abs js-open-modal"
+                          data-kind="absent"
+                          data-cast="<?= (int)$uid ?>"
+                          data-name="<?= h($name) ?>"
+                          data-text="<?= h($tplAbs) ?>"
+                        >欠勤LINE</button>
+                      </div>
+                    </details>
                   </div>
                 <?php else: ?>
                   <span class="muted">-</span>
@@ -1545,6 +1558,49 @@ render_header('本日の勤務予定', [
 .weekToggleBtn[aria-expanded="true"]::before{
   content:"-";
 }
+.mobileCastHead{
+  display:none;
+}
+.castTag{
+  color:#64748b;
+  font-size:12px;
+  font-weight:900;
+}
+.actionStack{
+  display:grid;
+  gap:8px;
+}
+.lineActionsDetails{
+  border:1px solid rgba(15,23,42,.10);
+  border-radius:14px;
+  background:#f8fafc;
+  padding:8px;
+}
+.lineActionsDetails summary{
+  list-style:none;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  font-size:12px;
+  font-weight:900;
+  color:#334155;
+}
+.lineActionsDetails summary::-webkit-details-marker{
+  display:none;
+}
+.lineActionsDetails summary::after{
+  content:"＋";
+  font-size:15px;
+  line-height:1;
+}
+.lineActionsDetails[open] summary::after{
+  content:"－";
+}
+.lineActionsDetails .btnRow{
+  margin-top:8px;
+}
 .weekRow td{
   background:#f8fafc;
   border-bottom: 1px solid rgba(15,23,42,.08);
@@ -1938,7 +1994,7 @@ body.today-density-compact .col-action .btn{
   }
   .tblToday tbody tr.row{
     margin-bottom:10px;
-    padding:10px;
+    padding:12px;
     border:1px solid rgba(15,23,42,.10);
     border-radius:16px;
     background:#ffffff;
@@ -1949,6 +2005,9 @@ body.today-density-compact .col-action .btn{
     border-bottom:1px solid rgba(15,23,42,.08);
     background:transparent !important;
     box-shadow:none !important;
+  }
+  .tblToday tbody tr.row td.col-status{
+    display:none;
   }
   .tblToday tbody tr.row td:last-child{
     border-bottom:none;
@@ -1971,11 +2030,50 @@ body.today-density-compact .col-action .btn{
     padding:5px 10px;
     font-size:11px;
   }
+  .mobileCastHead{
+    display:grid;
+    grid-template-columns:minmax(0, auto) minmax(0, auto) minmax(0, 1fr);
+    align-items:center;
+    gap:8px;
+    margin-bottom:8px;
+  }
+  .mobileCastHead__status{
+    justify-content:center;
+    min-width:0;
+  }
+  .mobileCastHead__tag{
+    display:inline-flex;
+    align-items:center;
+    min-height:30px;
+    padding:0 10px;
+    border-radius:999px;
+    border:1px solid rgba(15,23,42,.10);
+    background:#f8fafc;
+    color:#334155;
+    font-size:12px;
+    font-weight:900;
+    white-space:nowrap;
+  }
+  .mobileCastHead__name{
+    min-width:0;
+    font-size:18px;
+    font-weight:1000;
+    color:#0f172a;
+    text-align:left;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
   .castMain{
-    display:block;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .castMain .castTag{
+    display:none;
   }
   .castName{
-    font-size:18px;
+    font-size:16px;
     line-height:1.25;
   }
   .castSub{
@@ -2002,6 +2100,12 @@ body.today-density-compact .col-action .btn{
   }
   .replyText{
     font-size:12px;
+  }
+  .lineActionsDetails{
+    padding:10px;
+  }
+  .lineActionsDetails summary{
+    font-size:13px;
   }
   .col-action .btnRow{
     display:grid;
@@ -2033,6 +2137,9 @@ body.today-density-compact .col-action .btn{
   .inlineWeekItem{
     min-height:64px;
     padding:7px 6px;
+  }
+  .subInfo{
+    display:none;
   }
 }
 
