@@ -780,10 +780,14 @@ render_header('本日の勤務予定', [
           <div class="boardSummary__item">出勤確定待ち <?= (int)$confirmPendingCount ?>名</div>
         </div>
         <div class="boardToolbar__actions">
-          <label class="boardSearch">
+          <form class="boardSearch" id="castSearchForm">
             <span class="boardSearch__label">検索</span>
-            <input type="search" id="castSearch" class="boardSearch__input" placeholder="店番・名前で絞り込み">
-          </label>
+            <div class="boardSearch__controls">
+              <input type="search" id="castSearch" class="boardSearch__input" placeholder="店番・名前で絞り込み">
+              <button type="submit" class="btn boardSearch__submit">検索</button>
+              <button type="button" class="btn boardSearch__clear" id="castSearchClear">解除</button>
+            </div>
+          </form>
           <button type="button" class="btn boardDensityBtn" id="densityToggle" aria-pressed="false">高密度表示</button>
         </div>
       </div>
@@ -822,8 +826,8 @@ render_header('本日の勤務予定', [
     <div class="card mobileSimpleBoard" aria-label="キャスト簡易一覧">
       <div class="sectionHead">
         <div>
-          <div class="cardTitle">簡易一覧</div>
-          <div class="muted">スマホでは状態・店番・名前だけを先に一覧できます。</div>
+          <div class="cardTitle">未出勤の簡易一覧</div>
+          <div class="muted">未出勤中のキャストだけを並べています。タップで詳細へ移動します。</div>
         </div>
       </div>
       <div class="mobileSimpleGrid">
@@ -857,12 +861,23 @@ render_header('本日の勤務予定', [
           else if ($r['clock_out']) $state = 'done';
           else if ($r['clock_in']) $state = 'in';
           else $state = ($isLate ? 'late' : 'wait');
+
+          if (!in_array($state, ['wait', 'late'], true)) {
+            continue;
+          }
         ?>
-          <div class="mobileSimpleCard row-state-<?= h($state) ?>">
+          <button
+            type="button"
+            class="mobileSimpleCard row-state-<?= h($state) ?> js-simple-scroll"
+            data-target="detail-<?= (int)$uid ?>"
+            data-name="<?= h(mb_strtolower($name, 'UTF-8')) ?>"
+            data-tag="<?= h(mb_strtolower($tagLabel, 'UTF-8')) ?>"
+            data-state="<?= h($state) ?>"
+          >
             <span class="badgeState s-<?= h($state) ?>"><?= h($statusLabel) ?></span>
             <span class="mobileSimpleCard__tag">店番 <?= h($tagLabel) ?></span>
             <span class="mobileSimpleCard__name"><?= h($name) ?></span>
-          </div>
+          </button>
         <?php endforeach; ?>
       </div>
     </div>
@@ -976,6 +991,7 @@ render_header('本日の勤務予定', [
               $needsAttention = ($isLate || $attendanceStatus === 'absent' || $showConfirmButton);
             ?>
             <tr
+              id="detail-<?= (int)$uid ?>"
               class="row row-state-<?= h($state) ?>"
               data-state="<?= h($state) ?>"
               data-user-id="<?= (int)$uid ?>"
@@ -1624,6 +1640,12 @@ render_header('本日の勤務予定', [
   background:#ffffff;
   box-shadow:0 8px 18px rgba(15,23,42,.05);
   min-width:0;
+  width:100%;
+  text-align:center;
+  cursor:pointer;
+}
+.mobileSimpleCard:active{
+  transform:translateY(1px);
 }
 .mobileSimpleCard .badgeState{
   min-width:0;
@@ -1696,6 +1718,19 @@ render_header('本日の勤務予定', [
 }
 .lineActionsDetails .btnRow{
   margin-top:8px;
+}
+.boardSearch{
+  display:grid;
+  gap:6px;
+}
+.boardSearch__controls{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.boardSearch__submit,
+.boardSearch__clear{
+  white-space:nowrap;
 }
 .weekRow td{
   background:#f8fafc;
@@ -2026,6 +2061,11 @@ body.today-density-compact .col-action .btn{
   }
   .boardSearch{
     width:100%;
+  }
+  .boardSearch__controls{
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) auto auto;
+    gap:8px;
   }
   .boardSearch__input{
     width:100%;
