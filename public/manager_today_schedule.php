@@ -465,12 +465,13 @@ $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 $statePriority = [
   'in' => 0,
-  'late' => 1,
-  'absent' => 2,
-  'wait' => 3,
-  'done' => 4,
-  'off' => 5,
-  'noplan' => 6,
+  'confirm' => 1,
+  'late' => 2,
+  'absent' => 3,
+  'wait' => 4,
+  'done' => 5,
+  'off' => 6,
+  'noplan' => 7,
 ];
 
 usort($rows, static function(array $a, array $b) use ($bizDate, $now, $statePriority): int {
@@ -676,6 +677,9 @@ foreach ($rows as $r) {
 
   $uid = (int)($r['user_id'] ?? 0);
   $attendanceConfirmNotice = $noticeMap[$uid]['attendance_confirm'] ?? null;
+  $attendanceConfirmed = $attendanceConfirmNotice
+    && (string)($attendanceConfirmNotice['reply_choice'] ?? '') === 'confirm'
+    && !empty($attendanceConfirmNotice['responded_at']);
   $showConfirmButton = $attendanceConfirmNotice
     && (string)($attendanceConfirmNotice['reply_choice'] ?? '') === 'confirm'
     && !empty($attendanceConfirmNotice['responded_at'])
@@ -695,7 +699,7 @@ foreach ($rows as $r) {
   if ($showConfirmButton) {
     $confirmPendingCount++;
   }
-  if ($isLate || $attendanceStatus === 'absent' || $showConfirmButton) {
+  if ($isLate || $attendanceStatus === 'absent' || $showConfirmButton || $attendanceConfirmed) {
     $attentionCount++;
   }
 }
@@ -830,6 +834,10 @@ render_header('本日の勤務予定', [
         <?php foreach ($rows as $r):
           $uid  = (int)$r['user_id'];
           $name = (string)$r['display_name'];
+          $attendanceConfirmNotice = $noticeMap[$uid]['attendance_confirm'] ?? null;
+          $attendanceConfirmed = $attendanceConfirmNotice
+            && (string)($attendanceConfirmNotice['reply_choice'] ?? '') === 'confirm'
+            && !empty($attendanceConfirmNotice['responded_at']);
           $shopTag  = trim((string)($r['shop_tag'] ?? ''));
           $tagLabel = ($shopTag !== '') ? $shopTag : (string)$uid;
           $hasPlan   = ((int)($r['has_plan'] ?? 0) === 1);
@@ -843,6 +851,7 @@ render_header('本日の勤務予定', [
           else if ($attendanceStatus === 'absent') $statusLabel = '欠勤';
           else if ($r['clock_out']) $statusLabel = '退勤済';
           else if ($r['clock_in']) $statusLabel = '出勤中';
+          else if ($attendanceConfirmed) $statusLabel = '出勤確定';
 
           $isLate = false;
           if ($attendanceStatus !== 'absent' && $hasPlan && !$planOff && $planStart !== '' && empty($r['clock_in'])) {
@@ -856,6 +865,7 @@ render_header('本日の勤務予定', [
           else if ($attendanceStatus === 'absent') $state = 'absent';
           else if ($r['clock_out']) $state = 'done';
           else if ($r['clock_in']) $state = 'in';
+          else if ($attendanceConfirmed) $state = 'confirm';
           else $state = ($isLate ? 'late' : 'wait');
 
           if (!in_array($state, ['wait', 'late'], true)) {
@@ -914,6 +924,10 @@ render_header('本日の勤務予定', [
             $planOff   = $hasPlan && ((int)($r['plan_is_off'] ?? 0) === 1);
             $planStart = $hasPlan ? (string)($r['plan_start_time'] ?? '') : '';
             $attendanceStatus = (string)($r['attendance_status'] ?? '');
+            $attendanceConfirmNotice = $noticeMap[$uid]['attendance_confirm'] ?? null;
+            $attendanceConfirmed = $attendanceConfirmNotice
+              && (string)($attendanceConfirmNotice['reply_choice'] ?? '') === 'confirm'
+              && !empty($attendanceConfirmNotice['responded_at']);
 
             $clockIn  = $r['clock_in'] ? substr((string)$r['clock_in'], 11, 5) : '';
             $clockOut = $r['clock_out'] ? substr((string)$r['clock_out'], 11, 5) : '';
@@ -925,6 +939,7 @@ render_header('本日の勤務予定', [
             else if ($attendanceStatus === 'absent') $statusLabel = '欠勤';
             else if ($r['clock_out']) $statusLabel = '退勤済';
             else if ($r['clock_in']) $statusLabel = '出勤中';
+            else if ($attendanceConfirmed) $statusLabel = '出勤確定';
 
             // 遅刻判定
             $isLate = false;
@@ -940,11 +955,11 @@ render_header('本日の勤務予定', [
             else if ($attendanceStatus === 'absent') $state = 'absent';
             else if ($r['clock_out']) $state = 'done';
             else if ($r['clock_in']) $state = 'in';
+            else if ($attendanceConfirmed) $state = 'confirm';
             else $state = ($isLate ? 'late' : 'wait');
 
             $lateNotice = $noticeMap[$uid]['late'] ?? null;
             $absNotice  = $noticeMap[$uid]['absent'] ?? null;
-            $attendanceConfirmNotice = $noticeMap[$uid]['attendance_confirm'] ?? null;
 
             $replyText = '';
             $replyWhen = '';
@@ -1531,6 +1546,7 @@ render_header('本日の勤務予定', [
 /* 状態別 */
 .badgeState.s-noplan{ background:#f1f5f9; color:#475569; }
 .badgeState.s-off   { background:#eef2ff; color:#3730a3; border-color: rgba(99,102,241,.25); }
+.badgeState.s-confirm{ background: rgba(59,130,246,.14); color:#1d4ed8; border-color: rgba(59,130,246,.30); }
 .badgeState.s-wait  { background: rgba(251,191,36,.18); color:#92400e; border-color: rgba(251,191,36,.35); }
 .badgeState.s-late  { background: rgba(239,68,68,.14); color:#991b1b; border-color: rgba(239,68,68,.35); }
 .badgeState.s-absent{ background: rgba(239,68,68,.12); color:#991b1b; border-color: rgba(239,68,68,.30); }
@@ -1540,6 +1556,7 @@ render_header('本日の勤務予定', [
 /* 6) 行の左ラインで “今見るべき” を強調 */
 .row{ position: relative; }
 .row-state-wait td{ box-shadow: inset 4px 0 0 rgba(251,191,36,.65); }
+.row-state-confirm td{ box-shadow: inset 4px 0 0 rgba(59,130,246,.80); }
 .row-state-late td{ box-shadow: inset 4px 0 0 rgba(239,68,68,.80); }
 .row-state-absent td{ box-shadow: inset 4px 0 0 rgba(239,68,68,.65); }
 .row-state-in   td{ box-shadow: inset 4px 0 0 rgba(34,197,94,.70); }
@@ -1863,6 +1880,7 @@ body[data-theme="dark"] .recentPlanItem__time{
 
 /* 状態別アイコン風 */
 .badgeState.s-wait::before{ content:"⏳ "; }
+.badgeState.s-confirm::before{ content:"📩 "; }
 .badgeState.s-in::before{ content:"🟢 "; }
 .badgeState.s-done::before{ content:"✔ "; }
 .badgeState.s-off::before{ content:"🌙 "; }
