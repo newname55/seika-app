@@ -274,22 +274,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       $st = $pdo->prepare("
         SELECT
-          u.id AS user_id,
-          u.display_name,
-          COALESCE(NULLIF(su.shop_tag, ''), '') AS shop_tag
-        FROM user_roles ur
-        JOIN roles r
-          ON r.id = ur.role_id
-         AND r.code = 'cast'
-        JOIN users u
-          ON u.id = ur.user_id
-         AND u.is_active = 1
-        LEFT JOIN store_users su
-          ON su.user_id = ur.user_id
-         AND su.store_id = ur.store_id
-         AND su.status = 'active'
-        WHERE ur.store_id = ?
-          AND ur.user_id = ?
+          c.user_id,
+          c.display_name,
+          COALESCE(NULLIF(c.shop_tag, ''), '') AS shop_tag
+        FROM v_store_casts_active c
+        WHERE c.store_id = ?
+          AND c.user_id = ?
+          AND COALESCE(NULLIF(c.shop_tag, ''), '') <> ''
         LIMIT 1
       ");
       $st->execute([$storeIdP, $targetUserId]);
@@ -510,33 +501,24 @@ $selectedAttendanceConfirmTestUserId = (int)($_POST['attendance_confirm_test_use
 try {
   $st = $pdo->prepare("
     SELECT
-      u.id AS user_id,
-      u.display_name,
-      COALESCE(NULLIF(su.shop_tag, ''), '') AS shop_tag
-    FROM user_roles ur
-    JOIN roles r
-      ON r.id = ur.role_id
-     AND r.code = 'cast'
-    JOIN users u
-      ON u.id = ur.user_id
-     AND u.is_active = 1
+      c.user_id,
+      c.display_name,
+      COALESCE(NULLIF(c.shop_tag, ''), '') AS shop_tag
+    FROM v_store_casts_active c
     JOIN user_identities ui
-      ON ui.user_id = u.id
+      ON ui.user_id = c.user_id
      AND ui.provider = 'line'
      AND ui.is_active = 1
-    LEFT JOIN store_users su
-      ON su.user_id = ur.user_id
-     AND su.store_id = ur.store_id
-     AND su.status = 'active'
-    WHERE ur.store_id = ?
-    GROUP BY u.id, u.display_name, su.shop_tag
+    WHERE c.store_id = ?
+      AND COALESCE(NULLIF(c.shop_tag, ''), '') <> ''
+    GROUP BY c.user_id, c.display_name, c.shop_tag
     ORDER BY
       CASE
-        WHEN COALESCE(NULLIF(su.shop_tag, ''), '') REGEXP '^[0-9]+$' THEN CAST(su.shop_tag AS UNSIGNED)
+        WHEN COALESCE(NULLIF(c.shop_tag, ''), '') REGEXP '^[0-9]+$' THEN CAST(c.shop_tag AS UNSIGNED)
         ELSE 999999
       END ASC,
-      COALESCE(NULLIF(su.shop_tag, ''), '') ASC,
-      u.display_name ASC
+      COALESCE(NULLIF(c.shop_tag, ''), '') ASC,
+      c.display_name ASC
   ");
   $st->execute([$storeId]);
   $attendanceConfirmTestCandidates = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
