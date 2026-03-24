@@ -68,6 +68,44 @@ function fingerprint(string $title, ?string $starts_at, ?string $venue, ?string 
   return hash('sha256', $t . '|' . $s . '|' . $v . '|' . $a);
 }
 
+function clamp_nullable_string(mixed $value, int $maxLen): ?string {
+  if ($value === null) return null;
+  $s = trim((string)$value);
+  if ($s === '') return null;
+  if (mb_strlen($s) <= $maxLen) return $s;
+  return mb_substr($s, 0, $maxLen);
+}
+
+function compact_contact_name(mixed $value): ?string {
+  $s = clamp_nullable_string($value, 255);
+  if ($s === null) return null;
+
+  foreach ([' 料金 ', '料金 ', ' 休業日 ', '休業日 ', ' ウェブサイト ', 'ウェブサイト '] as $marker) {
+    $pos = mb_strpos($s, $marker);
+    if ($pos !== false) {
+      $s = trim(mb_substr($s, 0, $pos));
+      break;
+    }
+  }
+
+  $s = preg_replace('/\s+/u', ' ', $s ?? '');
+  $s = trim((string)$s);
+  if ($s === '') return null;
+  if (mb_strlen($s) <= 255) return $s;
+  return mb_substr($s, 0, 255);
+}
+
+function extract_contact_tel(mixed $value): ?string {
+  $s = trim((string)$value);
+  if ($s === '') return null;
+
+  if (preg_match('/\d{2,4}-\d{2,4}-\d{3,4}/', $s, $m)) {
+    return clamp_nullable_string($m[0], 50);
+  }
+
+  return clamp_nullable_string($value, 50);
+}
+
 function upsert_event(PDO $pdo, array $e): void {
   // haruto_core schema
   $sql = "INSERT INTO events (
@@ -110,27 +148,27 @@ function upsert_event(PDO $pdo, array $e): void {
   $st->execute([
     ':store_id' => $e['store_id'] ?? null,
     ':source_id' => (int)$e['source_id'],
-    ':external_id' => (string)$e['external_id'],
-    ':source_url' => (string)$e['source_url'],
-    ':source_list_url' => $e['source_list_url'] ?? null,
-    ':title' => (string)$e['title'],
+    ':external_id' => clamp_nullable_string($e['external_id'] ?? null, 200),
+    ':source_url' => clamp_nullable_string($e['source_url'] ?? null, 500),
+    ':source_list_url' => clamp_nullable_string($e['source_list_url'] ?? null, 500),
+    ':title' => (string)clamp_nullable_string($e['title'] ?? '', 255),
     ':description' => $e['description'] ?? null,
     ':starts_at' => $e['starts_at'] ?? null,
     ':ends_at' => $e['ends_at'] ?? null,
     ':all_day' => (int)($e['all_day'] ?? 0),
-    ':timezone' => $e['timezone'] ?? 'Asia/Tokyo',
-    ':venue_name' => $e['venue_name'] ?? null,
-    ':address' => $e['address'] ?? null,
-    ':city' => $e['city'] ?? null,
-    ':prefecture' => $e['prefecture'] ?? null,
+    ':timezone' => clamp_nullable_string($e['timezone'] ?? 'Asia/Tokyo', 64) ?? 'Asia/Tokyo',
+    ':venue_name' => clamp_nullable_string($e['venue_name'] ?? null, 255),
+    ':address' => clamp_nullable_string($e['address'] ?? null, 500),
+    ':city' => clamp_nullable_string($e['city'] ?? null, 100),
+    ':prefecture' => clamp_nullable_string($e['prefecture'] ?? null, 50),
     ':lat' => $e['lat'] ?? null,
     ':lng' => $e['lng'] ?? null,
-    ':organizer_name' => $e['organizer_name'] ?? null,
-    ':contact_name' => $e['contact_name'] ?? null,
-    ':contact_tel' => $e['contact_tel'] ?? null,
-    ':contact_email' => $e['contact_email'] ?? null,
+    ':organizer_name' => clamp_nullable_string($e['organizer_name'] ?? null, 255),
+    ':contact_name' => compact_contact_name($e['contact_name'] ?? null),
+    ':contact_tel' => extract_contact_tel($e['contact_tel'] ?? null),
+    ':contact_email' => clamp_nullable_string($e['contact_email'] ?? null, 255),
     ':status' => $e['status'] ?? 'unknown',
-    ':fingerprint' => $e['fingerprint'] ?? null,
+    ':fingerprint' => clamp_nullable_string($e['fingerprint'] ?? null, 64),
   ]);
 }
 
@@ -148,6 +186,7 @@ try {
     'okayama_city' => ['岡山市イベント', 'https://www.city.okayama.jp/'],
     'okayama_pref' => ['岡山県イベントカレンダー', 'https://www.pref.okayama.jp/calendar/'],
     'mamakari'     => ['岡山コンベンションセンター（ママカリ）', 'https://www.mamakari.net/event/'],
+    'okayama_kanko'=> ['岡山観光WEB', 'https://www.okayama-kanko.jp/event/'],
     'convex'       => ['コンベックス岡山', 'https://www.convex-okayama.co.jp/event/'],
   ];
 
@@ -198,7 +237,7 @@ try {
       'lng' => null,
       'organizer_name' => $it['organizer_name'] ?? null,
       'contact_name' => $it['organizer_contact'] ?? null,
-      'contact_tel' => null,
+      'contact_tel' => $it['organizer_contact'] ?? null,
       'contact_email' => null,
       'status' => 'scheduled',
       'fingerprint' => $fp,
