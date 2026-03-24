@@ -1647,6 +1647,9 @@ render_header('本日の勤務予定', [
   outline:2px solid rgba(59,130,246,.42);
   outline-offset:4px;
 }
+.tblToday tbody tr.row{
+  scroll-margin-top:96px;
+}
 .mobileSimpleCard .badgeState{
   min-width:0;
   width:100%;
@@ -2220,15 +2223,16 @@ body.today-density-compact .col-action .btn{
   .castMain .castTag{
     display:none;
   }
+  .castMain .castName,
+  .castSub{
+    display:none;
+  }
   .castName{
     font-size:16px;
     line-height:1.25;
   }
-  .castSub{
-    margin-top:2px;
-  }
   .weekToggleBtn{
-    margin-top:6px;
+    margin-top:2px;
     padding:5px 9px;
     font-size:11px;
   }
@@ -2397,7 +2401,10 @@ body.today-density-compact .col-action .btn{
     const row = targetId ? document.getElementById(targetId) : null;
     if (!row) return;
 
-    row.scrollIntoView({ behavior:'smooth', block:'start' });
+    const header = document.querySelector('.app-header');
+    const headerOffset = header ? header.getBoundingClientRect().height : 0;
+    const top = window.scrollY + row.getBoundingClientRect().top - headerOffset - 10;
+    window.scrollTo({ top: Math.max(0, top), behavior:'smooth' });
     row.classList.add('row-is-highlighted');
     window.setTimeout(() => row.classList.remove('row-is-highlighted'), 1600);
   }

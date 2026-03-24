@@ -175,6 +175,59 @@ function normalize_time_seconds(string $value, string $fallback): string {
   throw new RuntimeException('時刻は HH:MM 形式で入力してください');
 }
 
+function jst_now(): DateTime {
+  return new DateTime('now', new DateTimeZone('Asia/Tokyo'));
+}
+
+function business_date_for_store_settings(array $storeRow, ?DateTime $now = null): string {
+  $now = $now ?: jst_now();
+  $cut = (string)($storeRow['business_day_start'] ?? '06:00:00');
+  $cutDT = new DateTime($now->format('Y-m-d') . ' ' . $cut, new DateTimeZone('Asia/Tokyo'));
+  if ($now < $cutDT) {
+    $now->modify('-1 day');
+  }
+  return $now->format('Y-m-d');
+}
+
+function resolve_line_user_id(PDO $pdo, int $userId): string {
+  $st = $pdo->prepare("
+    SELECT provider_user_id
+    FROM user_identities
+    WHERE user_id = ?
+      AND provider = 'line'
+      AND is_active = 1
+    ORDER BY id DESC
+    LIMIT 1
+  ");
+  $st->execute([$userId]);
+  return (string)($st->fetchColumn() ?: '');
+}
+
+function line_api_post(string $accessToken, string $path, array $body): array {
+  $url = 'https://api.line.me/v2/bot/' . ltrim($path, '/');
+  $ch = curl_init($url);
+  curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+      'Content-Type: application/json',
+      'Authorization: Bearer ' . $accessToken,
+    ],
+    CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE),
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT => 12,
+  ]);
+  $res = curl_exec($ch);
+  $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  $err = curl_error($ch);
+  curl_close($ch);
+
+  return [
+    'code' => $code,
+    'body' => is_string($res) ? $res : '',
+    'curl_error' => (string)$err,
+  ];
+}
+
 function weekend_dow_options(): array {
   return [
     32 => '金',
@@ -212,14 +265,129 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       if ($storeIdP <= 0) throw new RuntimeException('store_id invalid');
     }
 
-    // 入力
-    $businessDayStart = normalize_time_seconds((string)($_POST['business_day_start'] ?? '06:00'), '06:00');
-    $openTime         = normalize_time_seconds((string)($_POST['open_time'] ?? '20:00'), '20:00');
-    $closeWk          = normalize_time_seconds((string)($_POST['close_time_weekday'] ?? '02:30'), '02:30');
-    $closeWe          = normalize_time_seconds((string)($_POST['close_time_weekend'] ?? '05:00'), '05:00');
+    $action = (string)($_POST['action'] ?? 'save_settings');
+    if ($action === 'send_attendance_confirm_test') {
+      $targetUserId = (int)($_POST['attendance_confirm_test_user_id'] ?? 0);
+      if ($targetUserId <= 0) {
+        throw new RuntimeException('テスト送信先を選択してください');
+      }
 
-    $nextWk = (int)($_POST['close_is_next_day_weekday'] ?? 1);
-    $nextWe = (int)($_POST['close_is_next_day_weekend'] ?? 1);
+      $st = $pdo->prepare("
+        SELECT
+          u.id AS user_id,
+          u.display_name,
+          COALESCE(NULLIF(su.shop_tag, ''), '') AS shop_tag
+        FROM user_roles ur
+        JOIN roles r
+          ON r.id = ur.role_id
+         AND r.code = 'cast'
+        JOIN users u
+          ON u.id = ur.user_id
+         AND u.is_active = 1
+        LEFT JOIN store_users su
+          ON su.user_id = ur.user_id
+         AND su.store_id = ur.store_id
+         AND su.status = 'active'
+        WHERE ur.store_id = ?
+          AND ur.user_id = ?
+        LIMIT 1
+      ");
+      $st->execute([$storeIdP, $targetUserId]);
+      $targetUser = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+      if (!$targetUser) {
+        throw new RuntimeException('選択したユーザーはこの店舗の有効キャストではありません');
+      }
+
+      $lineTo = resolve_line_user_id($pdo, $targetUserId);
+      if ($lineTo === '') {
+        throw new RuntimeException('このユーザーはLINE未連携です');
+      }
+
+      $accessToken = conf('LINE_MSG_CHANNEL_ACCESS_TOKEN');
+      if ($accessToken === '') {
+        throw new RuntimeException('LINE送信用トークンが未設定です');
+      }
+
+      $businessDate = business_date_for_store_settings(fetch_store($pdo, $storeIdP));
+      $displayName = trim((string)($targetUser['display_name'] ?? ''));
+      $shopTag = trim((string)($targetUser['shop_tag'] ?? ''));
+      $nameLabel = $displayName !== '' ? $displayName : ('user#' . $targetUserId);
+      $tagLabel = $shopTag !== '' ? " 店番{$shopTag}" : '';
+      $text = "【テスト送信】出勤確認LINEです。\n{$nameLabel}{$tagLabel} さん、本日の出勤予定を確認してください。\n「出勤します / 遅れます / 休みます / その他」から返信できます。";
+      $token = bin2hex(random_bytes(12));
+
+      $pdo->beginTransaction();
+      try {
+        $ins = $pdo->prepare("
+          INSERT INTO line_notice_actions
+            (store_id, business_date, cast_user_id, kind, token, template_text, sent_text,
+             sent_by_user_id, sent_at, status, error_message, created_at, updated_at)
+          VALUES
+            (?, ?, ?, 'attendance_confirm', ?, ?, ?, ?, NOW(), 'sent', NULL, NOW(), NOW())
+        ");
+        $ins->execute([
+          $storeIdP,
+          $businessDate,
+          $targetUserId,
+          $token,
+          $text,
+          $text,
+          (int)current_user_id(),
+        ]);
+
+        $api = line_api_post($accessToken, 'message/push', [
+          'to' => $lineTo,
+          'messages' => [[
+            'type' => 'text',
+            'text' => $text,
+            'quickReply' => [
+              'items' => [
+                ['type' => 'action', 'action' => ['type' => 'message', 'label' => '出勤します', 'text' => '出勤します']],
+                ['type' => 'action', 'action' => ['type' => 'message', 'label' => '遅れます', 'text' => '遅れます']],
+                ['type' => 'action', 'action' => ['type' => 'message', 'label' => '休みます', 'text' => '休みます']],
+                ['type' => 'action', 'action' => ['type' => 'message', 'label' => 'その他', 'text' => 'その他']],
+              ],
+            ],
+          ]],
+        ]);
+
+        if ($api['code'] >= 300) {
+          $errMsg = 'HTTP ' . $api['code'] . ($api['curl_error'] !== '' ? (' curl=' . $api['curl_error']) : '');
+          $upd = $pdo->prepare("
+            UPDATE line_notice_actions
+            SET status = 'failed',
+                error_message = ?,
+                updated_at = NOW()
+            WHERE token = ?
+            LIMIT 1
+          ");
+          $upd->execute([$errMsg, $token]);
+          $pdo->commit();
+          throw new RuntimeException('テスト送信に失敗しました: ' . $errMsg);
+        }
+
+        $pdo->commit();
+        $msg = $nameLabel . ' へ出勤確認LINEのテスト送信を行いました';
+      } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+          $pdo->rollBack();
+        }
+        throw $e;
+      }
+
+      if ($isSuper) {
+        $storeId = $storeIdP;
+      }
+    } else {
+
+      // 入力
+      $businessDayStart = normalize_time_seconds((string)($_POST['business_day_start'] ?? '06:00'), '06:00');
+      $openTime         = normalize_time_seconds((string)($_POST['open_time'] ?? '20:00'), '20:00');
+      $closeWk          = normalize_time_seconds((string)($_POST['close_time_weekday'] ?? '02:30'), '02:30');
+      $closeWe          = normalize_time_seconds((string)($_POST['close_time_weekend'] ?? '05:00'), '05:00');
+
+      $nextWk = (int)($_POST['close_is_next_day_weekday'] ?? 1);
+      $nextWe = (int)($_POST['close_is_next_day_weekend'] ?? 1);
 
     $selectedWeekendDows = $_POST['weekend_dows'] ?? null;
     if (is_array($selectedWeekendDows)) {
@@ -323,9 +491,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ");
     $st->execute($updateValues);
 
-    $msg = '更新しました';
-    // 表示中のstoreIdも更新
-    if ($isSuper) $storeId = $storeIdP;
+      $msg = '更新しました';
+      // 表示中のstoreIdも更新
+      if ($isSuper) $storeId = $storeIdP;
+    }
 
   } catch (Throwable $e) {
     $err = $e->getMessage();
@@ -335,6 +504,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $store = fetch_store($pdo, $storeId);
 if (!$store) {
   throw new RuntimeException('店舗が見つかりません');
+}
+$attendanceConfirmTestCandidates = [];
+$selectedAttendanceConfirmTestUserId = (int)($_POST['attendance_confirm_test_user_id'] ?? 0);
+try {
+  $st = $pdo->prepare("
+    SELECT
+      u.id AS user_id,
+      u.display_name,
+      COALESCE(NULLIF(su.shop_tag, ''), '') AS shop_tag
+    FROM user_roles ur
+    JOIN roles r
+      ON r.id = ur.role_id
+     AND r.code = 'cast'
+    JOIN users u
+      ON u.id = ur.user_id
+     AND u.is_active = 1
+    JOIN user_identities ui
+      ON ui.user_id = u.id
+     AND ui.provider = 'line'
+     AND ui.is_active = 1
+    LEFT JOIN store_users su
+      ON su.user_id = ur.user_id
+     AND su.store_id = ur.store_id
+     AND su.status = 'active'
+    WHERE ur.store_id = ?
+    GROUP BY u.id, u.display_name, su.shop_tag
+    ORDER BY
+      CASE
+        WHEN COALESCE(NULLIF(su.shop_tag, ''), '') REGEXP '^[0-9]+$' THEN CAST(su.shop_tag AS UNSIGNED)
+        ELSE 999999
+      END ASC,
+      COALESCE(NULLIF(su.shop_tag, ''), '') ASC,
+      u.display_name ASC
+  ");
+  $st->execute([$storeId]);
+  $attendanceConfirmTestCandidates = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+} catch (Throwable $e) {
+  $attendanceConfirmTestCandidates = [];
 }
 $weekendDowMask = (int)($store['weekend_dow_mask'] ?? 96);
 $weekendDowOptions = weekend_dow_options();
@@ -674,6 +881,17 @@ render_header('店舗設定', [
     line-height:1.55;
     color:var(--muted);
   }
+  .settings-inline-row{
+    display:grid;
+    gap:10px;
+    grid-template-columns:minmax(0, 1fr) auto;
+    align-items:end;
+    margin-top:10px;
+  }
+  .settings-inline-row .btn{
+    min-height:46px;
+    white-space:nowrap;
+  }
   @media (min-width: 760px){
     .settings-grid--two{
       grid-template-columns:repeat(2, minmax(0, 1fr));
@@ -727,6 +945,10 @@ render_header('店舗設定', [
     .settings-grid--two,
     .settings-grid--three{
       grid-template-columns:1fr;
+    }
+    .settings-inline-row{
+      grid-template-columns:1fr;
+      align-items:stretch;
     }
   }
   body[data-theme="light"] .settings-control,
@@ -927,6 +1149,29 @@ render_header('店舗設定', [
                 <label class="settings-label">出勤確認LINEを営業時間の何時間前に送るか</label>
                 <input class="settings-control" name="attendance_confirm_lead_hours" inputmode="numeric" value="<?= h((string)($store['attendance_confirm_lead_hours'] ?? 3)) ?>">時間前
                 <div class="settings-hint">当日の出勤予定時刻の何時間前に出勤確認LINEを送るか設定します。</div>
+                <div class="settings-inline-row">
+                  <div>
+                    <label class="settings-label" for="attendance_confirm_test_user_id">テスト送信先を選ぶ</label>
+                    <select class="settings-control" name="attendance_confirm_test_user_id" id="attendance_confirm_test_user_id">
+                      <option value="">送信先を選択</option>
+                      <?php foreach ($attendanceConfirmTestCandidates as $candidate): ?>
+                        <?php
+                          $candidateName = trim((string)($candidate['display_name'] ?? ''));
+                          $candidateTag = trim((string)($candidate['shop_tag'] ?? ''));
+                          $candidateLabel = $candidateName !== '' ? $candidateName : ('user#' . (int)($candidate['user_id'] ?? 0));
+                          if ($candidateTag !== '') {
+                            $candidateLabel = '店番' . $candidateTag . ' / ' . $candidateLabel;
+                          }
+                        ?>
+                        <option value="<?= (int)($candidate['user_id'] ?? 0) ?>" <?= ((int)($candidate['user_id'] ?? 0) === $selectedAttendanceConfirmTestUserId) ? 'selected' : '' ?>>
+                          <?= h($candidateLabel) ?>
+                        </option>
+                      <?php endforeach; ?>
+                    </select>
+                  </div>
+                  <button class="btn" type="submit" name="action" value="send_attendance_confirm_test" <?= $attendanceConfirmTestCandidates === [] ? 'disabled' : '' ?>>出勤確認LINEをテスト送信</button>
+                </div>
+                <div class="settings-hint">本番の自動送信とは別です。LINE連携済みの在籍キャストにだけ送れます。</div>
               </div>
             </div>
 
@@ -964,7 +1209,7 @@ render_header('店舗設定', [
             </div>
 
             <div class="settings-note-list">
-              <div class="settings-note">lat / lon が未設定だと、LINE出勤時に「店舗位置未設定」として扱う設計にしておくと安全です。</div>
+              <div class="settings-note">緯度 / 経度 が未設定だと、LINE出勤時に「店舗位置未設定」として扱う設計にしておくと安全です。</div>
               <div class="settings-note">半径を広げすぎると近隣からの誤判定が増えるので、まずは 100m から 200m の範囲で調整するのが無難です。</div>
             </div>
           </section>
