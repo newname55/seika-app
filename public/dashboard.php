@@ -331,6 +331,17 @@ $adminControlItems = [
   ],
 ];
 
+if ($isSuper) {
+  $adminControlItems[] = [
+    'icon' => '🧯',
+    'title' => '本番 deploy / rollback',
+    'desc' => '本番履歴の確認と rollback 管理UIを開きます。',
+    'href' => '/wbss/public/admin/deploy_history.php',
+    'tag'  => 'super_user',
+    'tone' => 'warn',
+  ];
+}
+
 $adminSections = [
   [
     'title' => '今すぐ対応',
