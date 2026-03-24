@@ -780,10 +780,10 @@ render_header('本日の勤務予定', [
           <div class="boardSummary__item">出勤確定待ち <?= (int)$confirmPendingCount ?>名</div>
         </div>
         <div class="boardToolbar__actions">
-          <label class="boardSearch">
+          <form class="boardSearch" id="castSearchForm">
             <span class="boardSearch__label">検索</span>
             <input type="search" id="castSearch" class="boardSearch__input" placeholder="店番・名前で絞り込み">
-          </label>
+          </form>
           <button type="button" class="btn boardDensityBtn" id="densityToggle" aria-pressed="false">高密度表示</button>
         </div>
       </div>
@@ -818,6 +818,65 @@ render_header('本日の勤務予定', [
         </div>
       </div>
     <?php endif; ?>
+
+    <div class="card mobileSimpleBoard" aria-label="キャスト簡易一覧">
+      <div class="sectionHead">
+        <div>
+          <div class="cardTitle">未出勤の簡易一覧</div>
+          <div class="muted">未出勤中のキャストだけを並べています。タップで詳細へ移動します。</div>
+        </div>
+      </div>
+      <div class="mobileSimpleGrid">
+        <?php foreach ($rows as $r):
+          $uid  = (int)$r['user_id'];
+          $name = (string)$r['display_name'];
+          $shopTag  = trim((string)($r['shop_tag'] ?? ''));
+          $tagLabel = ($shopTag !== '') ? $shopTag : (string)$uid;
+          $hasPlan   = ((int)($r['has_plan'] ?? 0) === 1);
+          $planOff   = $hasPlan && ((int)($r['plan_is_off'] ?? 0) === 1);
+          $planStart = $hasPlan ? (string)($r['plan_start_time'] ?? '') : '';
+          $attendanceStatus = (string)($r['attendance_status'] ?? '');
+
+          $statusLabel = '未出勤';
+          if (!$hasPlan) $statusLabel = '予定なし';
+          else if ($planOff) $statusLabel = '休み';
+          else if ($attendanceStatus === 'absent') $statusLabel = '欠勤';
+          else if ($r['clock_out']) $statusLabel = '退勤済';
+          else if ($r['clock_in']) $statusLabel = '出勤中';
+
+          $isLate = false;
+          if ($attendanceStatus !== 'absent' && $hasPlan && !$planOff && $planStart !== '' && empty($r['clock_in'])) {
+            $planDT = new DateTime($bizDate . ' ' . substr($planStart, 0, 5) . ':00', new DateTimeZone('Asia/Tokyo'));
+            if ($now > $planDT) $isLate = true;
+          }
+
+          $state = 'wait';
+          if (!$hasPlan) $state = 'noplan';
+          else if ($planOff) $state = 'off';
+          else if ($attendanceStatus === 'absent') $state = 'absent';
+          else if ($r['clock_out']) $state = 'done';
+          else if ($r['clock_in']) $state = 'in';
+          else $state = ($isLate ? 'late' : 'wait');
+
+          if (!in_array($state, ['wait', 'late'], true)) {
+            continue;
+          }
+        ?>
+          <button
+            type="button"
+            class="mobileSimpleCard row-state-<?= h($state) ?> js-simple-scroll"
+            data-target="detail-<?= (int)$uid ?>"
+            data-name="<?= h(mb_strtolower($name, 'UTF-8')) ?>"
+            data-tag="<?= h(mb_strtolower($tagLabel, 'UTF-8')) ?>"
+            data-state="<?= h($state) ?>"
+          >
+            <span class="badgeState s-<?= h($state) ?>"><?= h($statusLabel) ?></span>
+            <span class="mobileSimpleCard__tag">店番 <?= h($tagLabel) ?></span>
+            <span class="mobileSimpleCard__name"><?= h($name) ?></span>
+          </button>
+        <?php endforeach; ?>
+      </div>
+    </div>
 
     <!-- 今日 -->
     <div class="card" style="margin-top:14px;">
@@ -928,6 +987,7 @@ render_header('本日の勤務予定', [
               $needsAttention = ($isLate || $attendanceStatus === 'absent' || $showConfirmButton);
             ?>
             <tr
+              id="detail-<?= (int)$uid ?>"
               class="row row-state-<?= h($state) ?>"
               data-state="<?= h($state) ?>"
               data-user-id="<?= (int)$uid ?>"
@@ -1558,6 +1618,64 @@ render_header('本日の勤務予定', [
 .weekToggleBtn[aria-expanded="true"]::before{
   content:"-";
 }
+.mobileSimpleBoard{
+  display:none;
+  margin-top:14px;
+}
+.mobileSimpleGrid{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:8px;
+}
+.mobileSimpleCard{
+  display:grid;
+  gap:6px;
+  padding:10px;
+  border:1px solid rgba(15,23,42,.10);
+  border-radius:14px;
+  background:#ffffff;
+  box-shadow:0 8px 18px rgba(15,23,42,.05);
+  min-width:0;
+  width:100%;
+  text-align:center;
+  cursor:pointer;
+}
+.mobileSimpleCard:active{
+  transform:translateY(1px);
+}
+.row-is-highlighted{
+  outline:2px solid rgba(59,130,246,.42);
+  outline-offset:4px;
+}
+.mobileSimpleCard .badgeState{
+  min-width:0;
+  width:100%;
+  justify-content:center;
+}
+.mobileSimpleCard__tag{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:28px;
+  padding:0 8px;
+  border-radius:999px;
+  border:1px solid rgba(15,23,42,.10);
+  background:#f8fafc;
+  color:#334155;
+  font-size:11px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.mobileSimpleCard__name{
+  display:block;
+  min-width:0;
+  font-size:14px;
+  font-weight:1000;
+  line-height:1.3;
+  color:#0f172a;
+  text-align:center;
+  word-break:break-word;
+}
 .mobileCastHead{
   display:none;
 }
@@ -1601,9 +1719,16 @@ render_header('本日の勤務予定', [
 .lineActionsDetails .btnRow{
   margin-top:8px;
 }
+.boardSearch{
+  display:grid;
+  gap:6px;
+}
 .weekRow td{
   background:#f8fafc;
   border-bottom: 1px solid rgba(15,23,42,.08);
+}
+.weekRow[hidden]{
+  display:none !important;
 }
 .weekCell{
   padding-top: 0;
@@ -1973,6 +2098,29 @@ body.today-density-compact .col-action .btn{
     white-space:normal;
     text-align:center;
   }
+  .mobileSimpleBoard{
+    display:block;
+  }
+  .mobileSimpleGrid{
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:6px;
+  }
+  .mobileSimpleCard{
+    padding:8px 6px;
+    border-radius:12px;
+  }
+  .mobileSimpleCard .badgeState{
+    padding:5px 6px;
+    font-size:10px;
+  }
+  .mobileSimpleCard__tag{
+    min-height:24px;
+    font-size:10px;
+    padding:0 6px;
+  }
+  .mobileSimpleCard__name{
+    font-size:13px;
+  }
   .tblWrap{
     overflow:visible;
     border:none;
@@ -2161,11 +2309,13 @@ body.today-density-compact .col-action .btn{
   const form = document.getElementById('modalForm');
   const sendBtn = document.getElementById('modalSend');
   const searchInput = document.getElementById('castSearch');
+  const searchForm = document.getElementById('castSearchForm');
   const filterButtons = Array.from(document.querySelectorAll('[data-toolbar-filter]'));
   const kpiButtons = Array.from(document.querySelectorAll('.kpiBtns .k[data-filter]'));
   const densityToggle = document.getElementById('densityToggle');
   const visibleCount = document.getElementById('visibleCount');
   const rows = Array.from(document.querySelectorAll('.tblToday tbody tr.row'));
+  const simpleCards = Array.from(document.querySelectorAll('.js-simple-scroll'));
   const densityKey = 'managerTodayDensityCompact';
   let activeFilter = 'all';
 
@@ -2224,7 +2374,32 @@ body.today-density-compact .col-action .btn{
     if (visibleCount) {
       visibleCount.textContent = String(shown);
     }
+
+    simpleCards.forEach((card) => {
+      const targetRow = card.dataset.target ? document.getElementById(card.dataset.target) : null;
+      const rowVisible = !!(targetRow && !targetRow.hidden);
+      const cardText = `${card.dataset.tag || ''} ${card.dataset.name || ''}`;
+      const matchesSearch = q === '' || cardText.includes(q);
+      const matchesFilter = activeFilter === 'all'
+        ? true
+        : activeFilter === 'wait'
+          ? (card.dataset.state === 'wait' || card.dataset.state === 'late')
+          : activeFilter === 'late'
+            ? card.dataset.state === 'late'
+            : false;
+      card.hidden = !(rowVisible && matchesSearch && matchesFilter);
+    });
+
     syncActiveButtons();
+  }
+
+  function scrollToDetail(targetId){
+    const row = targetId ? document.getElementById(targetId) : null;
+    if (!row) return;
+
+    row.scrollIntoView({ behavior:'smooth', block:'start' });
+    row.classList.add('row-is-highlighted');
+    window.setTimeout(() => row.classList.remove('row-is-highlighted'), 1600);
   }
 
   function openModal(kind, castId, name, text){
@@ -2288,6 +2463,12 @@ body.today-density-compact .col-action .btn{
     });
   });
 
+  simpleCards.forEach((card) => {
+    card.addEventListener('click', () => {
+      scrollToDetail(card.dataset.target || '');
+    });
+  });
+
   filterButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       activeFilter = btn.dataset.toolbarFilter || 'all';
@@ -2304,6 +2485,30 @@ body.today-density-compact .col-action .btn{
 
   if (searchInput) {
     searchInput.addEventListener('input', applyBoardFilters);
+    searchInput.addEventListener('search', applyBoardFilters);
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyBoardFilters();
+        const firstVisible = rows.find((row) => !row.hidden);
+        if (firstVisible && searchInput.value.trim() !== '') {
+          scrollToDetail(firstVisible.id);
+        }
+      }
+    });
+  }
+
+  if (searchForm) {
+    searchForm.addEventListener('submit', (e) => {
+      if (document.activeElement === searchInput) {
+        e.preventDefault();
+        applyBoardFilters();
+        const firstVisible = rows.find((row) => !row.hidden);
+        if (firstVisible && searchInput && searchInput.value.trim() !== '') {
+          scrollToDetail(firstVisible.id);
+        }
+      }
+    });
   }
 
   if (densityToggle) {
