@@ -155,7 +155,7 @@ if (!function_exists('render_dashboard_focus_actions')) {
     <section class="dashboard-focus">
       <div class="dashboard-focus__head">
         <div>
-          <h2>⭐️⭐️まずここから始めます⭐️⭐️</h2>
+          <h2>⭐️まずここから始めます⭐️</h2>
           <p>今日よく使う入口だけ先に置いています。</p>
         </div>
       </div>
