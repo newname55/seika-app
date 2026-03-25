@@ -795,6 +795,40 @@ input:focus, select:focus{
   color: #0b2a6e;
 }
 
+.setTabCard{
+  min-width: 150px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:4px;
+  padding: 10px 14px;
+}
+
+.setTabCardTitle{
+  font-size:14px;
+  font-weight:1000;
+  line-height:1.1;
+}
+
+.setTabCardMeta{
+  font-size:11px;
+  color:var(--muted);
+  line-height:1.2;
+}
+
+.tabXL.on .setTabCardMeta{
+  color:#335389;
+}
+
+.setPaneTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom:10px;
+}
+
 .phaseTabs{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 .phaseBtn{
   min-height: 60px;
@@ -1263,8 +1297,8 @@ input:focus, select:focus{
 
       <div class="card">
         <div class="cardTitle">
-          <h2>セット選択</h2>
-          <div class="muted">横にスワイプでタブ移動</div>
+          <h2>セット一覧</h2>
+          <div class="muted">上でセットを切り替え、下で内容を編集します</div>
         </div>
         <div class="tabs" id="setTabs"></div>
         <div class="pane" id="setPane"></div>
@@ -2915,10 +2949,15 @@ input:focus, select:focus{
   function render(full=true){
     setTabsEl.innerHTML = '';
     state.sets.forEach((s, i)=>{
+      const seatLabel = seatLabelById(s.seat_id || 0);
+      const tabDrinkSum = (s.drinks||[]).reduce((a,d)=>a + (d.amount|0), 0);
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'tabXL' + (i === state.ui.selected_set_index ? ' on' : '');
-      b.textContent = `セット${i+1}（${seatLabelById(s.seat_id || 0)}）`;
+      b.className = 'tabXL setTabCard' + (i === state.ui.selected_set_index ? ' on' : '');
+      b.innerHTML = `
+        <span class="setTabCardTitle">セット${i+1}</span>
+        <span class="setTabCardMeta">席 ${escapeHtml(seatLabel)} / ドリンク ${tabDrinkSum.toLocaleString()}円</span>
+      `;
       b.title = buildFreeStatusText(s);
       b.addEventListener('click', ()=> selectSetTab(i));
       setTabsEl.appendChild(b);
@@ -2955,6 +2994,13 @@ input:focus, select:focus{
     const activeWorkTab = (state.ui.work_tab === 'customer' || state.ui.work_tab === 'drink') ? state.ui.work_tab : 'set';
 
     setPaneEl.innerHTML = `
+    <div class="setPaneTop">
+      <div>
+        <span class="badgeMini2">編集中 セット${idx + 1}</span>
+        <span class="badgeMini2">席 ${escapeHtml(seatLabelById(s.seat_id || 0))}</span>
+      </div>
+      <div class="muted">ここでは選んだセットの内容を編集します</div>
+    </div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
           <div style="min-width:180px;">
@@ -2982,8 +3028,8 @@ input:focus, select:focus{
         >
           <span class="cashierDashTabIcon">🪑</span>
           <span class="cashierDashTabText">
-            <span class="cashierDashTabTitle">セット選択</span>
-            <span class="cashierDashTabMeta">席・人数・VIP・種別</span>
+            <span class="cashierDashTabTitle">基本設定</span>
+            <span class="cashierDashTabMeta">人数・VIP・種別を編集</span>
           </span>
         </button>
         <button
