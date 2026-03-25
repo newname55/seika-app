@@ -1378,7 +1378,7 @@ input:focus, select:focus{
       <div class="headTop">
         <div class="headMain">
           <div class="titleBox">
-            <h1>WEB会計（iPad現場版 / legacy）</h1>
+            <h1>WEB会計（iPad版）</h1>
             <div class="sub">
               店舗: <b><?= h($storeName) ?></b>（#<?= (int)$storeId ?>） / 営業日: <b><?= h($business_date) ?></b>（切替 <?= h($bizStart) ?>）<br>
               Ticket: <b>#<?= (int)$ticket_id ?></b> / 出勤確定のキャストだけが候補として表示されます。
