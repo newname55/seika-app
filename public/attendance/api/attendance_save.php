@@ -16,6 +16,7 @@ $db_candidates   = [$root.'/app/db.php', $root.'/db.php'];
 
 foreach ($auth_candidates as $f) { if (is_file($f)) { require_once $f; break; } }
 foreach ($db_candidates as $f)   { if (is_file($f)) { require_once $f; break; } }
+require_once $root . '/app/store_decommission.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -96,6 +97,7 @@ $cast_user_id = (int)($data['cast_id'] ?? $data['user_id'] ?? $data['person_id']
 
 $pdo = db();
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+store_decommission_assert_store_writable($pdo, (int)$store_id, '停止中の店舗では出勤保存できません');
 
 if ($person_type === 'cast') {
   if ($cast_user_id <= 0) {

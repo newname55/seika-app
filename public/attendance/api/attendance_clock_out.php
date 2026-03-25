@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../../app/auth.php';
 require_once __DIR__ . '/../../../app/db.php';
 require_once __DIR__ . '/../../../app/bootstrap.php';
+require_once __DIR__ . '/../../../app/store_decommission.php';
 
 require_login();
 
@@ -70,6 +71,7 @@ try {
     echo json_encode(['ok'=>false,'error'=>'store_id_invalid'], JSON_UNESCAPED_UNICODE);
     exit;
   }
+  store_decommission_assert_store_writable($pdo, $storeId, '停止中の店舗では打刻できません');
 
   $st = $pdo->prepare("SELECT id,name,business_day_start FROM stores WHERE id=? LIMIT 1");
   $st->execute([$storeId]);

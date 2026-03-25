@@ -333,6 +333,15 @@ $adminControlItems = [
 
 if ($isSuper) {
   $adminControlItems[] = [
+    'icon' => '🗃️',
+    'title' => '店舗解約・データ廃棄',
+    'desc' => '店舗停止、解約申請、承認、予約、監査ログを管理します。',
+    'href' => dashboard_link('/wbss/public/admin/store_decommission.php', $storeId),
+    'tag'  => 'super_user',
+    'tone' => 'warn',
+  ];
+
+  $adminControlItems[] = [
     'icon' => '🧯',
     'title' => '本番 deploy / rollback',
     'desc' => '本番履歴の確認と rollback 管理UIを開きます。',

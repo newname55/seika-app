@@ -5,6 +5,7 @@ date_default_timezone_set('Asia/Tokyo');
 
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/db.php';
+require_once __DIR__ . '/../../app/store_decommission.php';
 
 require_login();
 if (function_exists('require_role')) {
@@ -77,6 +78,8 @@ if ($storeId <= 0 || $customerId <= 0) {
   http_response_code(400);
   exit('invalid params');
 }
+$pdo = db();
+store_decommission_assert_store_writable($pdo, $storeId, '停止中の店舗では顧客更新できません');
 
 $displayName = trim((string)($_POST['display_name'] ?? ''));
 $features = trim((string)($_POST['features'] ?? ''));
@@ -109,8 +112,6 @@ if ($lastVisitAtRaw !== '' && $lastVisitAt === null) {
   flash_set_customer_save('最終来店は YYYY-MM-DD か YYYY-MM-DD HH:MM[:SS] で入力してください');
   redirect_customer_detail($storeId, $customerId);
 }
-
-$pdo = db();
 
 $st = $pdo->prepare("
   SELECT id, merged_into_customer_id

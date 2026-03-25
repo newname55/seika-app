@@ -6,6 +6,7 @@ date_default_timezone_set('Asia/Tokyo');
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../../app/layout.php';
+require_once __DIR__ . '/../../app/store_decommission.php';
 
 require_login();
 if (function_exists('require_role')) {
@@ -75,6 +76,7 @@ if ($storeId <= 0) {
   echo "store_id が必要です";
   exit;
 }
+store_decommission_assert_store_writable($pdo, $storeId, '停止中の店舗では顧客画面を開けません');
 
 $me = current_user_id_safe();
 $isStaff = can_view_staff_notes();

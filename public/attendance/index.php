@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../../app/layout.php';
 require_once __DIR__ . '/../../app/attendance.php';
 require_once __DIR__ . '/../../app/service_store_casts.php';
+require_once __DIR__ . '/../../app/store_decommission.php';
 
 $storeLib = __DIR__ . '/../../app/store.php';
 if (is_file($storeLib)) require_once $storeLib;
@@ -34,6 +35,7 @@ if ($store_id <= 0) {
   header('Location: /wbss/public/store_select.php?next=' . urlencode($_SERVER['REQUEST_URI']));
   exit;
 }
+store_decommission_assert_store_writable($pdo, $store_id, '停止中の店舗では出勤画面を開けません');
 
 $store = att_fetch_store($pdo, $store_id);
 $storeName = $store['name'] ?? ('#' . $store_id);

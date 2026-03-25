@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../../app/layout.php';
+require_once __DIR__ . '/../../app/store_decommission.php';
 
 // attendance流儀のstore選択を使えるなら使う
 $attLib = __DIR__ . '/../../app/attendance.php';
@@ -40,6 +41,7 @@ if ($store_id <= 0) {
   exit;
 }
 $_SESSION['store_id'] = $store_id;
+store_decommission_assert_store_writable($pdo, $store_id, '停止中の店舗では注文画面を開けません');
 
 // 店舗名（あれば表示）
 $storeName = '#' . $store_id;

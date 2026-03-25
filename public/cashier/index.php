@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../../app/layout.php';
 require_once __DIR__ . '/../../app/service_visit.php';
+require_once __DIR__ . '/../../app/store_decommission.php';
 
 require_login();
 if (function_exists('require_role')) {
@@ -15,6 +16,10 @@ if (function_exists('require_role')) {
 
 $pdo = db();
 if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+$store_id_guard = (int)($_GET['store_id'] ?? $_SESSION['store_id'] ?? 0);
+if ($store_id_guard > 0) {
+  store_decommission_assert_store_writable($pdo, $store_id_guard, '停止中の店舗では会計画面を開けません');
+}
 
 /* =========================
    Helpers (NO redeclare)

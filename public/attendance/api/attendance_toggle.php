@@ -5,6 +5,7 @@ date_default_timezone_set('Asia/Tokyo');
 
 require_once __DIR__ . '/../../../app/auth.php';
 require_once __DIR__ . '/../../../app/db.php';
+require_once __DIR__ . '/../../../app/store_decommission.php';
 
 require_login();
 require_role(['admin','manager','super_user']);
@@ -199,6 +200,7 @@ try {
 
   $storeId = safe_store_id();
   if ($storeId <= 0) jexit(400, ['ok' => false, 'error' => 'store_id missing']);
+  store_decommission_assert_store_writable($pdo, $storeId, '停止中の店舗では出勤編集できません');
 
   $mode = (string)($_POST['mode'] ?? '');
   if (!in_array($mode, ['in','out','late','absent','memo','set_time'], true)) {

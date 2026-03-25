@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../../app/attendance.php';
 require_once __DIR__ . '/../../app/orders_repo.php';
+require_once __DIR__ . '/../../app/store_decommission.php';
 
 $storeLib = __DIR__ . '/../../app/store.php';
 if (is_file($storeLib)) require_once $storeLib;
@@ -46,6 +47,11 @@ $store_id = function_exists('att_safe_store_id')
 
 if ($store_id <= 0) {
   json_out(['ok'=>false,'error'=>'store not selected'], 400);
+}
+try {
+  store_decommission_assert_store_writable($pdo, $store_id, '停止中の店舗では注文APIを利用できません');
+} catch (Throwable $e) {
+  json_out(['ok' => false, 'error' => $e->getMessage()], 423);
 }
 
 $action = (string)($_GET['action'] ?? '');
