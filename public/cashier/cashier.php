@@ -272,6 +272,30 @@ body{
   flex-wrap:wrap;
 }
 
+.headMain{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  min-width:0;
+  flex:1 1 auto;
+}
+
+.headActions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.headActions .btn{
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
 .titleBox h1{
   font-size: 18px;
   margin:0;
@@ -732,6 +756,10 @@ input:focus, select:focus{
     padding: 8px;
   }
 
+  .headMain{
+    gap:8px;
+  }
+
   .titleBox h1{
     font-size: 15px;
   }
@@ -760,6 +788,17 @@ input:focus, select:focus{
     font-size: 13px;
     padding: 8px 10px;
     border-radius: 12px;
+  }
+
+  .headActions{
+    width:100%;
+  }
+
+  .headActions .btn{
+    flex:1 1 0;
+    min-height: 40px;
+    font-size: 12px;
+    padding: 8px 10px;
   }
 
   .rightCol{
@@ -1337,17 +1376,24 @@ input:focus, select:focus{
   <div class="stickyHeader">
     <div class="headCard">
       <div class="headTop">
-        <div class="titleBox">
-          <h1>WEB会計（iPad現場版 / legacy）</h1>
-          <div class="sub">
-            店舗: <b><?= h($storeName) ?></b>（#<?= (int)$storeId ?>） / 営業日: <b><?= h($business_date) ?></b>（切替 <?= h($bizStart) ?>）<br>
-            Ticket: <b>#<?= (int)$ticket_id ?></b> / 出勤確定のキャストだけが候補として表示されます。
-            <?php if (is_array($visitSummary)): ?><br>
-            Visit: <b>#<?= (int)($visitSummary['visit_id'] ?? 0) ?></b> /
-            Customer: <b><?= (int)($visitSummary['customer_id'] ?? 0) > 0 ? (int)$visitSummary['customer_id'] : '—' ?></b> /
-            Event: <b><?= (int)($visitSummary['store_event_instance_id'] ?? 0) > 0 ? (int)$visitSummary['store_event_instance_id'] : '—' ?></b> /
-            Type: <b><?= h((string)($visitSummary['visit_type'] ?? 'unknown')) ?></b>
-            <?php endif; ?>
+        <div class="headMain">
+          <div class="titleBox">
+            <h1>WEB会計（iPad現場版 / legacy）</h1>
+            <div class="sub">
+              店舗: <b><?= h($storeName) ?></b>（#<?= (int)$storeId ?>） / 営業日: <b><?= h($business_date) ?></b>（切替 <?= h($bizStart) ?>）<br>
+              Ticket: <b>#<?= (int)$ticket_id ?></b> / 出勤確定のキャストだけが候補として表示されます。
+              <?php if (is_array($visitSummary)): ?><br>
+              Visit: <b>#<?= (int)($visitSummary['visit_id'] ?? 0) ?></b> /
+              Customer: <b><?= (int)($visitSummary['customer_id'] ?? 0) > 0 ? (int)$visitSummary['customer_id'] : '—' ?></b> /
+              Event: <b><?= (int)($visitSummary['store_event_instance_id'] ?? 0) > 0 ? (int)$visitSummary['store_event_instance_id'] : '—' ?></b> /
+              Type: <b><?= h((string)($visitSummary['visit_type'] ?? 'unknown')) ?></b>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <div class="headActions">
+            <a class="btn b-dark" href="/wbss/public/dashboard.php">ダッシュボード</a>
+            <a class="btn b-blue" href="/wbss/public/cashier/index.php?store_id=<?= (int)$storeId ?>">新 会計一覧</a>
           </div>
         </div>
 
@@ -1361,11 +1407,6 @@ input:focus, select:focus{
           <span class="statusDot"></span>
           状態：<b><?= h($label) ?></b>
         </div>
-      </div>
-
-      <div class="actionGrid">
-        <a class="btn b-dark" href="/wbss/public/dashboard.php">ダッシュボード</a>
-        <a class="btn b-blue" href="/wbss/public/cashier/index.php?store_id=<?= (int)$storeId ?>">新 会計一覧</a>
       </div>
 
     </div>
