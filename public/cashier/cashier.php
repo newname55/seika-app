@@ -1586,7 +1586,7 @@ input:focus, select:focus{
     closeBtn.disabled = true;
     closeBtn.classList.add('disabled');
     closeBtn.textContent = '入金完了（PAID）';
-    closeBtn.title = '満額入金済みです';
+    closeBtn.title = '入金済';
     return;
   }
 
