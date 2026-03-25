@@ -1633,12 +1633,30 @@ render_header('本日の勤務予定', [
 }
 .mobileSimpleBoard{
   display:block;
-  margin-top:14px;
+  margin-top:12px;
+  padding:10px;
+}
+.mobileSimpleBoard .sectionHead{
+  margin-bottom:8px;
+}
+.mobileSimpleBoard .cardTitle{
+  font-size:15px;
+}
+.mobileSimpleBoard .muted{
+  font-size:11px;
 }
 .mobileSimpleGrid{
   display:grid;
   grid-template-columns:repeat(5, minmax(0, 1fr));
-  gap:8px;
+  gap:6px;
+}
+@media (min-width: 1280px){
+  .mobileSimpleGrid{
+    grid-template-columns:repeat(6, minmax(0, 1fr));
+  }
+  .mobileSimpleBoard .muted{
+    display:none;
+  }
 }
 @media (max-width: 1180px){
   .mobileSimpleGrid{
@@ -1653,12 +1671,12 @@ render_header('本日の勤務予定', [
 }
 .mobileSimpleCard{
   display:grid;
-  gap:4px;
-  padding:8px 8px 7px;
+  gap:3px;
+  padding:6px 6px 5px;
   border:1px solid rgba(15,23,42,.10);
-  border-radius:12px;
+  border-radius:10px;
   background:#ffffff;
-  box-shadow:0 6px 14px rgba(15,23,42,.04);
+  box-shadow:0 4px 10px rgba(15,23,42,.035);
   min-width:0;
   width:100%;
   text-align:center;
@@ -1683,22 +1701,22 @@ render_header('本日の勤務予定', [
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  min-height:24px;
-  padding:0 6px;
+  min-height:20px;
+  padding:0 5px;
   border-radius:999px;
   border:1px solid rgba(15,23,42,.10);
   background:#f8fafc;
   color:#334155;
-  font-size:10px;
+  font-size:9px;
   font-weight:900;
   white-space:nowrap;
 }
 .mobileSimpleCard__name{
   display:block;
   min-width:0;
-  font-size:13px;
+  font-size:12px;
   font-weight:1000;
-  line-height:1.2;
+  line-height:1.1;
   color:#0f172a;
   text-align:center;
   word-break:break-word;
