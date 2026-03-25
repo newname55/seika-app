@@ -389,6 +389,51 @@ body{
   .grid3{ grid-template-columns: 1fr; }
 }
 
+.globalQuickGrid{
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap:10px;
+  margin-bottom:10px;
+}
+@media (max-width: 1180px){
+  .globalQuickGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px){
+  .globalQuickGrid{ grid-template-columns: 1fr; }
+}
+
+.quickMeta{
+  margin-top:8px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.quickStatus{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.quickStatus strong{
+  font-size: 18px;
+  font-weight: 1100;
+}
+
+.globalActionRow{
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap:10px;
+}
+@media (max-width: 1024px){
+  .globalActionRow{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px){
+  .globalActionRow{ grid-template-columns: 1fr; }
+}
+
 /* ✅ labelは統一（重複削除） */
 label{
   font-size: 12px;
@@ -932,10 +977,11 @@ input:focus, select:focus{
 
       <div class="card">
         <div class="cardTitle">
-          <h2>全体（開始・割引・タイマー・保存）</h2>
-          <div class="muted">まずは「▶スタート」→ セット/客 → ドリンク → 保存</div>
+          <h2>全体操作</h2>
+          <div class="muted">先に席を決めておくと、ドリンク追加まで迷わず進めます</div>
         </div>
 
+        <div id="globalQuickTools"></div>
         <div id="currentSetSummary" class="setSummaryBar"></div>
 
         <div class="grid4">
@@ -969,11 +1015,11 @@ input:focus, select:focus{
             </div>
           </div>
 
-          <div class="full" style="display:grid;grid-template-columns: repeat(4, 1fr); gap:10px;">
+          <div class="full globalActionRow">
+            <button type="button" class="btn b-dark" id="saveBtnInline">保存（DB）</button>
             <button type="button" class="btn b-blue" id="addSetBtn">+ 延長</button>
             <button class="btn b-green" type="button" id="previewBtn">プレビュー</button>
             <button class="btn b-dark" type="button" id="freeHistBtn">FREE履歴</button>
-            <button type="button" class="btn b-cyan" id="serverCalcBtn_dup">サーバ確定（API）</button>
           </div>
 
           <div class="full muted">
@@ -1041,9 +1087,10 @@ input:focus, select:focus{
 <script>
 /* ========= 保存（上部ボタン） ========= */
 (() => {
-  const saveTop = document.getElementById('saveBtnTop');
-  if (saveTop) {
-    saveTop.addEventListener('click', async () => {
+  ['saveBtnTop', 'saveBtnInline'].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
       try {
         await saveToDB();
         alert('保存しました');
@@ -1051,7 +1098,7 @@ input:focus, select:focus{
         alert('保存失敗: ' + (e?.message || e));
       }
     });
-  }
+  });
 
   /* ========= iPad版：追加の誤操作防止 ========= */
   const ids = ['serverCalcBtn', 'serverCalcBtn_dup', 'serverCalcBtn_head'];
@@ -1141,6 +1188,7 @@ input:focus, select:focus{
   const serverErrEl      = document.getElementById('serverErr');
   
   const currentSetSummaryEl = document.getElementById('currentSetSummary');
+  const globalQuickToolsEl = document.getElementById('globalQuickTools');
   
   function setFreePhase(setIndex, custNo, phase){
     const s = state.sets[setIndex];
@@ -1153,6 +1201,75 @@ input:focus, select:focus{
     cust.free.phase = phase;
     logEvent('free_phase_set', setIndex+1, {custNo, before, after: phase});
     render(false);
+  }
+
+  function kindOptionsHtml(selectedKind, idx){
+    return `
+      <option value="normal50" ${selectedKind==='normal50'?'selected':''}>通常50分 7000</option>
+      <option value="half25" ${selectedKind==='half25'?'selected':''}>ハーフ25分 3500</option>
+      <option value="pack_douhan" ${selectedKind==='pack_douhan'?'selected':''} ${idx>=1?'disabled':''}>同伴パック 20:00-21:30 13000</option>
+    `;
+  }
+
+  function renderGlobalQuickTools(setObj, idx){
+    if (!globalQuickToolsEl) return;
+    if (!setObj) {
+      globalQuickToolsEl.innerHTML = '';
+      return;
+    }
+
+    const seatId = clampSeatId(setObj.seat_id || 0);
+    const seatMissing = seatId <= 0;
+    const drinkSum = (setObj.drinks || []).reduce((a, d)=> a + (d.amount|0), 0);
+
+    globalQuickToolsEl.innerHTML = `
+      <div class="globalQuickGrid">
+        <div class="blockSafe blockBlue">
+          <label>現在セットの席</label>
+          <select id="quickSeatSel">${seatOptionsHtml(seatId)}</select>
+          <div class="quickMeta">
+            <span class="badgeMini">${seatMissing ? '席未決定' : `席 ${escapeHtml(seatLabelById(seatId))}`}</span>
+            <span class="badgeMini">${seatIsVip(seatId) ? 'VIP自動ON' : '通常席'}</span>
+          </div>
+        </div>
+
+        <div class="blockSafe blockYellow">
+          <label>来店人数</label>
+          <input type="number" id="quickGuestPeople" min="0" value="${setObj.guest_people|0}">
+          <div class="muted">現在のセットにそのまま反映</div>
+        </div>
+
+        <div class="blockSafe blockPurple">
+          <label>セット種別</label>
+          <select id="quickKindSel">
+            ${kindOptionsHtml(setObj.kind || 'normal50', idx)}
+          </select>
+          <div class="muted">延長前の確認もここでできます</div>
+        </div>
+
+        <div class="blockSafe blockGreen">
+          <label>現在セットの状態</label>
+          <div class="quickStatus">
+            <strong>${seatMissing ? '席を先に決定' : 'ドリンク追加OK'}</strong>
+            <span class="badgeMini">セット${idx + 1}</span>
+          </div>
+          <div class="quickMeta">
+            <span class="badgeMini">ドリンク ${drinkSum.toLocaleString()}円</span>
+            <span class="badgeMini">終了 ${escapeHtml(setObj.ends_at || '—')}</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('quickSeatSel')?.addEventListener('change', (e)=>{
+      setSeatId(idx, e.target.value);
+    });
+    document.getElementById('quickGuestPeople')?.addEventListener('change', (e)=>{
+      setGuestPeople(idx, e.target.value);
+    });
+    document.getElementById('quickKindSel')?.addEventListener('change', (e)=>{
+      setKindForSet(idx, e.target.value);
+    });
   }
 
 // CLOSEボタン：payments.php へ遷移（入金へ誘導）
@@ -2565,6 +2682,7 @@ input:focus, select:focus{
 
     const idx = state.ui.selected_set_index;
     const s = state.sets[idx];
+    renderGlobalQuickTools(s, idx);
     // ✅ 選択中セット概要バー更新
     if (currentSetSummaryEl && s){
       let shMap = {};
@@ -2631,7 +2749,7 @@ input:focus, select:focus{
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
           <div style="min-width:180px;">
-            <label style="margin:0 0 4px;">席</label>
+            <label style="margin:0 0 4px;">席（詳細）</label>
             <select id="seatSel">
               ${seatOptionsHtml(s.seat_id || 0)}
             </select>
