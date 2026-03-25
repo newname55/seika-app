@@ -78,6 +78,15 @@ render_header('管理ランチャー', [
         <div class="tile__hint">採用</div>
       </a>
 
+      <a class="tile tile-warn" href="/wbss/public/admin/store_decommission.php">
+        <div class="tile__icon">🗃️</div>
+        <div class="tile__main">
+          <div class="tile__title">店舗解約・データ廃棄</div>
+          <div class="tile__desc">停止、件数確認、申請、承認、予約、監査ログを管理する</div>
+        </div>
+        <div class="tile__hint">解約</div>
+      </a>
+
       <a class="tile tile-good" href="/wbss/public/line_login_start.php?mode=link&return=<?= urlencode('/wbss/public/admin/index.php') ?>">
         <div class="tile__icon">🔗</div>
         <div class="tile__main">

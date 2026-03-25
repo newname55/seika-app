@@ -118,6 +118,7 @@ status: $R4_STATUS"
   log_deploy "dev" "dev" "$BEFORE_R4" "$AFTER_R4" "failed" "gitエラー"
 fi
 
-send_line "$MSG"
+#送る時は＃を外す
+#send_line "$MSG"
 
 echo "===== DONE ====="

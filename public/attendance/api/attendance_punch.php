@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../../app/auth.php';
 require_once __DIR__ . '/../../../app/db.php';
+require_once __DIR__ . '/../../../app/store_decommission.php';
 
 /**
  * Legacy direct notify endpoint.
@@ -113,6 +114,7 @@ if ($storeId <= 0) {
   http_response_code(400);
   exit('store_id missing');
 }
+store_decommission_assert_store_writable($pdo, $storeId, '停止中の店舗では打刻通知できません');
 $_SESSION['store_id'] = $storeId;
 
 $me = function_exists('current_user_id') ? (int)current_user_id() : (int)($_SESSION['user_id'] ?? 0);
