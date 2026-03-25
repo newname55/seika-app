@@ -207,25 +207,24 @@ function store_decommission_log_step(
   ]);
 }
 
-function store_decommission_discover_store_tables(PDO $pdo): array
+function store_decommission_table_kind(PDO $pdo, string $table): ?string
 {
-  $st = $pdo->query("
-    SELECT TABLE_NAME
-    FROM information_schema.COLUMNS
+  $st = $pdo->prepare("
+    SELECT TABLE_TYPE
+    FROM information_schema.TABLES
     WHERE TABLE_SCHEMA = DATABASE()
-      AND COLUMN_NAME = 'store_id'
-    ORDER BY TABLE_NAME ASC
+      AND TABLE_NAME = ?
+    LIMIT 1
   ");
-  $tables = $st->fetchAll(PDO::FETCH_COLUMN) ?: [];
+  $st->execute([$table]);
+  $kind = $st->fetchColumn();
+  return is_string($kind) ? $kind : null;
+}
 
-  $excluded = [
-    'stores' => true,
-    'store_decommission_jobs' => true,
-    'store_decommission_logs' => true,
-    'store_decommission_snapshots' => true,
-  ];
-
-  $priority = [
+function store_decommission_delete_allowlist(): array
+{
+  return [
+    // 会計/注文
     'order_item_cast_assignments',
     'order_items',
     'orders',
@@ -233,47 +232,155 @@ function store_decommission_discover_store_tables(PDO $pdo): array
     'ticket_payments',
     'ticket_receipt_jobs',
     'ticket_headers',
+    'ticket_seat_moves',
     'tickets',
+    'visit_ticket_links',
+    'visits',
     'visit_nomination_events',
-    'attendance_audits',
-    'attendances',
-    'cast_shift_requests',
-    'cast_shift_plans',
+
+    // 顧客
     'customer_cast_links',
     'customer_notes',
+    'customer_contacts',
+    'customer_dates',
+    'customer_memberships',
+    'customer_merge_logs',
+    'customer_metrics',
+    'customer_profiles',
+    'customer_tags',
     'customers',
-    'wbss_applicant_photos',
-    'wbss_applicant_interviews',
+
+    // 勤怠/シフト
+    'attendance_audits',
+    'attendance_logs',
+    'attendance_notice_logs',
+    'attendance_shifts',
+    'attendances',
+    'cast_shift_logs',
+    'cast_shift_plans',
+    'cast_shift_requests',
+    'cast_week_plans',
+    'shift_schedules',
+
+    // 連携/通知/メッセージ
+    'invite_tokens',
+    'line_cast_replies',
+    'line_geo_pending',
+    'line_notice_actions',
+    'line_notice_logs',
+    'line_notice_replies',
+    'messages',
+    'push_subscriptions',
+
+    // イベント/移送
+    'event_entries',
+    'events',
+    'event_metrics_daily',
+    'event_schedules',
+    'rides',
+    'store_event_audit_logs',
+    'store_event_instances',
+    'store_event_metric_defs',
+    'store_events',
+    'store_external_events',
+    'store_transport_bases',
+    'transport_route_jobs',
+    'transport_route_plans',
+    'transport_route_stops',
+
+    // 応募/面接
     'applicants',
     'interviews',
-    'points',
-    'point_histories',
-    'line_geo_pending',
-    'store_event_audit_logs',
-    'store_events',
-    'store_users',
-    'user_roles',
-    'store_transport_bases',
-    'store_settings',
+    'wbss_applicant_interviews',
+    'wbss_applicant_photos',
+    'wbss_applicant_status_logs',
+    'wbss_applicant_store_assignments',
+
+    // 店舗内マスタ/設定
+    'order_menus',
+    'order_menu_categories',
+    'order_orders',
+    'order_order_items',
+    'order_tables',
+    'stock_categories',
+    'stock_inventory_lines',
+    'stock_inventory_sessions',
+    'stock_items',
+    'stock_item_locations',
+    'stock_locations',
+    'stock_moves',
+    'stock_product_price_history',
+    'stock_products',
+    'store_business_overrides',
+    'store_cast_history',
+    'store_closures',
+    'store_daily_metrics',
+    'store_printers',
+    'store_shift_time_presets',
+    'store_weekly_closed_days',
+    'ticket_sequences',
+    'ticket_shimei_events',
+    'wage_rates',
   ];
+}
 
-  $ordered = [];
-  foreach ($priority as $table) {
-    if (in_array($table, $tables, true) && !isset($excluded[$table])) {
-      $ordered[] = ['table' => $table, 'mode' => 'delete_by_store_id'];
-    }
-  }
-  foreach ($tables as $table) {
-    if (isset($excluded[$table])) {
+function store_decommission_delete_excluded(): array
+{
+  return [
+    // 親/監査/ジョブ
+    'stores' => 'parent store row is retained for audit visibility',
+    'store_decommission_jobs' => 'decommission control tables must remain',
+    'store_decommission_logs' => 'decommission control tables must remain',
+    'store_decommission_snapshots' => 'decommission control tables must remain',
+    'audit_impersonations' => 'global audit data should not be physically deleted in v0.1',
+    'audit_logs' => 'global audit data should not be physically deleted in v0.1',
+
+    // 共有ユーザー情報
+    'store_users' => 'shared user membership needs store-specific rules before deletion',
+    'user_roles' => 'shared role assignments need store-specific rules before deletion',
+    'cast_profiles' => 'cast profiles may span stores and need dedicated cleanup rules',
+    'cast_points' => 'points data needs business decision before deletion',
+    'cast_points_deleted' => 'points data needs business decision before deletion',
+    'cast_transport_profiles' => 'cast transport profiles may be shared across stores',
+    'drivers' => 'driver master may be shared across stores',
+
+    // ビュー/派生
+    'v_store_casts_active' => 'views are never physical delete targets',
+  ];
+}
+
+function store_decommission_build_delete_plan(PDO $pdo): array
+{
+  $plan = [];
+  foreach (store_decommission_delete_allowlist() as $table) {
+    if (!store_decommission_table_exists($pdo, $table)) {
       continue;
     }
-    if (in_array($table, $priority, true)) {
+    if (!store_decommission_column_exists($pdo, $table, 'store_id')) {
       continue;
     }
-    $ordered[] = ['table' => $table, 'mode' => 'delete_by_store_id'];
+    if (store_decommission_table_kind($pdo, $table) !== 'BASE TABLE') {
+      continue;
+    }
+    $plan[] = ['table' => $table, 'mode' => 'delete_by_store_id'];
   }
+  return $plan;
+}
 
-  return $ordered;
+function store_decommission_ignored_tables(PDO $pdo): array
+{
+  $ignored = [];
+  foreach (store_decommission_delete_excluded() as $table => $reason) {
+    if (!store_decommission_table_exists($pdo, $table)) {
+      continue;
+    }
+    $ignored[] = [
+      'table' => $table,
+      'reason' => $reason,
+      'kind' => store_decommission_table_kind($pdo, $table),
+    ];
+  }
+  return $ignored;
 }
 
 function store_decommission_preview_definitions(): array
@@ -799,15 +906,27 @@ function store_decommission_execute_job(PDO $pdo, int $jobId, bool $dryRun = tru
   }
 
   $storeId = (int)$job['store_id'];
-  $plan = store_decommission_discover_store_tables($pdo);
-  $result = ['deleted' => [], 'skipped' => []];
+  $plan = store_decommission_build_delete_plan($pdo);
+  $ignored = store_decommission_ignored_tables($pdo);
+  $result = ['deleted' => [], 'skipped' => [], 'ignored' => []];
 
   store_decommission_mark_job_running($pdo, $jobId);
   store_decommission_log_step($pdo, $jobId, $storeId, 'runner.start', '廃棄実行開始', 'started', $dryRun ? 'dry-run' : 'execute', [
     'dry_run' => $dryRun,
+    'planned_tables' => array_column($plan, 'table'),
+    'ignored_tables' => array_column($ignored, 'table'),
   ], $systemUserId > 0 ? $systemUserId : null);
 
   try {
+    foreach ($ignored as $entry) {
+      $table = (string)$entry['table'];
+      $reason = (string)$entry['reason'];
+      store_decommission_log_step($pdo, $jobId, $storeId, 'ignore.' . $table, 'Ignore ' . $table, 'completed', $reason, [
+        'table_kind' => $entry['kind'],
+      ], $systemUserId ?: null);
+      $result['ignored'][$table] = $reason;
+    }
+
     foreach ($plan as $entry) {
       $table = (string)$entry['table'];
       $label = 'Delete ' . $table;
@@ -853,6 +972,7 @@ function store_decommission_execute_job(PDO $pdo, int $jobId, bool $dryRun = tru
     store_decommission_log_step($pdo, $jobId, $storeId, 'runner.finish', '廃棄実行完了', 'completed', null, [
       'dry_run' => $dryRun,
       'deleted_tables' => array_keys($result['deleted']),
+      'ignored_tables' => $result['ignored'],
     ], $systemUserId ?: null);
 
     return $result;
