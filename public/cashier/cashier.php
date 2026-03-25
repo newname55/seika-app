@@ -3516,6 +3516,12 @@ input:focus, select:focus{
       } else {
         const box = custObj.free || {first:0,second:0,third:0,phase:'first'};
         const phase = box.phase || 'first';
+        const phaseInfoMap = {
+          first:  { label:'FIRST',  cardClass:'blockBlue',   gridId:'free_phase_grid', hint:'※ SECOND/THIRD のときはロック', current: box.first || 0 },
+          second: { label:'SECOND', cardClass:'blockGreen',  gridId:'free_phase_grid', hint:'※ THIRD のときはロック', current: box.second || 0 },
+          third:  { label:'THIRD',  cardClass:'blockPurple', gridId:'free_phase_grid', hint:'※ 現在進行中', current: box.third || 0 },
+        };
+        const currentPhaseInfo = phaseInfoMap[phase] || phaseInfoMap.first;
 
         const curNo = getCurrentAssignedCastNoForCustomer(s, custNo);
         const hint = document.getElementById('currentAssignHint');
@@ -3538,33 +3544,13 @@ input:focus, select:focus{
 
           <div class="hr"></div>
 
-          <div class="grid3">
-            <div class="blockSafe blockBlue">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-                <div style="font-weight:1100;">FIRST</div>
-                ${box.first ? `<span class="badgeMini2">店番${box.first}</span>` : `<span class="muted">—</span>`}
-              </div>
-              <div class="muted" style="margin:6px 0 8px;">※ SECOND/THIRD のときはロック</div>
-              <div class="grid30" id="free_first"></div>
+          <div class="blockSafe ${currentPhaseInfo.cardClass}">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+              <div style="font-weight:1100;">${currentPhaseInfo.label}</div>
+              ${currentPhaseInfo.current ? `<span class="badgeMini2">店番${currentPhaseInfo.current}</span>` : `<span class="muted">—</span>`}
             </div>
-
-            <div class="blockSafe blockGreen">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-                <div style="font-weight:1100;">SECOND</div>
-                ${box.second ? `<span class="badgeMini2">店番${box.second}</span>` : `<span class="muted">—</span>`}
-              </div>
-              <div class="muted" style="margin:6px 0 8px;">※ THIRD のときはロック</div>
-              <div class="grid30" id="free_second"></div>
-            </div>
-
-            <div class="blockSafe blockPurple">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-                <div style="font-weight:1100;">THIRD</div>
-                ${box.third ? `<span class="badgeMini2">店番${box.third}</span>` : `<span class="muted">—</span>`}
-              </div>
-              <div class="muted" style="margin:6px 0 8px;">※ 現在進行中</div>
-              <div class="grid30" id="free_third"></div>
-            </div>
+            <div class="muted" style="margin:6px 0 8px;">${currentPhaseInfo.hint}</div>
+            <div class="grid30" id="${currentPhaseInfo.gridId}"></div>
           </div>
         `;
 
@@ -3603,9 +3589,7 @@ input:focus, select:focus{
           });
         }
 
-        fillRole('first', 'free_first', box.first||0);
-        fillRole('second','free_second',box.second||0);
-        fillRole('third', 'free_third', box.third||0);
+        fillRole(phase, currentPhaseInfo.gridId, currentPhaseInfo.current);
       }
     }
 
