@@ -762,11 +762,82 @@ input:focus, select:focus{
 .phaseBtn.on{ background: var(--primary); color:#fff; border-color: var(--primary); }
 .phaseBtn.disabled{ opacity:.35; cursor:not-allowed; box-shadow:none; }
 
-.workTabs{
+.cashierDashTabs{
   display:flex;
   gap:8px;
   flex-wrap:wrap;
-  margin: 10px 0 8px;
+  padding:4px;
+  margin:10px 0 10px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:linear-gradient(180deg, #ffffff, #f7f8fc);
+  box-shadow:0 10px 24px rgba(15,18,34,.08);
+}
+
+.cashierDashTab{
+  appearance:none;
+  border:1px solid transparent;
+  background:transparent;
+  color:var(--muted);
+  border-radius:14px;
+  min-height:58px;
+  padding:12px 16px;
+  font-size:15px;
+  font-weight:900;
+  line-height:1.2;
+  cursor:pointer;
+  transition:background .16s ease, color .16s ease, border-color .16s ease, transform .16s ease;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex:1 1 180px;
+}
+
+.cashierDashTab:hover{
+  color:var(--text);
+  border-color:rgba(37,99,235,.18);
+  background:rgba(37,99,235,.05);
+}
+
+.cashierDashTab.is-active{
+  color:#0f172a;
+  border-color:rgba(37,99,235,.20);
+  background:linear-gradient(135deg, #bfdbfe, #dbeafe 55%, #fef3c7);
+}
+
+.cashierDashTabIcon{
+  width:34px;
+  height:34px;
+  border-radius:12px;
+  display:grid;
+  place-items:center;
+  background:#fff;
+  box-shadow: inset 0 0 0 1px rgba(15,18,34,.08);
+  font-size:16px;
+  flex:0 0 auto;
+}
+
+.cashierDashTabText{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+}
+
+.cashierDashTabTitle{
+  font-size:14px;
+  font-weight:1000;
+  color:inherit;
+}
+
+.cashierDashTabMeta{
+  font-size:11px;
+  color:var(--muted);
+  font-weight:700;
+}
+
+.cashierDashTab.is-active .cashierDashTabMeta{
+  color:#334155;
 }
 
 .workTabPane{
@@ -2875,6 +2946,7 @@ input:focus, select:focus{
     const shimeiCount = Object.keys(shMap).length;
     const charge = Math.max(s.guest_people|0, shimeiCount);
     const drinkSum = (s.drinks||[]).reduce((a,d)=>a + (d.amount|0), 0);
+    const activeWorkTab = (state.ui.work_tab === 'customer' || state.ui.work_tab === 'drink') ? state.ui.work_tab : 'set';
 
     setPaneEl.innerHTML = `
         <div>
@@ -2902,105 +2974,148 @@ input:focus, select:focus{
 
       <div class="hr"></div>
 
-      <div class="row2">
-        <div>
+      <div class="cashierDashTabs" role="tablist" aria-label="会計作業切り替え">
+        <button
+          type="button"
+          class="cashierDashTab ${activeWorkTab === 'set' ? 'is-active' : ''}"
+          data-work-tab="set"
+          role="tab"
+          aria-selected="${activeWorkTab === 'set' ? 'true' : 'false'}"
+        >
+          <span class="cashierDashTabIcon">🪑</span>
+          <span class="cashierDashTabText">
+            <span class="cashierDashTabTitle">セット選択</span>
+            <span class="cashierDashTabMeta">席・人数・VIP・種別</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          class="cashierDashTab ${activeWorkTab === 'customer' ? 'is-active' : ''}"
+          data-work-tab="customer"
+          role="tab"
+          aria-selected="${activeWorkTab === 'customer' ? 'true' : 'false'}"
+        >
+          <span class="cashierDashTabIcon">👥</span>
+          <span class="cashierDashTabText">
+            <span class="cashierDashTabTitle">客ごとのモード</span>
+            <span class="cashierDashTabMeta">FREE・指名の切替</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          class="cashierDashTab ${activeWorkTab === 'drink' ? 'is-active' : ''}"
+          data-work-tab="drink"
+          role="tab"
+          aria-selected="${activeWorkTab === 'drink' ? 'true' : 'false'}"
+        >
+          <span class="cashierDashTabIcon">🥃</span>
+          <span class="cashierDashTabText">
+            <span class="cashierDashTabTitle">ドリンク（都度追加）</span>
+            <span class="cashierDashTabMeta">評価先・金額・履歴</span>
+          </span>
+        </button>
+      </div>
 
-          <div class="guestLadiesRow">
-            <div class="guestBox">
-              <label>ゲスト人数（来店人数）</label>
-              <input type="number" id="guest_people" min="0" value="${s.guest_people}">
-            </div>
+      <div class="workTabPane ${activeWorkTab === 'set' ? 'active' : ''}" id="workPaneSet">
+        <div class="row2">
+          <div>
+            <div class="guestLadiesRow">
+              <div class="guestBox">
+                <label>ゲスト人数（来店人数）</label>
+                <input type="number" id="guest_people" min="0" value="${s.guest_people}">
+              </div>
 
-            <div class="ladiesBox">
-              <label class="small muted" style="display:flex; gap:8px; align-items:center; user-select:none; margin-bottom:6px;">
-                <input type="checkbox" id="ladies_enabled" class="chkMini"${ (s.ladies_people|0) > 0 ? 'checked' : '' }>
-                レディース料金
-              </label>
+              <div class="ladiesBox">
+                <label class="small muted" style="display:flex; gap:8px; align-items:center; user-select:none; margin-bottom:6px;">
+                  <input type="checkbox" id="ladies_enabled" class="chkMini"${ (s.ladies_people|0) > 0 ? 'checked' : '' }>
+                  レディース料金
+                </label>
 
-              <div id="ladiesWrap"
-                  style="display:${(s.ladies_people|0) > 0 ? 'flex' : 'none'}; gap:8px; align-items:center; flex-wrap:wrap;">
-                <span class="small muted">人数</span>
+                <div id="ladiesWrap"
+                    style="display:${(s.ladies_people|0) > 0 ? 'flex' : 'none'}; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <span class="small muted">人数</span>
 
-                <div class="stepper">
-                  <button type="button" class="stepBtn" id="ladiesMinus">−</button>
-                  <input
-                    type="text"
-                    id="ladies_people"
-                    class="stepVal"
-                    value="${s.ladies_people||0}"
-                    readonly
-                    inputmode="numeric"
-                  >
-                  <button type="button" class="stepBtn" id="ladiesPlus">＋</button>
+                  <div class="stepper">
+                    <button type="button" class="stepBtn" id="ladiesMinus">−</button>
+                    <input
+                      type="text"
+                      id="ladies_people"
+                      class="stepVal"
+                      value="${s.ladies_people||0}"
+                      readonly
+                      inputmode="numeric"
+                    >
+                    <button type="button" class="stepBtn" id="ladiesPlus">＋</button>
+                  </div>
+
+                  <button type="button" class="btnMini" id="ladiesMax">MAX</button>
+                  <button type="button" class="btnMini" id="ladiesClear">0</button>
                 </div>
-
-                <button type="button" class="btnMini" id="ladiesMax">MAX</button>
-                <button type="button" class="btnMini" id="ladiesClear">0</button>
               </div>
             </div>
           </div>
-        </div>
 
-        <div>
-          <div class="row2">
-            <div>
-              <label>VIP（+10000）</label>
-              <select id="vip">
-                <option value="0" ${s.vip ? "" : "selected"}>OFF</option>
-                <option value="1" ${s.vip ? "selected" : ""}>ON</option>
-              </select>
-            </div>
+          <div>
+            <div class="row2">
+              <div>
+                <label>VIP（+10000）</label>
+                <select id="vip">
+                  <option value="0" ${s.vip ? "" : "selected"}>OFF</option>
+                  <option value="1" ${s.vip ? "selected" : ""}>ON</option>
+                </select>
+              </div>
 
-            <div>
-              <label>セット種別</label>
-              <select id="kindSel">
-                <option value="normal50" ${s.kind==='normal50'?'selected':''}>通常50分 7000</option>
-                <option value="half25" ${s.kind==='half25'?'selected':''}>ハーフ25分 3500</option>
-                <option value="pack_douhan" ${s.kind==='pack_douhan'?'selected':''} ${idx>=1?'disabled':''}>同伴パック 20:00-21:30 13000</option>
-              </select>
+              <div>
+                <label>セット種別</label>
+                <select id="kindSel">
+                  <option value="normal50" ${s.kind==='normal50'?'selected':''}>通常50分 7000</option>
+                  <option value="half25" ${s.kind==='half25'?'selected':''}>ハーフ25分 3500</option>
+                  <option value="pack_douhan" ${s.kind==='pack_douhan'?'selected':''} ${idx>=1?'disabled':''}>同伴パック 20:00-21:30 13000</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="hr"></div>
+      <div class="workTabPane ${activeWorkTab === 'customer' ? 'active' : ''}" id="workPaneCustomer">
+        <h2>客ごとのモード</h2>
+        <div class="muted small">FREE=席付き / 指名=客ごと（○→★→解除）</div>
+        <div class="tabs wrap" id="custTabs"></div>
+        <div class="pane" id="custPane"></div>
+      </div>
 
-      <h2>客ごとのモード</h2>
-      <div class="muted small">FREE=席付き / 指名=客ごと（○→★→解除）</div>
-      <div class="tabs wrap" id="custTabs"></div>
-      <div class="pane" id="custPane"></div>
-
-      <div class="hr"></div>
-
-      <h2>ドリンク（都度追加）</h2>
-      <div class="muted small" id="currentAssignHint"></div>
+      <div class="workTabPane ${activeWorkTab === 'drink' ? 'active' : ''}" id="workPaneDrink">
+        <h2>ドリンク（都度追加）</h2>
+        <div class="muted small" id="currentAssignHint"></div>
         <div>
           <label>評価先</label>
           <select id="payer_select"></select>
           <div class="muted small" style="margin-top:6px;">※ 今最後に付いてる人が最上段に出ます</div>
         </div>
-      <div class="drinkRowTight">
-        <div>
-        <label>金額（税別）</label>
-        <div class="amtRow">
-          <input type="number" id="drink_amount" class="amtInput" min="0" value="0" inputmode="numeric">
-          <div class="amtBtns">
-            <button type="button" class="btnAmt" id="btnAmt1000">+1000</button>
-            <button type="button" class="btnAmt" id="btnAmt1500">+1500</button>
-            <button type="button" class="btnAmt" id="btnAmtClear">クリア</button>
+        <div class="drinkRowTight">
+          <div>
+            <label>金額（税別）</label>
+            <div class="amtRow">
+              <input type="number" id="drink_amount" class="amtInput" min="0" value="0" inputmode="numeric">
+              <div class="amtBtns">
+                <button type="button" class="btnAmt" id="btnAmt1000">+1000</button>
+                <button type="button" class="btnAmt" id="btnAmt1500">+1500</button>
+                <button type="button" class="btnAmt" id="btnAmtClear">クリア</button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label>操作</label>
+            <button type="button" class="btn b-green" id="addDrinkBtn">+ ドリンク追加</button>
           </div>
         </div>
-      </div>
-        <div>
-          <label>操作</label>
-          <button type="button" class="btn b-green" id="addDrinkBtn">+ ドリンク追加</button>
-        </div>
-      </div>
 
-      <div class="hr"></div>
+        <div class="hr"></div>
 
-      <h2>このセットのドリンク一覧</h2>
-      <div id="drinkList"></div>
+        <h2>このセットのドリンク一覧</h2>
+        <div id="drinkList"></div>
+      </div>
     `;
 
     document.getElementById('delSetBtn').addEventListener('click', ()=>{
@@ -3030,6 +3145,9 @@ input:focus, select:focus{
     document.getElementById('guest_people').addEventListener('change', (e)=> setGuestPeople(idx, e.target.value));
     document.getElementById('vip').addEventListener('change', (e)=> setVip(idx, e.target.value === '1'));
     document.getElementById('kindSel').addEventListener('change', (e)=> setKindForSet(idx, e.target.value));
+    setPaneEl.querySelectorAll('[data-work-tab]').forEach(btn=>{
+      btn.addEventListener('click', ()=> selectWorkTab(btn.getAttribute('data-work-tab') || 'set'));
+    });
     // =========================
     // レディース ステッパー
     // =========================
