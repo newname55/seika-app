@@ -424,14 +424,19 @@ body{
 
 .globalActionRow{
   display:grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap:8px;
+}
+.globalActionRow #closeBtn{
+  grid-column: span 2;
 }
 @media (max-width: 1024px){
   .globalActionRow{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .globalActionRow #closeBtn{ grid-column: span 1; }
 }
 @media (max-width: 640px){
   .globalActionRow{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .globalActionRow #closeBtn{ grid-column: span 2; }
 }
 
 /* ✅ labelは統一（重複削除） */
@@ -588,8 +593,10 @@ input:focus, select:focus{
 .compactCard .btn{
   min-height: 46px;
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: 13px;
   border-radius: 13px;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .compactCard .muted{
@@ -702,6 +709,8 @@ input:focus, select:focus{
 
 .actionPair .btn{
   min-width:0;
+  font-size: 12px;
+  letter-spacing: -.01em;
 }
 
 /* ====== Right column sticky ====== */
