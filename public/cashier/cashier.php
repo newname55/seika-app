@@ -1245,7 +1245,7 @@ input:focus, select:focus{
           <div class="blockSafe blockPurple compactField">
             <label>操作</label>
             <div class="actionPair">
-              <button type="button" class="btn b-green" id="startBtn">▶ スタート</button>
+              <button type="button" class="btn b-green" id="startBtn">▶ 開始</button>
               <button type="button" class="btn b-orange" id="stopBtn">■ 停止</button>
             </div>
           </div>
