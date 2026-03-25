@@ -1194,9 +1194,6 @@ input:focus, select:focus{
         <a class="btn b-blue" href="/wbss/public/cashier/index.php?store_id=<?= (int)$storeId ?>">新 会計一覧</a>
       </div>
 
-      <div class="muted" style="margin-top:8px;">
-        ※ legacy版は「押しやすさ」と「誤入力防止」を優先（色分け・大ボタン・タブ横スクロール）
-      </div>
     </div>
   </div>
 
