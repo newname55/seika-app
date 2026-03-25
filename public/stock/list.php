@@ -96,6 +96,32 @@ function format_stock_last_move(?string $value): string {
   return date('m-d H:i', $ts);
 }
 
+function normalize_search_text(string $value): string {
+  $value = trim($value);
+  if ($value === '') return '';
+  $value = mb_convert_kana($value, 'asKV', 'UTF-8');
+  return mb_strtolower($value, 'UTF-8');
+}
+
+function kana_search_variants(string $value): array {
+  $base = normalize_search_text($value);
+  if ($base === '') return [];
+
+  $variants = [
+    $base,
+    mb_convert_kana($base, 'c', 'UTF-8'),
+    mb_convert_kana($base, 'C', 'UTF-8'),
+  ];
+
+  $uniq = [];
+  foreach ($variants as $variant) {
+    $variant = trim($variant);
+    if ($variant === '' || isset($uniq[$variant])) continue;
+    $uniq[$variant] = true;
+  }
+  return array_keys($uniq);
+}
+
 $store_id = (int)require_store_selected_safe();
 
 /** ====== 前提チェック ====== */
@@ -180,12 +206,18 @@ if (table_has_column($pdo, 'stock_products', 'is_active')) {
 if ($q !== '') {
   // search_text があるなら拾う（無ければ name/barcode のみ）
   $hasSearchText = table_has_column($pdo, 'stock_products', 'search_text');
-  $cond = ["p.name LIKE ?", "p.barcode LIKE ?"];
-  $params[] = '%'.$q.'%';
-  $params[] = '%'.$q.'%';
-  if ($hasSearchText) {
-    $cond[] = "p.search_text LIKE ?";
-    $params[] = '%'.$q.'%';
+  $qVariants = kana_search_variants($q);
+  $cond = [];
+  foreach ($qVariants as $qVariant) {
+    $like = '%' . $qVariant . '%';
+    $cond[] = "p.name LIKE ?";
+    $params[] = $like;
+    $cond[] = "p.barcode LIKE ?";
+    $params[] = $like;
+    if ($hasSearchText) {
+      $cond[] = "p.search_text LIKE ?";
+      $params[] = $like;
+    }
   }
   $where[] = "(" . implode(" OR ", $cond) . ")";
 }
@@ -1423,7 +1455,7 @@ body[data-theme="light"] .tbl td{
                 (string)$cname,
                 (string)ptype_label((string)($r['product_type'] ?? '')),
               ], static fn($v) => $v !== '');
-              $searchText = mb_strtolower(trim(implode(' ', $searchParts)), 'UTF-8');
+              $searchText = normalize_search_text(implode(' ', $searchParts));
             ?>
             <tr
               id="product-row-<?= (int)$r['id'] ?>"
@@ -1508,7 +1540,7 @@ body[data-theme="light"] .tbl td{
               (string)$cname,
               (string)ptype_label((string)($r['product_type'] ?? '')),
             ], static fn($v) => $v !== '');
-            $searchText = mb_strtolower(trim(implode(' ', $searchParts)), 'UTF-8');
+            $searchText = normalize_search_text(implode(' ', $searchParts));
           ?>
           <div
             class="sp-card"
@@ -1606,7 +1638,13 @@ document.querySelectorAll('.sort-option input[type="radio"]').forEach((input) =>
     return;
   }
 
-  const normalizeText = (value) => String(value || '').trim().toLowerCase();
+  const normalizeText = (value) => String(value || '')
+    .trim()
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\u30a1-\u30f6]/g, (ch) =>
+      String.fromCharCode(ch.charCodeAt(0) - 0x60)
+    );
 
   function applyProductSearch() {
     const keyword = normalizeText(searchInput.value);
