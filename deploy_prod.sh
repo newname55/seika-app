@@ -119,6 +119,8 @@ main_status: $MAIN_STATUS"
   log_deploy "prod" "main" "$BEFORE_MAIN" "$AFTER_MAIN" "failed" "deploy失敗"
 fi
 
-send_line "$MSG"
+#LINEを送る時は＃を外す
+#その後、chmod +x /var/www/html/wbss/deploy.sh
+#send_line "$MSG"
 
 echo "===== DONE ====="
