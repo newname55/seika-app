@@ -307,8 +307,8 @@ body{
 .actionGrid{
   display:grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 8px;
 }
 @media (max-width: 1200px){
   .actionGrid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -762,6 +762,21 @@ input:focus, select:focus{
 .phaseBtn.on{ background: var(--primary); color:#fff; border-color: var(--primary); }
 .phaseBtn.disabled{ opacity:.35; cursor:not-allowed; box-shadow:none; }
 
+.workTabs{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin: 10px 0 8px;
+}
+
+.workTabPane{
+  display:none;
+}
+
+.workTabPane.active{
+  display:block;
+}
+
 .btnSmall{
   border:none;
   border-radius: 16px;
@@ -818,14 +833,14 @@ input:focus, select:focus{
 
 /* セットサマリ */
 .setSummaryBar{
-  margin: 8px 0 10px;
-  padding: 10px 12px;
+  margin: 6px 0 8px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #fff;
   display:flex;
   flex-wrap:wrap;
-  gap:8px;
+  gap:6px;
   align-items:center;
 }
 .setSummaryBar .badgeMini{ margin-right: 0; }
@@ -1451,7 +1466,7 @@ input:focus, select:focus{
   const state = {
     sets: [],
     history: [],
-    ui: { selected_set_index: 0, last_payer_sel: null },
+    ui: { selected_set_index: 0, last_payer_sel: null, work_tab: 'set' },
     timer: { running:false, base_start_hhmm:null, interval_id:null },
     cast_candidates: [],
   };
@@ -2000,6 +2015,12 @@ input:focus, select:focus{
     s.customer_tab_selected = custNo;
     normalizeCustomers(s);
     logEvent('customer_tab_select', setIndex+1, {before, after:s.customer_tab_selected});
+    render(false);
+  }
+  function selectWorkTab(tabKey){
+    const allow = new Set(['set','customer','drink']);
+    const next = allow.has(tabKey) ? tabKey : 'set';
+    state.ui.work_tab = next;
     render(false);
   }
 
