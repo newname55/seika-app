@@ -5,10 +5,10 @@
 }
 
 .transportPanel{
-  border:1px solid var(--line);
+  border:1px solid rgba(15,23,42,.08);
   border-radius:18px;
-  background:linear-gradient(180deg, color-mix(in srgb, var(--cardA) 96%, #fff 4%), color-mix(in srgb, var(--cardB) 98%, transparent));
-  box-shadow:var(--shadow);
+  background:linear-gradient(135deg, rgba(255,255,255,.98), rgba(241,245,249,.92));
+  box-shadow:0 12px 30px rgba(15,18,34,.08);
 }
 
 .transportMapAlert{
@@ -18,7 +18,8 @@
 
 .transportMapAlertError{
   border:1px solid rgba(239,68,68,.35);
-  background:color-mix(in srgb, var(--ng) 10%, var(--cardA));
+  background:rgba(254,242,242,.95);
+  color:#991b1b;
 }
 
 .transportMapFilters{
@@ -53,11 +54,12 @@
   padding:16px;
   display:grid;
   gap:6px;
+  background:#fff;
 }
 
 .transportMapSummaryWarn{
   border-color:rgba(239,68,68,.3);
-  background:linear-gradient(180deg, color-mix(in srgb, var(--ng) 16%, var(--cardA)), color-mix(in srgb, var(--cardB) 96%, transparent));
+  background:linear-gradient(180deg, rgba(254,226,226,.96), rgba(255,255,255,.98));
 }
 
 .transportMapSummaryLabel{
@@ -66,7 +68,8 @@
 }
 
 .transportMapSummaryValue{
-  font-size:28px;
+  font-size:24px;
+  color:#0f172a;
   line-height:1;
 }
 
@@ -99,11 +102,12 @@
   display:inline-flex;
   align-items:center;
   gap:8px;
-  padding:8px 10px;
+  padding:7px 10px;
   border-radius:999px;
-  background:color-mix(in srgb, var(--cardA) 92%, transparent);
-  border:1px solid var(--line);
+  background:#ffffff;
+  border:1px solid rgba(15,23,42,.10);
   font-size:12px;
+  color:#334155;
 }
 
 .transportMapChip b{
@@ -166,21 +170,22 @@
 .transportMapRow{
   width:100%;
   text-align:left;
-  border:1px solid var(--line);
-  border-radius:16px;
-  background:color-mix(in srgb, var(--cardA) 94%, transparent);
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:14px;
+  background:#ffffff;
   color:inherit;
   padding:12px;
   display:grid;
   gap:10px;
   cursor:pointer;
-  transition:border-color .16s ease, transform .16s ease, background .16s ease;
+  transition:border-color .16s ease, transform .16s ease, box-shadow .16s ease, background .16s ease;
 }
 
 .transportMapRow:hover,
 .transportMapRow.is-active{
   border-color:rgba(96,165,250,.48);
-  background:color-mix(in srgb, var(--accent) 8%, var(--cardA));
+  background:#ffffff;
+  box-shadow:0 10px 22px rgba(37,99,235,.10);
   transform:translateY(-1px);
 }
 
@@ -203,6 +208,7 @@
 .transportMapRowName{
   font-size:16px;
   font-weight:700;
+  color:#0f172a;
 }
 
 .transportMapRowMeta{
@@ -216,7 +222,7 @@
   grid-template-columns:repeat(2, minmax(0, 1fr));
   gap:8px 12px;
   font-size:12px;
-  color:var(--txt);
+  color:#1e293b;
 }
 
 .transportMapRowGrid span{
@@ -248,8 +254,8 @@
   padding:6px 10px;
   border-radius:999px;
   border:1px solid color-mix(in srgb, var(--status-color) 38%, transparent);
-  background:color-mix(in srgb, var(--status-color) 18%, rgba(15,23,42,.65));
-  color:#fff;
+  background:color-mix(in srgb, var(--status-color) 12%, white);
+  color:#334155;
   font-size:12px;
   font-weight:700;
   white-space:nowrap;
@@ -257,9 +263,9 @@
 
 .transportMapCanvas{
   min-height:620px;
-  border-radius:18px;
+  border-radius:14px;
   overflow:hidden;
-  border:1px solid var(--line);
+  border:1px solid rgba(15,23,42,.10);
 }
 
 .transportMapMapBadge{
@@ -267,9 +273,9 @@
   align-items:center;
   padding:8px 12px;
   border-radius:999px;
-  background:color-mix(in srgb, var(--accent) 14%, var(--cardA));
-  border:1px solid color-mix(in srgb, var(--accent) 36%, var(--line));
-  color:var(--txt);
+  background:rgba(37,99,235,.08);
+  border:1px solid rgba(37,99,235,.16);
+  color:#1d4ed8;
   font-size:12px;
   font-weight:700;
 }
@@ -362,6 +368,174 @@ body[data-theme="light"] .transportMapPage .pageHero{
   border:1px solid var(--line);
   border-radius:18px;
   box-shadow:var(--shadow);
+}
+
+.transportMapPage .pageHero{
+  margin-bottom:0;
+  padding:18px;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:18px;
+  background:linear-gradient(135deg, rgba(255,255,255,.98), rgba(241,245,249,.92));
+  box-shadow:0 12px 30px rgba(15,18,34,.08);
+}
+
+.transportMapPage .rowTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+
+.transportMapPage .titleWrap{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  align-items:flex-end;
+}
+
+.transportMapPage .title{
+  font-weight:1000;
+  font-size:28px;
+  line-height:1.1;
+  letter-spacing:.01em;
+  color:#0f172a;
+}
+
+.transportMapPage .heroMeta{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.transportMapPage .heroChip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:8px 12px;
+  border-radius:999px;
+  border:1px solid rgba(15,23,42,.10);
+  background:#ffffff;
+  color:#334155;
+  font-size:13px;
+}
+
+.transportMapPage .subInfo{
+  margin-top:10px;
+}
+
+.transportMapPage .cardTitle{
+  font-weight:900;
+  color:#0f172a;
+}
+
+.transportMapPage .fieldLabel{
+  display:block;
+  margin-bottom:6px;
+  font-size:12px;
+  font-weight:800;
+  color:#475569;
+}
+
+.transportMapPage .sel{
+  min-height:44px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(15,23,42,.12);
+  background:#fff;
+  color:#0f172a;
+  font-size:14px;
+  font-weight:700;
+}
+
+.transportMapPage .btn{
+  min-height:44px;
+  border-radius:12px;
+}
+
+.transportMapPage .miniBtn{
+  min-height:30px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(15,23,42,.10);
+  background:#fff;
+  color:#334155;
+  font-size:11px;
+  font-weight:800;
+}
+
+.transportMapPage .checkWrap{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:44px;
+  padding:0 2px;
+  color:#334155;
+  font-size:13px;
+}
+
+body[data-theme="dark"] .transportPanel,
+body[data-theme="cast"] .transportPanel,
+body[data-theme="staff"] .transportPanel{
+  border:1px solid var(--line);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--cardA) 96%, #fff 4%), color-mix(in srgb, var(--cardB) 98%, transparent));
+  box-shadow:var(--shadow);
+}
+
+body[data-theme="dark"] .transportMapPage .pageHero,
+body[data-theme="cast"] .transportMapPage .pageHero,
+body[data-theme="staff"] .transportMapPage .pageHero{
+  border:1px solid var(--line);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--cardA) 96%, #fff 4%), color-mix(in srgb, var(--cardB) 98%, transparent));
+  box-shadow:var(--shadow);
+}
+
+body[data-theme="dark"] .transportMapSummaryCard,
+body[data-theme="cast"] .transportMapSummaryCard,
+body[data-theme="staff"] .transportMapSummaryCard,
+body[data-theme="dark"] .transportMapRow,
+body[data-theme="cast"] .transportMapRow,
+body[data-theme="staff"] .transportMapRow,
+body[data-theme="dark"] .transportMapChip,
+body[data-theme="cast"] .transportMapChip,
+body[data-theme="staff"] .transportMapChip{
+  background:color-mix(in srgb, var(--cardA) 94%, transparent);
+  color:var(--txt);
+}
+
+body[data-theme="dark"] .transportMapRowName,
+body[data-theme="cast"] .transportMapRowName,
+body[data-theme="staff"] .transportMapRowName,
+body[data-theme="dark"] .transportMapSummaryValue,
+body[data-theme="cast"] .transportMapSummaryValue,
+body[data-theme="staff"] .transportMapSummaryValue,
+body[data-theme="dark"] .transportMapPage .title,
+body[data-theme="cast"] .transportMapPage .title,
+body[data-theme="staff"] .transportMapPage .title,
+body[data-theme="dark"] .transportMapPage .cardTitle,
+body[data-theme="cast"] .transportMapPage .cardTitle,
+body[data-theme="staff"] .transportMapPage .cardTitle{
+  color:var(--txt);
+}
+
+body[data-theme="dark"] .transportMapPage .heroChip,
+body[data-theme="cast"] .transportMapPage .heroChip,
+body[data-theme="staff"] .transportMapPage .heroChip,
+body[data-theme="dark"] .transportMapPage .sel,
+body[data-theme="cast"] .transportMapPage .sel,
+body[data-theme="staff"] .transportMapPage .sel,
+body[data-theme="dark"] .transportMapPage .miniBtn,
+body[data-theme="cast"] .transportMapPage .miniBtn,
+body[data-theme="staff"] .transportMapPage .miniBtn{
+  background:color-mix(in srgb, var(--cardA) 96%, transparent);
+  color:var(--txt);
+  border-color:var(--line);
+}
+
+body[data-theme="dark"] .transportMapPage .fieldLabel,
+body[data-theme="cast"] .transportMapPage .fieldLabel,
+body[data-theme="staff"] .transportMapPage .fieldLabel{
+  color:var(--muted);
 }
 
 body[data-theme="light"] .transportMapRow{
