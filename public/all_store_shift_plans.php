@@ -457,22 +457,37 @@ render_header($pageTitle, [
   color:inherit;
   text-decoration:none;
 }
-.btn.is-active{
-  border-color:color-mix(in srgb, var(--accent) 72%, var(--line));
-  background:var(--accent);
-  color:#08111f;
+.date-nav .date-btn{
+  min-width:74px;
+  font-weight:700;
+}
+.date-nav .date-btn.is-active{
+  border-color:color-mix(in srgb, var(--accent) 72%, var(--line)) !important;
+  background:var(--accent) !important;
+  color:#08111f !important;
   font-weight:800;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,.18),
     0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent),
     0 10px 18px rgba(0,0,0,.16);
 }
-body[data-theme="light"] .btn.is-active,
-body[data-theme="staff"] .btn.is-active{
-  color:#fff;
+body[data-theme="dark"] .date-nav .date-btn.is-active{
+  color:#08111f !important;
 }
-body[data-theme="cast"] .btn.is-active{
-  color:#fff;
+body[data-theme="light"] .date-nav .date-btn.is-active{
+  background:#2563eb !important;
+  border-color:#1d4ed8 !important;
+  color:#fff !important;
+}
+body[data-theme="staff"] .date-nav .date-btn.is-active{
+  background:#2b9af3 !important;
+  border-color:#1f7fcc !important;
+  color:#fff !important;
+}
+body[data-theme="cast"] .date-nav .date-btn.is-active{
+  background:#ff6fa3 !important;
+  border-color:#e9568f !important;
+  color:#fff !important;
 }
 .summary-grid{
   display:grid;
@@ -632,9 +647,9 @@ body[data-theme="cast"] .btn.is-active{
 
       <div class="date-row">
         <div class="date-nav">
-          <a class="btn <?= $targetDate === $prevDate ? 'is-active' : '' ?>" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($prevDate) ?>">前日</a>
-          <a class="btn <?= $targetDate === $todayDate ? 'is-active' : '' ?>" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($todayDate) ?>">今日</a>
-          <a class="btn <?= $targetDate === $nextDate ? 'is-active' : '' ?>" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($nextDate) ?>">翌日</a>
+          <a class="btn date-btn <?= $targetDate === $prevDate ? 'is-active' : '' ?>" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($prevDate) ?>">前日</a>
+          <a class="btn date-btn <?= $targetDate === $todayDate ? 'is-active' : '' ?>" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($todayDate) ?>">今日</a>
+          <a class="btn date-btn <?= $targetDate === $nextDate ? 'is-active' : '' ?>" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($nextDate) ?>">翌日</a>
         </div>
 
         <div class="quick-links">
