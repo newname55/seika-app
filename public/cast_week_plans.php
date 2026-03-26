@@ -239,6 +239,7 @@ $st = $pdo->prepare("
 $st->execute([$storeId]);
 $storeRow = $st->fetch(PDO::FETCH_ASSOC);
 if (!$storeRow) { http_response_code(404); exit('店舗が見つかりません'); }
+$openTimeHm = hm_from_time_value((string)($storeRow['open_time'] ?? ''), '20:00');
 
 $holidayDow = $storeRow['weekly_holiday_dow'];
 $holidayDow = ($holidayDow === null) ? null : (int)$holidayDow;
@@ -512,7 +513,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 /* =========================
   UI settings
 ========================= */
-$openTimeHm = hm_from_time_value((string)($storeRow['open_time'] ?? ''), '20:00');
 $timeOptions = build_start_time_options($storeRow);
 $closeRuleWeekday = store_close_rule_by_kind($storeRow, 'weekday');
 $closeRuleWeekend = store_close_rule_by_kind($storeRow, 'weekend');
