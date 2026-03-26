@@ -937,7 +937,7 @@ textarea.inp{ min-height: 88px; resize: vertical; font-weight:800; }
                   <div class="pickupTargetSwitch">
                     <button
                       type="button"
-                      class="pickupTargetBtn <?= ((string)($transportProfile['pickup_target'] ?? 'primary') !== 'secondary') ? 'is-active' : '' ?>"
+                      class="pickupTargetBtn <?= ((string)($transportProfile['pickup_target'] ?? 'primary') === 'primary') ? 'is-active' : '' ?>"
                       data-pickup-target-value="primary"
                       <?= ($isActiveUser !== 1) ? 'disabled' : '' ?>
                     >今日は基本に迎え</button>
@@ -947,6 +947,12 @@ textarea.inp{ min-height: 88px; resize: vertical; font-weight:800; }
                       data-pickup-target-value="secondary"
                       <?= ($isActiveUser !== 1) ? 'disabled' : '' ?>
                     >今日はサブに迎え</button>
+                    <button
+                      type="button"
+                      class="pickupTargetBtn <?= ((string)($transportProfile['pickup_target'] ?? 'primary') === 'self') ? 'is-active' : '' ?>"
+                      data-pickup-target-value="self"
+                      <?= ($isActiveUser !== 1) ? 'disabled' : '' ?>
+                    >今日は自走</button>
                   </div>
                   <div class="muted" style="margin-top:8px;">送迎ルート最適化では、この選択を優先して迎車地点を使います。</div>
                 <?php endif; ?>

@@ -245,7 +245,7 @@ render_header('送迎ルート', [
                       <span class="muted"><?= h((string)($cast['shop_tag'] !== '' ? ' / ' . $cast['shop_tag'] : '')) ?></span>
                     </div>
                     <div class="routeCastFlags">
-                      <span class="badge mode <?= (($cast['pickup_target'] ?? 'primary') === 'secondary') ? 'secondary' : 'primary' ?>"><?= h((string)($cast['pickup_target_label'] ?? '基本')) ?>迎え</span>
+                      <span class="badge mode <?= (($cast['pickup_target'] ?? 'primary') === 'secondary') ? 'secondary' : ((($cast['pickup_target'] ?? 'primary') === 'self') ? 'self' : 'primary') ?>"><?= h((string)($cast['pickup_target_label'] ?? '基本')) ?></span>
                       <span class="badge <?= !empty($cast['has_address']) ? 'ok' : 'ng' ?>"><?= !empty($cast['has_address']) ? '住所' : '住所なし' ?></span>
                       <span class="badge <?= !empty($cast['has_coords']) ? 'ok' : 'ng' ?>"><?= !empty($cast['has_coords']) ? '座標' : '座標なし' ?></span>
                     </div>
@@ -348,6 +348,7 @@ render_header('送迎ルート', [
 .routeCastItem{ border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:12px; display:grid; gap:6px; background:rgba(255,255,255,.03); }
 .badge.mode.primary{ border-color:rgba(96,165,250,.35); background:rgba(96,165,250,.12); }
 .badge.mode.secondary{ border-color:rgba(244,114,182,.35); background:rgba(244,114,182,.12); }
+.badge.mode.self{ border-color:rgba(34,197,94,.35); background:rgba(34,197,94,.12); }
 .routeCastEmpty{ border:1px dashed rgba(255,255,255,.18); border-radius:14px; padding:14px; color:var(--muted); background:rgba(255,255,255,.02); }
 .routeCastFlags{ display:flex; gap:8px; flex-wrap:wrap; }
 .routePreviewList{ margin:0; padding-left:20px; display:grid; gap:10px; }

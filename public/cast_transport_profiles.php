@@ -58,7 +58,9 @@ foreach ($rows as $row) {
   if (!empty($row['has_address'])) $addressReadyCount++;
   if (!empty($row['has_coords'])) $coordReadyCount++;
   if (!empty($row['has_sub_address'])) $subAddressReadyCount++;
-  if ((int)($row['pickup_enabled'] ?? 1) === 1) $pickupEnabledCount++;
+  if (transport_pickup_target_requires_pickup((string)($row['pickup_target'] ?? 'primary'), (int)($row['pickup_enabled'] ?? 1))) {
+    $pickupEnabledCount++;
+  }
 }
 
 $headerActions = '';
@@ -167,7 +169,7 @@ render_header('送迎設定', [
                 <span class="metaPill">基本開始 <?= h($defaultStart !== '' ? substr($defaultStart, 0, 5) : '-') ?></span>
                 <span class="metaPill">権限 <?= h((string)$row['privacy_level']) ?></span>
                 <?php if ($hasPickupTarget): ?>
-                  <span class="metaPill">今日の迎車 <?= h((string)(($row['pickup_target'] ?? 'primary') === 'secondary' ? 'サブ' : '基本')) ?></span>
+                  <span class="metaPill">今日の来店 <?= h(transport_pickup_target_label((string)($row['pickup_target'] ?? 'primary'))) ?></span>
                 <?php endif; ?>
               </div>
             </div>
@@ -187,8 +189,9 @@ render_header('送迎設定', [
 
           <?php if ($hasPickupTarget && $hasSecondary): ?>
             <div class="pickupTargetSwitch managerPickupSwitch">
-              <button type="button" class="pickupTargetBtn <?= ((string)($row['pickup_target'] ?? 'primary') !== 'secondary') ? 'is-active' : '' ?>" data-pickup-target-value="primary">今日は基本に迎え</button>
+              <button type="button" class="pickupTargetBtn <?= ((string)($row['pickup_target'] ?? 'primary') === 'primary') ? 'is-active' : '' ?>" data-pickup-target-value="primary">今日は基本に迎え</button>
               <button type="button" class="pickupTargetBtn <?= ((string)($row['pickup_target'] ?? 'primary') === 'secondary') ? 'is-active' : '' ?>" data-pickup-target-value="secondary">今日はサブに迎え</button>
+              <button type="button" class="pickupTargetBtn <?= ((string)($row['pickup_target'] ?? 'primary') === 'self') ? 'is-active' : '' ?>" data-pickup-target-value="self">今日は自走</button>
               <input type="hidden" name="pickup_target" value="<?= h((string)($row['pickup_target'] ?? 'primary')) ?>">
             </div>
           <?php endif; ?>
@@ -370,6 +373,7 @@ render_header('送迎設定', [
                     <select class="in" name="pickup_target">
                       <option value="primary" <?= (string)($row['pickup_target'] ?? 'primary') === 'primary' ? 'selected' : '' ?>>基本を使う</option>
                       <option value="secondary" <?= (string)($row['pickup_target'] ?? 'primary') === 'secondary' ? 'selected' : '' ?>>サブを使う</option>
+                      <option value="self" <?= (string)($row['pickup_target'] ?? 'primary') === 'self' ? 'selected' : '' ?>>自走する</option>
                     </select>
                   </label>
                 <?php endif; ?>

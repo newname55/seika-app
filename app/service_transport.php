@@ -97,6 +97,21 @@ function transport_profile_has_pickup_target_field(PDO $pdo): bool {
   return $cache;
 }
 
+function transport_pickup_target_label(string $pickupTarget, bool $forPickup = false): string {
+  return match ($pickupTarget) {
+    'secondary' => $forPickup ? 'サブ迎え' : 'サブ',
+    'self' => '自走',
+    default => $forPickup ? '基本迎え' : '基本',
+  };
+}
+
+function transport_pickup_target_requires_pickup(string $pickupTarget, int $pickupEnabled = 1): bool {
+  if ($pickupEnabled !== 1) {
+    return false;
+  }
+  return $pickupTarget !== 'self';
+}
+
 function transport_store_base_has_dispatch_origin_field(PDO $pdo): bool {
   static $cache = null;
   if ($cache !== null) {
@@ -221,6 +236,9 @@ function transport_build_unavailable_reasons(array $casts, array $base, ?array $
   $coordReadyCount = 0;
   foreach ($casts as $cast) {
     if ((int)($cast['pickup_enabled'] ?? 1) !== 1) {
+      continue;
+    }
+    if (array_key_exists('requires_pickup', $cast) && !$cast['requires_pickup']) {
       continue;
     }
     $pickupEnabledCount++;
@@ -751,7 +769,7 @@ function transport_save_profile(PDO $pdo, int $storeId, int $userId, array $inpu
   if (!in_array($privacyLevel, ['manager_only', 'admin_only'], true)) {
     $privacyLevel = 'manager_only';
   }
-  if (!in_array($pickupTarget, ['primary', 'secondary'], true)) {
+  if (!in_array($pickupTarget, ['primary', 'secondary', 'self'], true)) {
     $pickupTarget = 'primary';
   }
 
@@ -1356,28 +1374,36 @@ function transport_fetch_route_candidates(PDO $pdo, string $businessDate, array 
     }
 
     $pickupTarget = (string)($row['pickup_target'] ?? 'primary');
+    $pickupEnabled = (int)($row['pickup_enabled'] ?? 1);
+    $requiresPickup = transport_pickup_target_requires_pickup($pickupTarget, $pickupEnabled);
     $useSecondary = $hasSecondary && $pickupTarget === 'secondary';
     $pickupPrefix = $useSecondary ? 'pickup_sub_' : 'pickup_';
-    $pickupAddress = trim(implode(' ', array_filter([
-      (string)($row[$pickupPrefix . 'prefecture'] ?? ''),
-      (string)($row[$pickupPrefix . 'city'] ?? ''),
-      (string)($row[$pickupPrefix . 'address1'] ?? ''),
-      (string)($row[$pickupPrefix . 'address2'] ?? ''),
-      (string)($row[$pickupPrefix . 'building'] ?? ''),
-    ], static fn(string $v): bool => trim($v) !== '')));
-    $hasAddress = $pickupAddress !== '';
-    $hasCoords = (($row[$pickupPrefix . 'lat'] ?? null) !== null && ($row[$pickupPrefix . 'lng'] ?? null) !== null);
+    $pickupAddress = $requiresPickup
+      ? trim(implode(' ', array_filter([
+          (string)($row[$pickupPrefix . 'prefecture'] ?? ''),
+          (string)($row[$pickupPrefix . 'city'] ?? ''),
+          (string)($row[$pickupPrefix . 'address1'] ?? ''),
+          (string)($row[$pickupPrefix . 'address2'] ?? ''),
+          (string)($row[$pickupPrefix . 'building'] ?? ''),
+        ], static fn(string $v): bool => trim($v) !== '')))
+      : '自走';
+    $hasAddress = $requiresPickup ? ($pickupAddress !== '') : true;
+    $hasCoords = $requiresPickup
+      ? (($row[$pickupPrefix . 'lat'] ?? null) !== null && ($row[$pickupPrefix . 'lng'] ?? null) !== null)
+      : true;
 
     $grouped[$storeId]['stats']['planned_count']++;
-    if ($hasAddress) {
-      $grouped[$storeId]['stats']['address_ready_count']++;
-    } else {
-      $grouped[$storeId]['stats']['missing_address_count']++;
-    }
-    if ($hasCoords) {
-      $grouped[$storeId]['stats']['coord_ready_count']++;
-    } else {
-      $grouped[$storeId]['stats']['missing_coord_count']++;
+    if ($requiresPickup) {
+      if ($hasAddress) {
+        $grouped[$storeId]['stats']['address_ready_count']++;
+      } else {
+        $grouped[$storeId]['stats']['missing_address_count']++;
+      }
+      if ($hasCoords) {
+        $grouped[$storeId]['stats']['coord_ready_count']++;
+      } else {
+        $grouped[$storeId]['stats']['missing_coord_count']++;
+      }
     }
 
     $grouped[$storeId]['casts'][] = [
@@ -1387,12 +1413,13 @@ function transport_fetch_route_candidates(PDO $pdo, string $businessDate, array 
       'start_time' => (string)($row['start_time'] ?? ''),
       'pickup_zip' => (string)($row[$pickupPrefix . 'zip'] ?? ''),
       'pickup_target' => $pickupTarget,
-      'pickup_target_label' => $useSecondary ? 'サブ' : '基本',
+      'pickup_target_label' => transport_pickup_target_label($pickupTarget),
       'pickup_address' => $pickupAddress,
       'pickup_note' => (string)($row[$pickupPrefix . 'note'] ?? ''),
       'pickup_lat' => ($row[$pickupPrefix . 'lat'] ?? null) !== null ? (float)$row[$pickupPrefix . 'lat'] : null,
       'pickup_lng' => ($row[$pickupPrefix . 'lng'] ?? null) !== null ? (float)$row[$pickupPrefix . 'lng'] : null,
-      'pickup_enabled' => (int)($row['pickup_enabled'] ?? 1),
+      'pickup_enabled' => $pickupEnabled,
+      'requires_pickup' => $requiresPickup,
       'has_address' => $hasAddress,
       'has_coords' => $hasCoords,
     ];
@@ -1442,7 +1469,9 @@ function transport_build_vehicle_route_set(array $casts, array $base, ?array $di
   $maxPassengers = transport_normalize_positive_int($maxPassengers, 6, 1, 6);
 
   $eligible = array_values(array_filter($casts, static function (array $cast): bool {
-    return !empty($cast['has_coords']) && (int)($cast['pickup_enabled'] ?? 1) === 1;
+    return !empty($cast['has_coords'])
+      && (int)($cast['pickup_enabled'] ?? 1) === 1
+      && (!array_key_exists('requires_pickup', $cast) || !empty($cast['requires_pickup']));
   }));
 
   if ($eligible === [] || ($base['lat'] ?? null) === null || ($base['lng'] ?? null) === null || ($dispatchBase['lat'] ?? null) === null || ($dispatchBase['lng'] ?? null) === null) {
@@ -1616,6 +1645,9 @@ function transport_optimize_pickup_order(array $casts, array $base, ?array $disp
       continue;
     }
     if ((int)($cast['pickup_enabled'] ?? 1) !== 1) {
+      continue;
+    }
+    if (array_key_exists('requires_pickup', $cast) && !$cast['requires_pickup']) {
       continue;
     }
     $eligible[] = [

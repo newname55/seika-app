@@ -9,6 +9,7 @@ require_once __DIR__ . '/../app/layout.php';
 require_once __DIR__ . '/../app/bootstrap.php';
 require_once __DIR__ . '/../app/attendance.php';
 require_once __DIR__ . '/../app/repo_casts.php';
+require_once __DIR__ . '/../app/service_transport.php';
 require_once __DIR__ . '/../app/store.php';
 
 require_login();
@@ -51,6 +52,26 @@ function shift_plan_note_text(?string $note): string {
   $note = preg_replace('/(^|\s)#douhan\b/u', ' 同伴', $note);
   $note = preg_replace('/\s+/u', ' ', (string)$note);
   return trim((string)$note);
+}
+
+function shift_plan_transport_text(array $row): string {
+  $pickupTarget = trim((string)($row['pickup_target'] ?? ''));
+  $pickupEnabledRaw = $row['pickup_enabled'] ?? null;
+  $hasTransportProfile = (int)($row['has_transport_profile'] ?? 0) === 1;
+
+  if (!$hasTransportProfile && $pickupEnabledRaw === null && $pickupTarget === '') {
+    return '未設定';
+  }
+
+  $pickupEnabled = is_numeric($pickupEnabledRaw) ? (int)$pickupEnabledRaw : 1;
+  if ($pickupTarget === 'self') {
+    return '自走';
+  }
+  if ($pickupEnabled !== 1) {
+    return '送迎対象外';
+  }
+
+  return transport_pickup_target_label($pickupTarget !== '' ? $pickupTarget : 'primary', true);
 }
 
 function shift_plan_state(array $row, string $targetDate, string $currentBusinessDate, DateTimeImmutable $now): array {
@@ -263,7 +284,28 @@ function shift_plan_rows(PDO $pdo, int $storeId, string $date): array {
         WHERE a.store_id = sp.store_id
           AND a.user_id = sp.user_id
           AND a.business_date = sp.business_date
-      ) AS attendance_status
+      ) AS attendance_status,
+      (
+        SELECT 1
+        FROM cast_transport_profiles ctp
+        WHERE ctp.store_id = sp.store_id
+          AND ctp.user_id = sp.user_id
+        LIMIT 1
+      ) AS has_transport_profile,
+      (
+        SELECT ctp.pickup_enabled
+        FROM cast_transport_profiles ctp
+        WHERE ctp.store_id = sp.store_id
+          AND ctp.user_id = sp.user_id
+        LIMIT 1
+      ) AS pickup_enabled,
+      (
+        SELECT ctp.pickup_target
+        FROM cast_transport_profiles ctp
+        WHERE ctp.store_id = sp.store_id
+          AND ctp.user_id = sp.user_id
+        LIMIT 1
+      ) AS pickup_target
     FROM cast_shift_plans sp
     LEFT JOIN users u
       ON u.id = sp.user_id
@@ -342,6 +384,7 @@ foreach ($rows as &$row) {
   $row['start_hm'] = shift_plan_format_hm((string)($row['start_time'] ?? ''));
   $row['end_hm'] = shift_plan_read_end_from_note((string)($row['plan_note'] ?? ''));
   $row['note_text'] = shift_plan_note_text((string)($row['plan_note'] ?? ''));
+  $row['transport_text'] = shift_plan_transport_text($row);
   $row['state'] = shift_plan_state($row, $targetDate, $currentBusinessDate, $now);
   $summaryKey = match ((string)$row['state']['code']) {
     'working' => 'working',
@@ -702,6 +745,7 @@ body[data-theme="cast"] .date-nav .date-btn.is-active{
               <th>出勤予定</th>
               <th>退勤予定</th>
               <th>ステータス</th>
+              <th>来店手段</th>
               <th>打刻</th>
               <th>メモ</th>
             </tr>
@@ -728,6 +772,7 @@ body[data-theme="cast"] .date-nav .date-btn.is-active{
                 <td class="mono"><?= h((string)($row['start_hm'] ?? '—')) ?></td>
                 <td class="mono"><?= h($endHm === 'LAST' ? 'LAST' : $endHm) ?></td>
                 <td><span class="status-badge <?= h((string)($row['state']['class'] ?? 'muted')) ?>"><?= h((string)($row['state']['label'] ?? '予定のみ')) ?></span></td>
+                <td><?= h((string)($row['transport_text'] ?? '未設定')) ?></td>
                 <td class="mono"><?= h($clockIn) ?> / <?= h($clockOut) ?></td>
                 <td>
                   <?php if (trim((string)($row['note_text'] ?? '')) !== ''): ?>
@@ -773,6 +818,10 @@ body[data-theme="cast"] .date-nav .date-btn.is-active{
                 <div class="plan-card__item">
                   <div class="plan-card__label">出勤打刻</div>
                   <div class="mono"><?= h($clockIn) ?></div>
+                </div>
+                <div class="plan-card__item">
+                  <div class="plan-card__label">来店手段</div>
+                  <div><?= h((string)($row['transport_text'] ?? '未設定')) ?></div>
                 </div>
                 <div class="plan-card__item">
                   <div class="plan-card__label">退勤打刻</div>
