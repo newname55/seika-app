@@ -457,6 +457,11 @@ render_header($pageTitle, [
   color:inherit;
   text-decoration:none;
 }
+.btn.is-active{
+  border-color:rgba(59,130,246,.45);
+  background:rgba(59,130,246,.16);
+  font-weight:800;
+}
 .summary-grid{
   display:grid;
   grid-template-columns:repeat(5, minmax(120px, 1fr));
@@ -615,9 +620,9 @@ render_header($pageTitle, [
 
       <div class="date-row">
         <div class="date-nav">
-          <a class="btn" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($prevDate) ?>">前日</a>
-          <a class="btn" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($todayDate) ?>">今日</a>
-          <a class="btn" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($nextDate) ?>">翌日</a>
+          <a class="btn <?= $targetDate === $prevDate ? 'is-active' : '' ?>" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($prevDate) ?>">前日</a>
+          <a class="btn <?= $targetDate === $todayDate ? 'is-active' : '' ?>" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($todayDate) ?>">今日</a>
+          <a class="btn <?= $targetDate === $nextDate ? 'is-active' : '' ?>" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($nextDate) ?>">翌日</a>
         </div>
 
         <div class="quick-links">
