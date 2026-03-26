@@ -4,6 +4,85 @@
   padding-bottom:28px;
 }
 
+.transportMapScreenPage{
+  display:grid;
+  gap:14px;
+  padding-bottom:28px;
+}
+
+.transportMapScreenTop{
+  padding:18px;
+  display:grid;
+  gap:14px;
+}
+
+.transportMapScreenForm{
+  display:grid;
+  grid-template-columns:minmax(180px, 240px) minmax(180px, 220px) minmax(0, 1fr) auto;
+  gap:12px;
+  align-items:end;
+}
+
+.transportMapScreenHero{
+  display:grid;
+  gap:8px;
+  min-width:0;
+}
+
+.transportMapScreenTitle{
+  font-size:24px;
+  font-weight:1000;
+  color:#0f172a;
+  line-height:1.1;
+}
+
+.transportMapScreenMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.transportMapScreenActions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.transportMapScreenActions .btn{
+  min-width:110px;
+  justify-content:center;
+}
+
+.transportMapScreenSummary{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:10px;
+}
+
+.transportMapScreenMetaRow{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) minmax(320px, 480px);
+  gap:12px;
+  align-items:start;
+}
+
+.transportMapScreenCanvas{
+  padding:18px;
+  display:grid;
+  gap:12px;
+}
+
+.transportMapCanvas--screen{
+  min-height:calc(100vh - 320px);
+}
+
+.transportMapDriverVisibility--screen{
+  padding:12px 14px;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:16px;
+  background:rgba(255,255,255,.7);
+}
+
 .transportPanel{
   border:1px solid rgba(15,23,42,.08);
   border-radius:18px;
@@ -843,6 +922,19 @@ body[data-theme="staff"] .transportMapSourceTag{
   color:var(--txt);
 }
 
+body[data-theme="dark"] .transportMapScreenTitle,
+body[data-theme="cast"] .transportMapScreenTitle,
+body[data-theme="staff"] .transportMapScreenTitle{
+  color:var(--txt);
+}
+
+body[data-theme="dark"] .transportMapDriverVisibility--screen,
+body[data-theme="cast"] .transportMapDriverVisibility--screen,
+body[data-theme="staff"] .transportMapDriverVisibility--screen{
+  background:color-mix(in srgb, var(--cardA) 94%, transparent);
+  border-color:var(--line);
+}
+
 body[data-theme="dark"] .transportMapAttentionTag,
 body[data-theme="cast"] .transportMapAttentionTag,
 body[data-theme="staff"] .transportMapAttentionTag{
@@ -909,6 +1001,15 @@ body[data-theme="staff"] .transportMapDriverToggle{
     width:100%;
     justify-content:center;
   }
+
+  .transportMapScreenForm,
+  .transportMapScreenMetaRow{
+    grid-template-columns:1fr;
+  }
+
+  .transportMapScreenActions{
+    justify-content:flex-start;
+  }
 }
 
 @media (max-width: 720px){
@@ -974,5 +1075,13 @@ body[data-theme="staff"] .transportMapDriverToggle{
 
   .transportMapDriverVisibilityHead{
     align-items:flex-start;
+  }
+
+  .transportMapScreenSummary{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+
+  .transportMapCanvas--screen{
+    min-height:56vh;
   }
 }
