@@ -105,7 +105,9 @@ function transport_vehicle_normalize_recorded_at(?string $value): string {
     return jst_now()->format('Y-m-d H:i:s');
   }
   try {
-    $dt = new DateTime($value, new DateTimeZone('Asia/Tokyo'));
+    $timezone = new DateTimeZone('Asia/Tokyo');
+    $dt = new DateTime($value, $timezone);
+    $dt->setTimezone($timezone);
     return $dt->format('Y-m-d H:i:s');
   } catch (Throwable $e) {
     return jst_now()->format('Y-m-d H:i:s');
