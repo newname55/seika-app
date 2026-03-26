@@ -128,7 +128,7 @@ render_header('キャスト一覧', [
                 <div class="lineActions">
                   <?= $hasLine ? '<span class="badge ok">OK</span>' : '<span class="badge ng">未連携</span>' ?>
                   <?php if (!$hasLine && $storeId > 0): ?>
-                    <a class="miniBtn" target="_blank" href="/wbss/public/store_casts_invite_qr.php?store_id=<?= (int)$storeId ?>">QR</a>
+                    <a class="miniBtn" target="_blank" href="/wbss/public/print_user_link_qr.php?user_id=<?= $uid ?>&store_id=<?= (int)$storeId ?>">連携QR</a>
                   <?php endif; ?>
                 </div>
               </div>
@@ -143,7 +143,8 @@ render_header('キャスト一覧', [
 
       <div class="muted" style="margin-top:10px;">
         ※ 店番は <b>cast_profiles.shop_tag</b> を優先表示します（列が無い/空の間は user_id を表示）。<br>
-        ※ 📝 はメモあり（PCはホバー、スマホはタップで表示）
+        ※ 📝 はメモあり（PCはホバー、スマホはタップで表示）<br>
+        ※ 各行の「連携QR」はそのキャスト専用です。
       </div>
     </div>
   </div>

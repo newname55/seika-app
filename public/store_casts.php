@@ -148,12 +148,10 @@ render_header('店別キャスト管理', [
         <?php if ($storeId > 0): ?>
           <button type="button" class="btn btn-primary" onclick="openAddDialog()">キャスト追加</button>
           <a class="btn" href="/wbss/public/cast_transport_profiles.php?store_id=<?= (int)$storeId ?>">送迎設定</a>
-          <a class="btn" href="/wbss/public/store_transport_bases.php?store_id=<?= (int)$storeId ?>">拠点設定</a>
           <a class="btn" href="/wbss/public/transport_routes.php?store_id=<?= (int)$storeId ?>">送迎ルート</a>
           <a class="btn" href="/wbss/public/store_casts.php?store_id=<?= (int)$storeId ?>&show_retired=<?= $showRetired ? '0' : '1' ?>">
             <?= $showRetired ? '在籍のみ表示' : '退店も表示' ?>
           </a>
-          <a class="btn" href="/wbss/public/store_casts_invites.php?store_id=<?= (int)$storeId ?>">招待リンク管理</a>
         <?php endif; ?>
       </div>
     </div>
@@ -199,7 +197,7 @@ render_header('店別キャスト管理', [
                   <div class="lineActions">
                     <?= $hasLine ? '<span class="badge ok">OK</span>' : '<span class="badge ng">未連携</span>' ?>
                     <?php if (!$hasLine && $storeId > 0): ?>
-                      <a class="miniBtn" target="_blank" href="/wbss/public/store_casts_invite_qr.php?store_id=<?= (int)$storeId ?>">QR</a>
+                      <a class="miniBtn" target="_blank" href="/wbss/public/print_user_link_qr.php?user_id=<?= $uid ?>&store_id=<?= (int)$storeId ?>">連携QR</a>
                     <?php endif; ?>
                   </div>
                 </td>
@@ -302,7 +300,7 @@ render_header('店別キャスト管理', [
                 <div class="lineActions">
                   <?= $hasLine ? '<span class="badge ok">OK</span>' : '<span class="badge ng">未連携</span>' ?>
                   <?php if (!$hasLine && $storeId > 0): ?>
-                    <a class="miniBtn" target="_blank" href="/wbss/public/store_casts_invite_qr.php?store_id=<?= (int)$storeId ?>">QR</a>
+                    <a class="miniBtn" target="_blank" href="/wbss/public/print_user_link_qr.php?user_id=<?= $uid ?>&store_id=<?= (int)$storeId ?>">連携QR</a>
                   <?php endif; ?>
                 </div>
               </div>
@@ -353,7 +351,7 @@ render_header('店別キャスト管理', [
 
       <div class="muted" style="margin-top:10px;">
         ※ 店番は <b>cast_profiles.shop_tag</b> を優先表示します（未設定時は user_id を表示）。<br>
-        ※ 招待リンクの発行と履歴確認は「招待リンク管理」に分離しました。
+        ※ 上部の「招待QR」は新規キャスト用、各行の「連携QR」は既存キャスト個別のLINE連携用です。
       </div>
     </div>
   </div>

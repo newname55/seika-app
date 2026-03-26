@@ -419,10 +419,10 @@ $adminSections = [
       ],
       [
         'icon' => '🔗',
-        'title' => '招待リンク管理',
-        'desc' => 'LINE登録用の招待リンクを発行してQR共有します。',
-        'href' => dashboard_link('/wbss/public/store_casts_invites.php', $storeId),
-        'tag'  => '招待',
+        'title' => '招待QRを開く',
+        'desc' => 'LINE登録用のQRをそのまま表示します。',
+        'href' => dashboard_link('/wbss/public/store_casts_invite_qr.php', $storeId),
+        'tag'  => 'QR',
       ],
       [
         'icon' => '⚠️',
@@ -599,10 +599,10 @@ $managerSections = [
       ],
       [
         'icon' => '🔗',
-        'title' => '招待リンク管理',
-        'desc' => '招待リンクを発行してQR共有します。',
-        'href' => dashboard_link('/wbss/public/store_casts_invites.php', $storeId),
-        'tag'  => '招待',
+        'title' => '招待QRを開く',
+        'desc' => '招待用のQRを表示してそのまま共有します。',
+        'href' => dashboard_link('/wbss/public/store_casts_invite_qr.php', $storeId),
+        'tag'  => 'QR',
       ],
       [
         'icon' => '⚠️',

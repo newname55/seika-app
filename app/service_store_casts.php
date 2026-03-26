@@ -154,14 +154,6 @@ function service_fetch_store_cast_index_with_retired(PDO $pdo, int $storeId): ar
   ];
 }
 
-function service_list_store_invites(PDO $pdo, int $storeId): array {
-  return repo_list_invites_for_store($pdo, $storeId, 50);
-}
-
-function service_find_store_invite(PDO $pdo, int $storeId, int $inviteId): ?array {
-  return repo_find_invite_for_store($pdo, $inviteId, $storeId);
-}
-
 function service_create_cast_invite(PDO $pdo, int $storeId, int $createdByUserId, string $expiresInput = ''): string {
   $expiresInput = trim($expiresInput);
   if ($expiresInput === '') {

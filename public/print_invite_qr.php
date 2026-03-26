@@ -188,7 +188,7 @@ body{
   }
   .invite{
     margin-top:14px;
-    font-size:28px;
+    font-size:20px;
   }
   .main{
     margin-top:14px;
@@ -207,7 +207,7 @@ body{
   }
   .copy{
     padding-top:0;
-    font-size:23px;
+    font-size:18px;
     text-align:center;
     line-height:1.2;
     font-weight:900;

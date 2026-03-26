@@ -1,33 +1,6 @@
 <?php
 declare(strict_types=1);
 
-function repo_list_invites_for_store(PDO $pdo, int $storeId, int $limit = 50): array {
-  $limit = max(1, min(100, $limit));
-
-  $sql = "
-    SELECT *
-    FROM invite_tokens
-    WHERE store_id=?
-    ORDER BY created_at DESC
-    LIMIT {$limit}
-  ";
-  $st = $pdo->prepare($sql);
-  $st->execute([$storeId]);
-  return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-}
-
-function repo_find_invite_for_store(PDO $pdo, int $inviteId, int $storeId): ?array {
-  $st = $pdo->prepare("
-    SELECT *
-    FROM invite_tokens
-    WHERE id=? AND store_id=?
-    LIMIT 1
-  ");
-  $st->execute([$inviteId, $storeId]);
-  $row = $st->fetch(PDO::FETCH_ASSOC);
-  return $row ?: null;
-}
-
 function repo_insert_cast_invite(
   PDO $pdo,
   string $rawToken,
