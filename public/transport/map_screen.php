@@ -118,23 +118,23 @@ render_page_start('送迎マップ TV');
         </div>
       </form>
 
-      <div class="transportMapScreenSummary">
-        <article class="transportMapSummaryCard transportPanel">
-          <span class="transportMapSummaryLabel">今日の件数</span>
-          <b class="transportMapSummaryValue" data-summary-total>0</b>
-        </article>
-        <article class="transportMapSummaryCard transportPanel transportMapSummaryWarn">
-          <span class="transportMapSummaryLabel">未割当</span>
-          <b class="transportMapSummaryValue" data-summary-unassigned>0</b>
-        </article>
-        <article class="transportMapSummaryCard transportPanel">
-          <span class="transportMapSummaryLabel">割当済</span>
-          <b class="transportMapSummaryValue" data-summary-assigned>0</b>
-        </article>
-        <article class="transportMapSummaryCard transportPanel">
-          <span class="transportMapSummaryLabel">完了</span>
-          <b class="transportMapSummaryValue" data-summary-done>0</b>
-        </article>
+      <div class="transportMapScreenSummaryLine transportPanel">
+        <span class="transportMapScreenMetric">
+          <span class="transportMapScreenMetricLabel">今日の件数</span>
+          <b class="transportMapScreenMetricValue" data-summary-total>0</b>
+        </span>
+        <span class="transportMapScreenMetric transportMapScreenMetricWarn">
+          <span class="transportMapScreenMetricLabel">未割当</span>
+          <b class="transportMapScreenMetricValue" data-summary-unassigned>0</b>
+        </span>
+        <span class="transportMapScreenMetric">
+          <span class="transportMapScreenMetricLabel">割当済</span>
+          <b class="transportMapScreenMetricValue" data-summary-assigned>0</b>
+        </span>
+        <span class="transportMapScreenMetric">
+          <span class="transportMapScreenMetricLabel">完了</span>
+          <b class="transportMapScreenMetricValue" data-summary-done>0</b>
+        </span>
       </div>
 
       <div class="transportMapScreenMetaRow">
