@@ -57,18 +57,18 @@
 }
 
 .transportMapScreenTop{
-  padding:12px 14px;
+  padding:8px 10px;
   display:grid;
-  gap:10px;
-  border-radius:14px;
-  background:linear-gradient(180deg, rgba(255,255,255,.82), rgba(248,250,252,.72));
-  box-shadow:0 6px 18px rgba(15,18,34,.05);
+  gap:8px;
+  border-radius:12px;
+  background:linear-gradient(180deg, rgba(255,255,255,.72), rgba(248,250,252,.62));
+  box-shadow:0 4px 12px rgba(15,18,34,.04);
 }
 
 .transportMapScreenForm{
   display:grid;
   grid-template-columns:minmax(180px, 240px) minmax(180px, 220px) minmax(0, 1fr) auto;
-  gap:12px;
+  gap:8px;
   align-items:end;
 }
 
@@ -79,7 +79,7 @@
 }
 
 .transportMapScreenTitle{
-  font-size:20px;
+  font-size:17px;
   font-weight:1000;
   color:#0f172a;
   line-height:1.1;
@@ -98,22 +98,23 @@
 }
 
 .transportMapScreenActions .btn{
-  min-width:96px;
+  min-width:88px;
   justify-content:center;
-  min-height:40px;
-  font-size:13px;
+  min-height:36px;
+  font-size:12px;
+  border-radius:10px;
 }
 
 .transportMapScreenSummary{
   display:grid;
   grid-template-columns:repeat(4, minmax(0, 1fr));
-  gap:8px;
+  gap:6px;
 }
 
 .transportMapScreenMetaRow{
   display:grid;
   grid-template-columns:minmax(0, 1fr) minmax(320px, 480px);
-  gap:10px;
+  gap:8px;
   align-items:start;
 }
 
@@ -135,10 +136,10 @@
 }
 
 .transportMapScreenPage .transportMapSummaryCard{
-  padding:10px 12px;
-  border-radius:12px;
+  padding:7px 9px;
+  border-radius:10px;
   box-shadow:none;
-  background:rgba(255,255,255,.72);
+  background:rgba(255,255,255,.58);
 }
 
 .transportMapScreenPage .transportMapSummaryWarn{
@@ -146,47 +147,77 @@
 }
 
 .transportMapScreenPage .transportMapSummaryLabel{
-  font-size:11px;
+  font-size:10px;
   font-weight:700;
 }
 
 .transportMapScreenPage .transportMapSummaryValue{
-  font-size:20px;
+  font-size:16px;
 }
 
 .transportMapScreenPage .transportMapChipList{
-  gap:6px;
+  gap:4px;
 }
 
 .transportMapScreenPage .transportMapChip{
-  padding:5px 8px;
-  font-size:11px;
-  background:rgba(255,255,255,.66);
+  padding:3px 6px;
+  font-size:10px;
+  background:rgba(255,255,255,.52);
   border-color:rgba(15,23,42,.07);
 }
 
 .transportMapScreenPage .transportMapChip b{
-  font-size:11px;
-}
-
-.transportMapScreenPage .transportMapMiniHint{
   font-size:10px;
 }
 
+.transportMapScreenPage .transportMapMiniHint{
+  font-size:9px;
+}
+
 .transportMapScreenPage .transportMapDriverToggle{
-  padding:6px 9px;
-  gap:6px;
-  background:rgba(255,255,255,.68);
+  padding:4px 7px;
+  gap:4px;
+  background:rgba(255,255,255,.54);
   border-color:rgba(37,99,235,.08);
   box-shadow:none;
 }
 
 .transportMapScreenPage .transportMapDriverToggleName{
-  font-size:11px;
+  font-size:10px;
 }
 
 .transportMapScreenPage .transportMapDriverToggleMeta{
+  font-size:9px;
+}
+
+.transportMapScreenPage .fieldLabel{
   font-size:10px;
+  margin-bottom:4px;
+}
+
+.transportMapScreenPage .sel{
+  min-height:36px;
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:12px;
+}
+
+.transportMapScreenPage .heroChip{
+  padding:5px 8px;
+  font-size:11px;
+}
+
+.transportMapScreenPage .transportMapDriverVisibility--screen{
+  padding:6px 8px;
+  border-radius:10px;
+}
+
+.transportMapScreenPage .cardTitle{
+  font-size:14px;
+}
+
+.transportMapScreenPage .muted{
+  font-size:11px;
 }
 
 .transportPanel{
