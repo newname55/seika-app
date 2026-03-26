@@ -357,6 +357,7 @@ unset($row);
 
 $prevDate = (new DateTimeImmutable($targetDate, new DateTimeZone('Asia/Tokyo')))->modify('-1 day')->format('Y-m-d');
 $nextDate = (new DateTimeImmutable($targetDate, new DateTimeZone('Asia/Tokyo')))->modify('+1 day')->format('Y-m-d');
+$todayDate = $defaultDate;
 
 $pageTitle = '全店出勤予定ビュー';
 $dashboardUrl = '/wbss/public/dashboard.php?store_id=' . $storeId;
@@ -443,8 +444,7 @@ render_header($pageTitle, [
 }
 .date-nav,
 .quick-links{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
-.btn,
-.date-input{
+.btn{
   display:inline-flex;
   align-items:center;
   justify-content:center;
@@ -457,7 +457,6 @@ render_header($pageTitle, [
   color:inherit;
   text-decoration:none;
 }
-.date-input{ padding:8px 12px; }
 .summary-grid{
   display:grid;
   grid-template-columns:repeat(5, minmax(120px, 1fr));
@@ -617,11 +616,7 @@ render_header($pageTitle, [
       <div class="date-row">
         <div class="date-nav">
           <a class="btn" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($prevDate) ?>">前日</a>
-          <form method="get" class="date-nav">
-            <input type="hidden" name="store_id" value="<?= $storeId ?>">
-            <input class="date-input" type="date" name="date" value="<?= h($targetDate) ?>">
-            <button class="btn" type="submit">表示</button>
-          </form>
+          <a class="btn" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($todayDate) ?>">今日</a>
           <a class="btn" href="/wbss/public/all_store_shift_plans.php?store_id=<?= $storeId ?>&date=<?= h($nextDate) ?>">翌日</a>
         </div>
 
