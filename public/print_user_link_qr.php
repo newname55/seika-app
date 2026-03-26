@@ -105,7 +105,7 @@ if ($userLabel === '') {
 }
 
 $userHeading = $shopTag !== ''
-  ? '店番 ' . $shopTag . ' ' . $userLabel
+  ? '' . $shopTag . ' ' . $userLabel
   : '#' . (int)$user['id'] . ' ' . $userLabel;
 ?>
 <!doctype html>
