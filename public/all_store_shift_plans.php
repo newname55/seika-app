@@ -195,52 +195,83 @@ function shift_plan_rows(PDO $pdo, int $storeId, string $date): array {
   $hasCastProfilesStoreId = att_has_column($pdo, 'cast_profiles', 'store_id');
 
   $shopParts = [];
-  if ($hasStoreUsersStaffCode) $shopParts[] = "NULLIF(TRIM(su.staff_code), '')";
-  if ($hasCastProfilesShopTag) $shopParts[] = "NULLIF(TRIM(cp.shop_tag), '')";
-  if ($hasUserShopTag) $shopParts[] = "NULLIF(TRIM(u.shop_tag), '')";
-  $shopExpr = $shopParts ? "COALESCE(" . implode(', ', $shopParts) . ", '')" : "''";
-
-  $castProfilesJoin = '';
-  if ($hasCastProfilesShopTag) {
-    $castProfilesOn = $hasCastProfilesStoreId
-      ? "cp.user_id = sp.user_id AND (cp.store_id = sp.store_id OR cp.store_id IS NULL)"
-      : "cp.user_id = sp.user_id";
-    $castProfilesJoin = "LEFT JOIN cast_profiles cp ON {$castProfilesOn}";
+  if ($hasStoreUsersStaffCode) {
+    $shopParts[] = "(
+      SELECT NULLIF(TRIM(su.staff_code), '')
+      FROM store_users su
+      WHERE su.user_id = sp.user_id
+        AND su.store_id = sp.store_id
+      ORDER BY su.id DESC
+      LIMIT 1
+    )";
   }
-
-  $storeUsersJoin = $hasStoreUsersStaffCode
-    ? "LEFT JOIN store_users su ON su.user_id = sp.user_id AND su.store_id = sp.store_id"
-    : "";
+  if ($hasCastProfilesShopTag) {
+    if ($hasCastProfilesStoreId) {
+      $shopParts[] = "(
+        SELECT NULLIF(TRIM(cp.shop_tag), '')
+        FROM cast_profiles cp
+        WHERE cp.user_id = sp.user_id
+          AND (cp.store_id = sp.store_id OR cp.store_id IS NULL)
+        ORDER BY
+          CASE WHEN cp.store_id = sp.store_id THEN 0 ELSE 1 END ASC,
+          cp.store_id DESC,
+          cp.user_id DESC
+        LIMIT 1
+      )";
+    } else {
+      $shopParts[] = "(
+        SELECT NULLIF(TRIM(cp.shop_tag), '')
+        FROM cast_profiles cp
+        WHERE cp.user_id = sp.user_id
+        ORDER BY cp.user_id DESC
+        LIMIT 1
+      )";
+    }
+  }
+  if ($hasUserShopTag) {
+    $shopParts[] = "NULLIF(TRIM(u.shop_tag), '')";
+  }
+  $shopExpr = $shopParts ? "COALESCE(" . implode(', ', $shopParts) . ", '')" : "''";
 
   $sql = "
     SELECT
       sp.user_id,
       sp.start_time,
       sp.note AS plan_note,
-      MAX(COALESCE(u.display_name, '')) AS display_name,
-      MAX({$shopExpr}) AS shop_tag,
-      MAX(COALESCE(a.clock_in, '')) AS clock_in,
-      MAX(COALESCE(a.clock_out, '')) AS clock_out,
-      MAX(COALESCE(a.status, '')) AS attendance_status
+      COALESCE(u.display_name, '') AS display_name,
+      {$shopExpr} AS shop_tag,
+      (
+        SELECT MAX(a.clock_in)
+        FROM attendances a
+        WHERE a.store_id = sp.store_id
+          AND a.user_id = sp.user_id
+          AND a.business_date = sp.business_date
+      ) AS clock_in,
+      (
+        SELECT MAX(a.clock_out)
+        FROM attendances a
+        WHERE a.store_id = sp.store_id
+          AND a.user_id = sp.user_id
+          AND a.business_date = sp.business_date
+      ) AS clock_out,
+      (
+        SELECT SUBSTRING_INDEX(
+          GROUP_CONCAT(COALESCE(a.status, '') ORDER BY a.id DESC SEPARATOR ','),
+          ',',
+          1
+        )
+        FROM attendances a
+        WHERE a.store_id = sp.store_id
+          AND a.user_id = sp.user_id
+          AND a.business_date = sp.business_date
+      ) AS attendance_status
     FROM cast_shift_plans sp
     LEFT JOIN users u
       ON u.id = sp.user_id
-    {$storeUsersJoin}
-    {$castProfilesJoin}
-    LEFT JOIN attendances a
-      ON a.store_id = sp.store_id
-     AND a.user_id = sp.user_id
-     AND a.business_date = sp.business_date
     WHERE sp.store_id = ?
       AND sp.business_date = ?
       AND sp.status = 'planned'
       AND sp.is_off = 0
-    GROUP BY
-      sp.store_id,
-      sp.user_id,
-      sp.business_date,
-      sp.start_time,
-      sp.note
   ";
 
   $st = $pdo->prepare($sql);
