@@ -458,9 +458,21 @@ render_header($pageTitle, [
   text-decoration:none;
 }
 .btn.is-active{
-  border-color:rgba(59,130,246,.45);
-  background:rgba(59,130,246,.16);
+  border-color:color-mix(in srgb, var(--accent) 72%, var(--line));
+  background:var(--accent);
+  color:#08111f;
   font-weight:800;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.18),
+    0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 10px 18px rgba(0,0,0,.16);
+}
+body[data-theme="light"] .btn.is-active,
+body[data-theme="staff"] .btn.is-active{
+  color:#fff;
+}
+body[data-theme="cast"] .btn.is-active{
+  color:#fff;
 }
 .summary-grid{
   display:grid;
