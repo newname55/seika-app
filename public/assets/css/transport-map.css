@@ -433,17 +433,43 @@
 
 .transportMapMarkerIcon{
   --pin-color:#475569;
-  display:block;
-  width:18px;
-  height:18px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:30px;
+  padding:4px 10px 4px 6px;
   border-radius:999px;
-  background:var(--pin-color);
-  border:3px solid rgba(255,255,255,.9);
-  box-shadow:0 6px 14px rgba(15,23,42,.35);
+  background:rgba(255,255,255,.96);
+  border:1px solid rgba(15,23,42,.14);
+  box-shadow:0 6px 14px rgba(15,23,42,.18);
+  white-space:nowrap;
 }
 
 .transportMapMarkerIcon--unassigned{
-  box-shadow:0 0 0 3px rgba(248,113,113,.25), 0 8px 14px rgba(15,23,42,.35);
+  box-shadow:0 0 0 3px rgba(248,113,113,.22), 0 6px 14px rgba(15,23,42,.18);
+}
+
+.transportMapMarkerTag{
+  display:inline-grid;
+  place-items:center;
+  min-width:24px;
+  height:24px;
+  padding:0 7px;
+  border-radius:999px;
+  background:var(--pin-color);
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  line-height:1;
+}
+
+.transportMapMarkerName{
+  max-width:96px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  color:#0f172a;
+  font-size:12px;
+  font-weight:800;
 }
 
 .transportMapStoreIcon{

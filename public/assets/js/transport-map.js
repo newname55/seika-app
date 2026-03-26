@@ -236,7 +236,7 @@
       }
       const latLng = [item.pickup_lat, item.pickup_lng];
       const marker = L.marker(latLng, {
-        icon: buildStatusIcon(item.status, item.driver_user_id === null)
+        icon: buildStatusIcon(item)
       });
       marker.bindPopup(buildPopupHtml(item));
       marker.on('click', function () {
@@ -295,15 +295,24 @@
     return true;
   }
 
-  function buildStatusIcon(status, isUnassigned) {
+  function buildStatusIcon(item) {
+    const status = String(item.status || '');
+    const isUnassigned = item.driver_user_id === null;
     const color = (statusOptions[status] && statusOptions[status].color) || '#475569';
     const className = isUnassigned ? ' transportMapMarkerIcon--unassigned' : '';
+    const shopTag = item.shop_tag ? String(item.shop_tag) : (Number(item.cast_id || 0) > 0 ? String(item.cast_id) : '');
+    const nameText = String(item.display_name || item.cast_name || '-');
+    const labelHtml = ''
+      + '<span class="transportMapMarkerTag">' + escapeHtml(shopTag || '-') + '</span>'
+      + '<span class="transportMapMarkerName">' + escapeHtml(nameText) + '</span>';
     return L.divIcon({
       className: 'transportMapMarkerWrap',
-      html: '<span class="transportMapMarkerIcon' + className + '" style="--pin-color:' + escapeHtml(color) + '"></span>',
-      iconSize: [20, 20],
-      iconAnchor: [10, 10],
-      popupAnchor: [0, -10]
+      html: '<span class="transportMapMarkerIcon' + className + '" style="--pin-color:' + escapeHtml(color) + '">'
+        + labelHtml
+        + '</span>',
+      iconSize: [140, 34],
+      iconAnchor: [18, 17],
+      popupAnchor: [0, -18]
     });
   }
 
