@@ -412,6 +412,7 @@
   async function fetchData(pushHistory) {
     const seq = ++lastFetchSeq;
     const params = serializeForm();
+    params.set('_ts', String(Date.now()));
     const url = apiUrl + '?' + params.toString();
 
     if (reloadButton) {
@@ -424,6 +425,7 @@
 
     try {
       const response = await fetch(url, {
+        cache: 'no-store',
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' }
       });
@@ -486,6 +488,7 @@
     try {
       const response = await fetch(apiUrl, {
         method: 'POST',
+        cache: 'no-store',
         credentials: 'same-origin',
         headers: {
           'Accept': 'application/json',

@@ -28,13 +28,81 @@
 
 .transportMapFilterForm{
   display:grid;
-  grid-template-columns:repeat(8, minmax(0, 1fr));
+  grid-template-columns:1fr;
+  gap:12px;
+}
+
+.transportMapFilterBlock{
+  display:grid;
+  gap:10px;
+  padding:12px;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:16px;
+  background:rgba(255,255,255,.68);
+}
+
+.transportMapFilterBlock-primary{
+  background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(248,250,252,.88));
+}
+
+.transportMapFilterBlock-secondary{
+  background:linear-gradient(180deg, rgba(248,250,252,.94), rgba(255,255,255,.82));
+}
+
+.transportMapFilterBlockHead{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.transportMapFilterBlockTitle{
+  color:#0f172a;
+  font-size:13px;
+  font-weight:900;
+}
+
+.transportMapFilterBlockHint{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:700;
+}
+
+.transportMapFilterRow{
+  display:grid;
+  grid-template-columns:repeat(12, minmax(0, 1fr));
   gap:12px;
   align-items:end;
 }
 
+.transportMapFilterForm .field{
+  display:grid;
+  gap:6px;
+  min-width:0;
+}
+
+.transportMapFilterRow-primary .field-store{
+  grid-column:span 4;
+}
+
+.transportMapFilterRow-primary .field-date{
+  grid-column:span 3;
+}
+
+.transportMapFilterRow-primary .field-time{
+  grid-column:span 2;
+}
+
+.transportMapFilterRow-secondary .field-status,
+.transportMapFilterRow-secondary .field-driver,
+.transportMapFilterRow-secondary .field-direction{
+  grid-column:span 2;
+}
+
 .transportMapCheckField{
-  align-self:stretch;
+  grid-column:span 2;
+  align-self:end;
 }
 
 .transportMapFilterActions{
@@ -42,6 +110,15 @@
   gap:10px;
   align-items:center;
   justify-content:flex-end;
+  flex-wrap:nowrap;
+  grid-column:span 4;
+  align-self:end;
+}
+
+.transportMapFilterActions .btn{
+  flex:1 1 0;
+  min-width:0;
+  justify-content:center;
 }
 
 .transportMapSummaryGrid{
@@ -483,6 +560,7 @@ body[data-theme="light"] .transportMapPage .pageHero{
   font-size:12px;
   font-weight:800;
   color:#475569;
+  letter-spacing:.01em;
 }
 
 .transportMapPage .sel{
@@ -517,9 +595,13 @@ body[data-theme="light"] .transportMapPage .pageHero{
   align-items:center;
   gap:8px;
   min-height:44px;
-  padding:0 2px;
+  padding:0 12px;
+  border:1px solid rgba(15,23,42,.12);
+  border-radius:12px;
+  background:#fff;
   color:#334155;
   font-size:13px;
+  font-weight:700;
 }
 
 body[data-theme="dark"] .transportPanel,
@@ -608,8 +690,25 @@ body[data-theme="staff"] .transportMapSourceTag{
 }
 
 @media (max-width: 1200px){
-  .transportMapFilterForm{
-    grid-template-columns:repeat(4, minmax(0, 1fr));
+  .transportMapFilterRow{
+    grid-template-columns:repeat(6, minmax(0, 1fr));
+  }
+
+  .transportMapFilterRow-primary .field-store,
+  .transportMapFilterRow-primary .field-date,
+  .transportMapFilterRow-secondary .field-status,
+  .transportMapFilterRow-secondary .field-driver,
+  .transportMapFilterRow-secondary .field-direction{
+    grid-column:span 2;
+  }
+
+  .transportMapFilterRow-primary .field-time,
+  .transportMapCheckField{
+    grid-column:span 1;
+  }
+
+  .transportMapFilterActions{
+    grid-column:span 3;
   }
 
   .transportMapSummaryGrid{
@@ -640,12 +739,35 @@ body[data-theme="staff"] .transportMapSourceTag{
     padding:14px;
   }
 
-  .transportMapFilterForm,
   .transportMapSummaryGrid,
   .transportMapMetaGrid,
   .transportMapRowGrid,
   .transportMapAssignRow{
     grid-template-columns:1fr;
+  }
+
+  .transportMapFilterBlock{
+    padding:10px;
+  }
+
+  .transportMapFilterBlockHead{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .transportMapFilterRow{
+    grid-template-columns:1fr;
+  }
+
+  .transportMapFilterRow-primary .field-store,
+  .transportMapFilterRow-primary .field-date,
+  .transportMapFilterRow-primary .field-time,
+  .transportMapFilterRow-secondary .field-status,
+  .transportMapFilterRow-secondary .field-driver,
+  .transportMapFilterRow-secondary .field-direction,
+  .transportMapCheckField,
+  .transportMapFilterActions{
+    grid-column:auto;
   }
 
   .transportMapFilterActions,
@@ -656,6 +778,10 @@ body[data-theme="staff"] .transportMapSourceTag{
   .transportMapRowActions{
     flex-direction:column;
     align-items:stretch;
+  }
+
+  .transportMapFilterActions .btn{
+    width:100%;
   }
 
   .transportMapList{

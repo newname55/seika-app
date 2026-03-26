@@ -58,7 +58,7 @@ render_header('送迎マップ', [
   'right_html' => $rightHtml,
 ]);
 ?>
-<link rel="stylesheet" href="/wbss/public/assets/css/transport-map.css?v=20260327d">
+<link rel="stylesheet" href="/wbss/public/assets/css/transport-map.css?v=20260327f">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -87,81 +87,97 @@ render_header('送迎マップ', [
 
     <section class="transportMapFilters transportPanel">
       <form id="transportMapFilterForm" class="transportMapFilterForm" method="get" action="/wbss/public/transport/map.php">
-        <label class="field">
-          <span class="fieldLabel">店舗</span>
-          <select class="sel" name="store_id" id="transportMapStore">
-            <?php foreach ($stores as $store): ?>
-              <?php $sid = (int)($store['id'] ?? 0); ?>
-              <option value="<?= $sid ?>" <?= $sid === $selectedStoreId ? 'selected' : '' ?>>
-                <?= h((string)($store['name'] ?? '')) ?> (#<?= $sid ?>)
-              </option>
-            <?php endforeach; ?>
-          </select>
-        </label>
+        <div class="transportMapFilterBlock transportMapFilterBlock-primary">
+          <div class="transportMapFilterBlockHead">
+            <span class="transportMapFilterBlockTitle">基本条件</span>
+            <span class="transportMapFilterBlockHint">対象日と時間帯を先に決めます</span>
+          </div>
+          <div class="transportMapFilterRow transportMapFilterRow-primary">
+            <label class="field field-store">
+              <span class="fieldLabel">店舗</span>
+              <select class="sel" name="store_id" id="transportMapStore">
+                <?php foreach ($stores as $store): ?>
+                  <?php $sid = (int)($store['id'] ?? 0); ?>
+                  <option value="<?= $sid ?>" <?= $sid === $selectedStoreId ? 'selected' : '' ?>>
+                    <?= h((string)($store['name'] ?? '')) ?> (#<?= $sid ?>)
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </label>
 
-        <label class="field">
-          <span class="fieldLabel">業務日</span>
-          <input class="sel" type="date" name="business_date" value="<?= h($businessDate) ?>">
-        </label>
+            <label class="field field-date">
+              <span class="fieldLabel">業務日</span>
+              <input class="sel" type="date" name="business_date" value="<?= h($businessDate) ?>">
+            </label>
 
-        <label class="field">
-          <span class="fieldLabel">時間From</span>
-          <input class="sel" type="time" name="time_from" value="<?= h(substr((string)($initialFilters['time_from'] ?? ''), 0, 5)) ?>">
-        </label>
+            <label class="field field-time">
+              <span class="fieldLabel">時間From</span>
+              <input class="sel" type="time" name="time_from" value="<?= h(substr((string)($initialFilters['time_from'] ?? ''), 0, 5)) ?>">
+            </label>
 
-        <label class="field">
-          <span class="fieldLabel">時間To</span>
-          <input class="sel" type="time" name="time_to" value="<?= h(substr((string)($initialFilters['time_to'] ?? ''), 0, 5)) ?>">
-        </label>
+            <label class="field field-time">
+              <span class="fieldLabel">時間To</span>
+              <input class="sel" type="time" name="time_to" value="<?= h(substr((string)($initialFilters['time_to'] ?? ''), 0, 5)) ?>">
+            </label>
+          </div>
+        </div>
 
-        <label class="field">
-          <span class="fieldLabel">ステータス</span>
-          <select class="sel" name="status">
-            <option value="">すべて</option>
-            <?php foreach (transport_map_status_definitions() as $status => $meta): ?>
-              <option value="<?= h($status) ?>" <?= ((string)($initialFilters['status'] ?? '') === $status) ? 'selected' : '' ?>>
-                <?= h((string)$meta['label']) ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
-        </label>
+        <div class="transportMapFilterBlock transportMapFilterBlock-secondary">
+          <div class="transportMapFilterBlockHead">
+            <span class="transportMapFilterBlockTitle">絞り込み</span>
+            <span class="transportMapFilterBlockHint">未対応や担当別の確認に使います</span>
+          </div>
+          <div class="transportMapFilterRow transportMapFilterRow-secondary">
+            <label class="field field-status">
+              <span class="fieldLabel">ステータス</span>
+              <select class="sel" name="status">
+                <option value="">すべて</option>
+                <?php foreach (transport_map_status_definitions() as $status => $meta): ?>
+                  <option value="<?= h($status) ?>" <?= ((string)($initialFilters['status'] ?? '') === $status) ? 'selected' : '' ?>>
+                    <?= h((string)$meta['label']) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </label>
 
-        <label class="field">
-          <span class="fieldLabel">ドライバー</span>
-          <select class="sel" name="driver_user_id" id="transportMapDriver">
-            <option value="0">すべて</option>
-            <?php foreach (($driversByStore[$selectedStoreId] ?? []) as $driver): ?>
-              <?php $driverId = (int)($driver['id'] ?? 0); ?>
-              <option value="<?= $driverId ?>" <?= ((int)($initialFilters['driver_user_id'] ?? 0) === $driverId) ? 'selected' : '' ?>>
-                <?= h((string)($driver['name'] ?? '')) ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
-        </label>
+            <label class="field field-driver">
+              <span class="fieldLabel">ドライバー</span>
+              <select class="sel" name="driver_user_id" id="transportMapDriver">
+                <option value="0">すべて</option>
+                <?php foreach (($driversByStore[$selectedStoreId] ?? []) as $driver): ?>
+                  <?php $driverId = (int)($driver['id'] ?? 0); ?>
+                  <option value="<?= $driverId ?>" <?= ((int)($initialFilters['driver_user_id'] ?? 0) === $driverId) ? 'selected' : '' ?>>
+                    <?= h((string)($driver['name'] ?? '')) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </label>
 
-        <label class="field">
-          <span class="fieldLabel">方面</span>
-          <select class="sel" name="direction_bucket">
-            <option value="">すべて</option>
-            <?php foreach (transport_map_direction_options() as $direction): ?>
-              <option value="<?= h($direction) ?>" <?= ((string)($initialFilters['direction_bucket'] ?? '') === $direction) ? 'selected' : '' ?>>
-                <?= h($direction) ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
-        </label>
+            <label class="field field-direction">
+              <span class="fieldLabel">方面</span>
+              <select class="sel" name="direction_bucket">
+                <option value="">すべて</option>
+                <?php foreach (transport_map_direction_options() as $direction): ?>
+                  <option value="<?= h($direction) ?>" <?= ((string)($initialFilters['direction_bucket'] ?? '') === $direction) ? 'selected' : '' ?>>
+                    <?= h($direction) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </label>
 
-        <label class="field transportMapCheckField">
-          <span class="fieldLabel">絞り込み</span>
-          <label class="checkWrap">
-            <input type="checkbox" name="unassigned_only" value="1" <?= ((int)($initialFilters['unassigned_only'] ?? 0) === 1) ? 'checked' : '' ?>>
-            <span>未割当のみ</span>
-          </label>
-        </label>
+            <label class="field transportMapCheckField">
+              <span class="fieldLabel">絞り込み</span>
+              <label class="checkWrap">
+                <input type="checkbox" name="unassigned_only" value="1" <?= ((int)($initialFilters['unassigned_only'] ?? 0) === 1) ? 'checked' : '' ?>>
+                <span>未割当のみ</span>
+              </label>
+            </label>
 
-        <div class="transportMapFilterActions">
-          <button type="submit" class="btn">条件反映</button>
-          <button type="button" class="btn btn-primary" id="transportMapReload">再読込</button>
+            <div class="transportMapFilterActions">
+              <button type="submit" class="btn">条件反映</button>
+              <button type="button" class="btn btn-primary" id="transportMapReload">再読込</button>
+            </div>
+          </div>
         </div>
       </form>
     </section>
