@@ -54,6 +54,18 @@ function shift_plan_note_text(?string $note): string {
   return trim((string)$note);
 }
 
+function shift_plan_douhan_text(array $row): string {
+  $rawNote = trim((string)($row['plan_note'] ?? ''));
+  $noteText = trim((string)($row['note_text'] ?? ''));
+  if ($rawNote !== '' && preg_match('/(^|\s)#douhan\b/u', $rawNote)) {
+    return 'あり';
+  }
+  if ($noteText !== '' && mb_strpos($noteText, '同伴') !== false) {
+    return 'あり';
+  }
+  return '—';
+}
+
 function shift_plan_transport_text(array $row): string {
   $pickupTarget = trim((string)($row['pickup_target'] ?? ''));
   $pickupEnabledRaw = $row['pickup_enabled'] ?? null;
@@ -385,6 +397,7 @@ foreach ($rows as &$row) {
   $row['end_hm'] = shift_plan_read_end_from_note((string)($row['plan_note'] ?? ''));
   $row['note_text'] = shift_plan_note_text((string)($row['plan_note'] ?? ''));
   $row['transport_text'] = shift_plan_transport_text($row);
+  $row['douhan_text'] = shift_plan_douhan_text($row);
   $row['state'] = shift_plan_state($row, $targetDate, $currentBusinessDate, $now);
   $summaryKey = match ((string)$row['state']['code']) {
     'working' => 'working',
@@ -743,11 +756,9 @@ body[data-theme="cast"] .date-nav .date-btn.is-active{
             <tr>
               <th>キャスト名</th>
               <th>出勤予定</th>
-              <th>退勤予定</th>
               <th>ステータス</th>
               <th>来店手段</th>
-              <th>打刻</th>
-              <th>メモ</th>
+              <th>同伴</th>
             </tr>
           </thead>
           <tbody>
@@ -756,9 +767,6 @@ body[data-theme="cast"] .date-nav .date-btn.is-active{
                 $name = trim((string)($row['display_name'] ?? ''));
                 if ($name === '') $name = '#' . (int)($row['user_id'] ?? 0);
                 $shopTag = trim((string)($row['shop_tag'] ?? ''));
-                $clockIn = shift_plan_format_hm((string)($row['clock_in'] ?? ''));
-                $clockOut = shift_plan_format_hm((string)($row['clock_out'] ?? ''));
-                $endHm = (string)($row['end_hm'] ?? 'LAST');
               ?>
               <tr>
                 <td>
@@ -770,17 +778,9 @@ body[data-theme="cast"] .date-nav .date-btn.is-active{
                   </div>
                 </td>
                 <td class="mono"><?= h((string)($row['start_hm'] ?? '—')) ?></td>
-                <td class="mono"><?= h($endHm === 'LAST' ? 'LAST' : $endHm) ?></td>
                 <td><span class="status-badge <?= h((string)($row['state']['class'] ?? 'muted')) ?>"><?= h((string)($row['state']['label'] ?? '予定のみ')) ?></span></td>
                 <td><?= h((string)($row['transport_text'] ?? '未設定')) ?></td>
-                <td class="mono"><?= h($clockIn) ?> / <?= h($clockOut) ?></td>
-                <td>
-                  <?php if (trim((string)($row['note_text'] ?? '')) !== ''): ?>
-                    <div class="note"><?= nl2br(h((string)$row['note_text'])) ?></div>
-                  <?php else: ?>
-                    <span class="note">—</span>
-                  <?php endif; ?>
-                </td>
+                <td><?= h((string)($row['douhan_text'] ?? '—')) ?></td>
               </tr>
             <?php endforeach; ?>
           </tbody>
@@ -792,9 +792,6 @@ body[data-theme="cast"] .date-nav .date-btn.is-active{
               $name = trim((string)($row['display_name'] ?? ''));
               if ($name === '') $name = '#' . (int)($row['user_id'] ?? 0);
               $shopTag = trim((string)($row['shop_tag'] ?? ''));
-              $clockIn = shift_plan_format_hm((string)($row['clock_in'] ?? ''));
-              $clockOut = shift_plan_format_hm((string)($row['clock_out'] ?? ''));
-              $endHm = (string)($row['end_hm'] ?? 'LAST');
             ?>
             <article class="plan-card">
               <div class="plan-card__head">
@@ -812,25 +809,18 @@ body[data-theme="cast"] .date-nav .date-btn.is-active{
                   <div class="mono"><?= h((string)($row['start_hm'] ?? '—')) ?></div>
                 </div>
                 <div class="plan-card__item">
-                  <div class="plan-card__label">退勤予定</div>
-                  <div class="mono"><?= h($endHm === 'LAST' ? 'LAST' : $endHm) ?></div>
-                </div>
-                <div class="plan-card__item">
-                  <div class="plan-card__label">出勤打刻</div>
-                  <div class="mono"><?= h($clockIn) ?></div>
+                  <div class="plan-card__label">ステータス</div>
+                  <div><span class="status-badge <?= h((string)($row['state']['class'] ?? 'muted')) ?>"><?= h((string)($row['state']['label'] ?? '予定のみ')) ?></span></div>
                 </div>
                 <div class="plan-card__item">
                   <div class="plan-card__label">来店手段</div>
                   <div><?= h((string)($row['transport_text'] ?? '未設定')) ?></div>
                 </div>
                 <div class="plan-card__item">
-                  <div class="plan-card__label">退勤打刻</div>
-                  <div class="mono"><?= h($clockOut) ?></div>
+                  <div class="plan-card__label">同伴</div>
+                  <div><?= h((string)($row['douhan_text'] ?? '—')) ?></div>
                 </div>
               </div>
-              <?php if (trim((string)($row['note_text'] ?? '')) !== ''): ?>
-                <div class="note"><?= nl2br(h((string)$row['note_text'])) ?></div>
-              <?php endif; ?>
             </article>
           <?php endforeach; ?>
         </div>
