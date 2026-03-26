@@ -53,6 +53,7 @@ try {
     'base' => $data['base'],
     'summary' => $data['summary'],
     'items' => $data['items'],
+    'vehicles' => $data['vehicles'],
   ], JSON_UNESCAPED_UNICODE);
 } catch (RuntimeException $e) {
   transport_map_api_error($e->getMessage(), 400);

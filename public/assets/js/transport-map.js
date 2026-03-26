@@ -7,6 +7,7 @@
   const apiUrl = pageConfig.apiUrl || '/wbss/public/api/transport_map.php';
   const statusOptions = pageConfig.statusOptions || {};
   const focusCastId = Number(pageConfig.focusCastId || 0);
+  const autoRefreshMs = 60000;
   const form = document.getElementById('transportMapFilterForm');
   const reloadButton = document.getElementById('transportMapReload');
   const storeSelect = document.getElementById('transportMapStore');
@@ -34,12 +35,14 @@
   let clusterLayer = null;
   let storeMarker = null;
   let rangeLayer = null;
+  let vehicleLayer = null;
   let markerById = new Map();
   let rowById = new Map();
   let itemById = new Map();
   let itemIdByCastId = new Map();
   let activeId = null;
   let lastFetchSeq = 0;
+  let autoRefreshTimer = null;
 
   function ensureMap() {
     if (map || typeof L === 'undefined') {
@@ -62,6 +65,7 @@
     map.addLayer(clusterLayer);
 
     rangeLayer = L.layerGroup().addTo(map);
+    vehicleLayer = L.layerGroup().addTo(map);
   }
 
   function updateDriverOptions() {
@@ -200,9 +204,9 @@
     });
   }
 
-  function renderMap(base, items) {
+  function renderMap(base, items, vehicles) {
     ensureMap();
-    if (!map || !clusterLayer || !rangeLayer) {
+    if (!map || !clusterLayer || !rangeLayer || !vehicleLayer) {
       if (mapBadgeEl) {
         mapBadgeEl.textContent = '地図初期化失敗';
       }
@@ -211,6 +215,7 @@
 
     clusterLayer.clearLayers();
     rangeLayer.clearLayers();
+    vehicleLayer.clearLayers();
     markerById = new Map();
 
     if (storeMarker) {
@@ -236,7 +241,7 @@
       }
       const latLng = [item.pickup_lat, item.pickup_lng];
       const marker = L.marker(latLng, {
-        icon: buildStatusIcon(item.status, item.driver_user_id === null)
+        icon: buildStatusIcon(item)
       });
       marker.bindPopup(buildPopupHtml(item));
       marker.on('click', function () {
@@ -244,6 +249,19 @@
       });
       clusterLayer.addLayer(marker);
       markerById.set(item.id, marker);
+      bounds.push(latLng);
+    });
+
+    (vehicles || []).forEach(function (vehicle) {
+      if (vehicle.lat === null || vehicle.lng === null) {
+        return;
+      }
+      const latLng = [vehicle.lat, vehicle.lng];
+      const marker = L.marker(latLng, {
+        icon: buildVehicleIcon(vehicle)
+      });
+      marker.bindPopup(buildVehiclePopupHtml(vehicle));
+      vehicleLayer.addLayer(marker);
       bounds.push(latLng);
     });
 
@@ -255,7 +273,8 @@
 
     if (mapBadgeEl) {
       const mappedCount = items.filter(function (item) { return item.has_coords; }).length;
-      mapBadgeEl.textContent = mappedCount + '件を地図表示';
+      const vehicleCount = (vehicles || []).filter(function (vehicle) { return vehicle.lat !== null && vehicle.lng !== null; }).length;
+      mapBadgeEl.textContent = mappedCount + '件 + 車両' + vehicleCount + '台';
     }
     if (footNoteEl) {
       const hiddenCount = items.filter(function (item) { return !item.has_coords; }).length;
@@ -295,15 +314,24 @@
     return true;
   }
 
-  function buildStatusIcon(status, isUnassigned) {
+  function buildStatusIcon(item) {
+    const status = String(item.status || '');
+    const isUnassigned = item.driver_user_id === null;
     const color = (statusOptions[status] && statusOptions[status].color) || '#475569';
     const className = isUnassigned ? ' transportMapMarkerIcon--unassigned' : '';
+    const shopTag = item.shop_tag ? String(item.shop_tag) : (Number(item.cast_id || 0) > 0 ? String(item.cast_id) : '');
+    const nameText = String(item.display_name || item.cast_name || '-');
+    const labelHtml = ''
+      + '<span class="transportMapMarkerTag">' + escapeHtml(shopTag || '-') + '</span>'
+      + '<span class="transportMapMarkerName">' + escapeHtml(nameText) + '</span>';
     return L.divIcon({
       className: 'transportMapMarkerWrap',
-      html: '<span class="transportMapMarkerIcon' + className + '" style="--pin-color:' + escapeHtml(color) + '"></span>',
-      iconSize: [20, 20],
-      iconAnchor: [10, 10],
-      popupAnchor: [0, -10]
+      html: '<span class="transportMapMarkerIcon' + className + '" style="--pin-color:' + escapeHtml(color) + '">'
+        + labelHtml
+        + '</span>',
+      iconSize: [140, 34],
+      iconAnchor: [18, 17],
+      popupAnchor: [0, -18]
     });
   }
 
@@ -313,6 +341,21 @@
       html: '<span class="transportMapStoreIcon">店</span>',
       iconSize: [26, 26],
       iconAnchor: [13, 13]
+    });
+  }
+
+  function buildVehicleIcon(vehicle) {
+    const className = vehicle.is_stale ? ' transportMapVehicleIcon--stale' : '';
+    const label = (vehicle.vehicle_label || '車両') + ' ' + (vehicle.driver_name || '');
+    return L.divIcon({
+      className: 'transportMapVehicleWrap',
+      html: '<span class="transportMapVehicleIcon' + className + '">'
+        + '<span class="transportMapVehicleBadge">' + escapeHtml(vehicle.vehicle_label || '車') + '</span>'
+        + '<span class="transportMapVehicleName">' + escapeHtml(label.trim()) + '</span>'
+        + '</span>',
+      iconSize: [168, 36],
+      iconAnchor: [22, 18],
+      popupAnchor: [0, -18]
     });
   }
 
@@ -335,6 +378,19 @@
         '<div class="transportMapPopupAddress">' + escapeHtml(item.pickup_address || '住所未登録') + '</div>' +
         (item.pickup_note ? '<div class="transportMapPopupNote">メモ: ' + escapeHtml(item.pickup_note) + '</div>' : '') +
         '<button type="button" class="btn miniBtn transportMapPopupButton" data-focus-id="' + escapeHtml(String(item.id)) + '">一覧で表示</button>' +
+      '</div>';
+  }
+
+  function buildVehiclePopupHtml(vehicle) {
+    return '' +
+      '<div class="transportMapPopup">' +
+        '<div class="transportMapPopupTitle">' + escapeHtml((vehicle.vehicle_label || '車両') + ' / ' + (vehicle.driver_name || '-')) + '</div>' +
+        '<div class="transportMapPopupGrid">' +
+          '<span><b>更新</b>' + escapeHtml(vehicle.recorded_at || '-') + '</span>' +
+          '<span><b>状態</b>' + escapeHtml(vehicle.is_stale ? '位置古め' : '送信中') + '</span>' +
+          '<span><b>精度</b>' + escapeHtml(vehicle.accuracy_m !== null ? Math.round(vehicle.accuracy_m) + 'm' : '-') + '</span>' +
+          '<span><b>速度</b>' + escapeHtml(vehicle.speed_kmh !== null ? Math.round(vehicle.speed_kmh) + 'km/h' : '-') + '</span>' +
+        '</div>' +
       '</div>';
   }
 
@@ -460,7 +516,7 @@
 
       renderSummary(json.summary || {});
       renderList(json.items || []);
-      renderMap(json.base || {}, json.items || []);
+      renderMap(json.base || {}, json.items || [], json.vehicles || []);
       if (focusCastId > 0 && activeId === null) {
         focusCast(focusCastId, true);
       }
@@ -480,7 +536,17 @@
       if (reloadButton) {
         reloadButton.disabled = false;
       }
+      scheduleAutoRefresh();
     }
+  }
+
+  function scheduleAutoRefresh() {
+    if (autoRefreshTimer !== null) {
+      window.clearTimeout(autoRefreshTimer);
+    }
+    autoRefreshTimer = window.setTimeout(function () {
+      fetchData(false);
+    }, autoRefreshMs);
   }
 
   async function saveAssignment(itemId, triggerEl) {
@@ -572,6 +638,12 @@
       fetchData(true);
     });
   }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+      fetchData(false);
+    }
+  });
 
   updateDriverOptions();
   fetchData(false);
