@@ -97,7 +97,7 @@ render_header('送迎設定', [
         </div>
       </div>
       <div class="subInfo">
-        <div class="muted">キャストプロフィールと同じく、基本地点とサブ地点の2つを登録できます。今日の迎車地点もここで切り替えられます。</div>
+        <div class="muted">キャストプロフィールと同じく、メイン地点とサブ地点の2つを登録できます。今日の迎車地点もここで切り替えられます。</div>
       </div>
     </div>
 
@@ -120,11 +120,11 @@ render_header('送迎設定', [
           <b class="transportStatValue"><?= (int)$pickupEnabledCount ?></b>
         </div>
         <div class="transportStatCard">
-          <span class="transportStatLabel">基本住所</span>
+          <span class="transportStatLabel">メイン住所</span>
           <b class="transportStatValue"><?= (int)$addressReadyCount ?></b>
         </div>
         <div class="transportStatCard">
-          <span class="transportStatLabel">基本座標</span>
+          <span class="transportStatLabel">メイン座標</span>
           <b class="transportStatValue"><?= (int)$coordReadyCount ?></b>
         </div>
         <div class="transportStatCard">
@@ -166,7 +166,7 @@ render_header('送迎設定', [
               <div class="transportProfileEyebrow">CAST #<?= h($shopLabel) ?></div>
               <div class="transportProfileName"><?= h((string)($row['display_name'] ?? '')) ?></div>
               <div class="transportMetaRow">
-                <span class="metaPill">基本開始 <?= h($defaultStart !== '' ? substr($defaultStart, 0, 5) : '-') ?></span>
+                <span class="metaPill">開店時間 <?= h($defaultStart !== '' ? substr($defaultStart, 0, 5) : '-') ?></span>
                 <span class="metaPill">権限 <?= h((string)$row['privacy_level']) ?></span>
                 <?php if ($hasPickupTarget): ?>
                   <span class="metaPill">今日の来店 <?= h(transport_pickup_target_label((string)($row['pickup_target'] ?? 'primary'))) ?></span>
@@ -174,8 +174,8 @@ render_header('送迎設定', [
               </div>
             </div>
             <div class="transportBadges">
-              <span class="badge <?= !empty($row['has_address']) ? 'ok' : 'ng' ?>"><?= !empty($row['has_address']) ? '基本住所あり' : '基本住所なし' ?></span>
-              <span class="badge <?= !empty($row['has_coords']) ? 'ok' : 'ng' ?>"><?= !empty($row['has_coords']) ? '基本座標あり' : '基本座標なし' ?></span>
+              <span class="badge <?= !empty($row['has_address']) ? 'ok' : 'ng' ?>"><?= !empty($row['has_address']) ? 'メイン住所あり' : 'メイン住所なし' ?></span>
+              <span class="badge <?= !empty($row['has_coords']) ? 'ok' : 'ng' ?>"><?= !empty($row['has_coords']) ? 'メイン座標あり' : 'メイン座標なし' ?></span>
               <?php if ($hasSecondary): ?>
                 <span class="badge <?= !empty($row['has_sub_address']) ? 'ok' : 'ng' ?>"><?= !empty($row['has_sub_address']) ? 'サブ住所あり' : 'サブ住所なし' ?></span>
               <?php endif; ?>
@@ -189,9 +189,9 @@ render_header('送迎設定', [
 
           <?php if ($hasPickupTarget && $hasSecondary): ?>
             <div class="pickupTargetSwitch managerPickupSwitch">
-              <button type="button" class="pickupTargetBtn <?= ((string)($row['pickup_target'] ?? 'primary') === 'primary') ? 'is-active' : '' ?>" data-pickup-target-value="primary">今日は基本に迎え</button>
-              <button type="button" class="pickupTargetBtn <?= ((string)($row['pickup_target'] ?? 'primary') === 'secondary') ? 'is-active' : '' ?>" data-pickup-target-value="secondary">今日はサブに迎え</button>
-              <button type="button" class="pickupTargetBtn <?= ((string)($row['pickup_target'] ?? 'primary') === 'self') ? 'is-active' : '' ?>" data-pickup-target-value="self">今日は自走</button>
+              <button type="button" class="pickupTargetBtn <?= ((string)($row['pickup_target'] ?? 'primary') === 'primary') ? 'is-active' : '' ?>" data-pickup-target-value="primary">メイン住所に迎え</button>
+              <button type="button" class="pickupTargetBtn <?= ((string)($row['pickup_target'] ?? 'primary') === 'secondary') ? 'is-active' : '' ?>" data-pickup-target-value="secondary">サブ住所迎え</button>
+              <button type="button" class="pickupTargetBtn <?= ((string)($row['pickup_target'] ?? 'primary') === 'self') ? 'is-active' : '' ?>" data-pickup-target-value="self">自走</button>
               <input type="hidden" name="pickup_target" value="<?= h((string)($row['pickup_target'] ?? 'primary')) ?>">
             </div>
           <?php endif; ?>
@@ -203,11 +203,11 @@ render_header('送迎設定', [
                   <div class="transportBlockSummaryLeft">
                     <span class="transportHamburger" aria-hidden="true">☰</span>
                     <div>
-                      <div class="transportBlockTitle">基本地点</div>
+                      <div class="transportBlockTitle">メイン地点</div>
                       <div class="transportBlockLead">一番よく使う迎車場所</div>
                     </div>
                   </div>
-                  <span class="transportBlockBadge">基本地点</span>
+                  <span class="transportBlockBadge">メイン地点</span>
                 </div>
                 <div class="transportBlockSummaryText">
                   <?= h($primarySummary !== '' ? $primarySummary : '住所未登録') ?>
@@ -371,7 +371,7 @@ render_header('送迎設定', [
                   <label class="field">
                     <span class="fieldLabel">今日の迎車地点</span>
                     <select class="in" name="pickup_target">
-                      <option value="primary" <?= (string)($row['pickup_target'] ?? 'primary') === 'primary' ? 'selected' : '' ?>>基本を使う</option>
+                      <option value="primary" <?= (string)($row['pickup_target'] ?? 'primary') === 'primary' ? 'selected' : '' ?>>メインを使う</option>
                       <option value="secondary" <?= (string)($row['pickup_target'] ?? 'primary') === 'secondary' ? 'selected' : '' ?>>サブを使う</option>
                       <option value="self" <?= (string)($row['pickup_target'] ?? 'primary') === 'self' ? 'selected' : '' ?>>自走する</option>
                     </select>
@@ -382,7 +382,7 @@ render_header('送迎設定', [
               <div class="transportProfileFoot compactFoot">
                 <div class="transportMetaNote">
                   最終更新 <?= h((string)($row['updated_at'] !== '' ? $row['updated_at'] : '-')) ?>
-                  / 基本座標更新 <?= h((string)($row['pickup_geocoded_at'] !== '' ? $row['pickup_geocoded_at'] : '-')) ?>
+                  / メイン座標更新 <?= h((string)($row['pickup_geocoded_at'] !== '' ? $row['pickup_geocoded_at'] : '-')) ?>
                   <?php if ($hasSecondary): ?>
                     / サブ座標更新 <?= h((string)($row['pickup_sub_geocoded_at'] !== '' ? $row['pickup_sub_geocoded_at'] : '-')) ?>
                   <?php endif; ?>
