@@ -104,7 +104,7 @@ render_page_start('送迎マップ TV');
         <input type="hidden" name="unassigned_only" value="<?= h((string)($initialFilters['unassigned_only'] ?? '0')) ?>">
 
         <div class="transportMapScreenHero">
-          <div class="transportMapScreenTitle">TV表示用 送迎マップ</div>
+          <div class="transportMapScreenTitle">大画面マップ</div>
           <div class="transportMapScreenMeta">
             <span class="heroChip">店舗 <b><?= h($storeName !== '' ? $storeName : '-') ?></b></span>
             <span class="heroChip">業務日 <b><?= h($businessDate !== '' ? $businessDate : '-') ?></b></span>
