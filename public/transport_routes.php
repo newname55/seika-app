@@ -92,6 +92,7 @@ foreach ($savedPlans as $plan) {
 $headerActions = '<a class="btn" href="/wbss/public/dashboard.php">ダッシュボード</a>';
 if ($selectedStoreId > 0) {
   $headerActions = '<a class="btn" href="/wbss/public/cast_transport_profiles.php?store_id=' . (int)$selectedStoreId . '">送迎設定へ</a> '
+    . '<a class="btn" href="/wbss/public/transport/map.php?store_id=' . (int)$selectedStoreId . '&business_date=' . urlencode($businessDate) . '">送迎マップへ</a> '
     . '<a class="btn" href="/wbss/public/store_transport_bases.php?store_id=' . (int)$selectedStoreId . '">拠点設定へ</a> '
     . $headerActions;
 }

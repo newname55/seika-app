@@ -66,6 +66,7 @@ foreach ($rows as $row) {
 $headerActions = '';
 if ($storeId > 0) {
   $headerActions .= '<a class="btn" href="/wbss/public/store_casts.php?store_id=' . (int)$storeId . '">キャスト一覧へ</a> ';
+  $headerActions .= '<a class="btn" href="/wbss/public/transport/map.php?store_id=' . (int)$storeId . '">送迎マップへ</a> ';
   $headerActions .= '<a class="btn" href="/wbss/public/transport_routes.php?store_id=' . (int)$storeId . '">送迎ルートへ</a>';
 }
 

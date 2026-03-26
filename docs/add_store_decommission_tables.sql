@@ -118,3 +118,53 @@ CREATE TABLE IF NOT EXISTS store_decommission_snapshots (
     FOREIGN KEY (job_id) REFERENCES store_decommission_jobs(id)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+START TRANSACTION;
+
+CREATE TABLE IF NOT EXISTS store_decommission_batches (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  requested_by INT UNSIGNED NOT NULL,
+  status ENUM(
+    'scheduled',
+    'running',
+    'completed',
+    'dry_run_completed',
+    'partial_failed',
+    'failed',
+    'cancelled'
+  ) NOT NULL DEFAULT 'scheduled',
+  reason TEXT NULL,
+  dry_run TINYINT(1) NOT NULL DEFAULT 0,
+  scheduled_at DATETIME NOT NULL,
+  started_at DATETIME NULL,
+  completed_at DATETIME NULL,
+  failure_reason TEXT NULL,
+  requested_ip VARCHAR(64) NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_batch_status_scheduled (status, scheduled_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE store_decommission_jobs
+  ADD COLUMN batch_id BIGINT UNSIGNED NULL AFTER id;
+
+ALTER TABLE store_decommission_jobs
+  MODIFY COLUMN status ENUM(
+    'requested',
+    'approved',
+    'scheduled',
+    'running',
+    'completed',
+    'dry_run_completed',
+    'cancelled',
+    'failed'
+  ) NOT NULL DEFAULT 'requested';
+
+ALTER TABLE store_decommission_jobs
+  ADD INDEX idx_batch_status (batch_id, status);
+
+ALTER TABLE store_decommission_jobs
+  ADD CONSTRAINT fk_store_decommission_jobs_batch
+    FOREIGN KEY (batch_id) REFERENCES store_decommission_batches(id)
+    ON DELETE SET NULL;
+
+COMMIT;

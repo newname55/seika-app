@@ -1,0 +1,417 @@
+.transportMapPage.transportShell{
+  display:grid;
+  gap:14px;
+  padding-bottom:28px;
+}
+
+.transportPanel{
+  border:1px solid rgba(148,163,184,.18);
+  border-radius:18px;
+  background:linear-gradient(180deg, rgba(15,23,42,.72), rgba(15,23,42,.56));
+  box-shadow:0 16px 40px rgba(15,23,42,.18);
+}
+
+.transportMapAlert{
+  padding:14px 16px;
+  border-radius:16px;
+}
+
+.transportMapAlertError{
+  border:1px solid rgba(239,68,68,.35);
+  background:rgba(127,29,29,.18);
+}
+
+.transportMapFilters{
+  padding:16px 18px;
+}
+
+.transportMapFilterForm{
+  display:grid;
+  grid-template-columns:repeat(8, minmax(0, 1fr));
+  gap:12px;
+  align-items:end;
+}
+
+.transportMapCheckField{
+  align-self:stretch;
+}
+
+.transportMapFilterActions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:flex-end;
+}
+
+.transportMapSummaryGrid{
+  display:grid;
+  grid-template-columns:repeat(6, minmax(0, 1fr));
+  gap:10px;
+}
+
+.transportMapSummaryCard{
+  padding:16px;
+  display:grid;
+  gap:6px;
+}
+
+.transportMapSummaryWarn{
+  border-color:rgba(239,68,68,.3);
+  background:linear-gradient(180deg, rgba(127,29,29,.25), rgba(15,23,42,.65));
+}
+
+.transportMapSummaryLabel{
+  color:#94a3b8;
+  font-size:12px;
+}
+
+.transportMapSummaryValue{
+  font-size:28px;
+  line-height:1;
+}
+
+.transportMapMetaGrid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+
+.transportMapMetaCard{
+  padding:16px;
+  display:grid;
+  gap:12px;
+}
+
+.transportMapMetaHead{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-end;
+}
+
+.transportMapChipList{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.transportMapChip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border-radius:999px;
+  background:rgba(51,65,85,.5);
+  border:1px solid rgba(148,163,184,.18);
+  font-size:12px;
+}
+
+.transportMapChip b{
+  font-size:12px;
+}
+
+.transportMapLayout{
+  display:grid;
+  grid-template-columns:minmax(320px, 420px) minmax(0, 1fr);
+  gap:14px;
+  min-height:680px;
+}
+
+.transportMapListPanel,
+.transportMapCanvasPanel{
+  padding:16px;
+  display:grid;
+  gap:14px;
+}
+
+.transportMapListHead,
+.transportMapCanvasHead{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+}
+
+.transportMapListLegend{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:flex-end;
+}
+
+.transportMapLegendItem{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:#cbd5e1;
+  font-size:11px;
+}
+
+.transportMapLegendItem i{
+  display:inline-block;
+  width:10px;
+  height:10px;
+  border-radius:999px;
+}
+
+.transportMapList{
+  display:grid;
+  gap:10px;
+  align-content:start;
+  max-height:720px;
+  overflow:auto;
+  padding-right:4px;
+}
+
+.transportMapRow{
+  width:100%;
+  text-align:left;
+  border:1px solid rgba(148,163,184,.16);
+  border-radius:16px;
+  background:rgba(15,23,42,.44);
+  color:inherit;
+  padding:12px;
+  display:grid;
+  gap:10px;
+  cursor:pointer;
+  transition:border-color .16s ease, transform .16s ease, background .16s ease;
+}
+
+.transportMapRow:hover,
+.transportMapRow.is-active{
+  border-color:rgba(96,165,250,.48);
+  background:rgba(30,41,59,.76);
+  transform:translateY(-1px);
+}
+
+.transportMapRow.is-unassigned{
+  border-color:rgba(248,113,113,.45);
+  box-shadow:0 0 0 1px rgba(248,113,113,.16) inset;
+}
+
+.transportMapRow.is-disabled{
+  opacity:.88;
+}
+
+.transportMapRowHead{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-start;
+}
+
+.transportMapRowName{
+  font-size:16px;
+  font-weight:700;
+}
+
+.transportMapRowMeta{
+  color:#94a3b8;
+  font-size:12px;
+  margin-top:2px;
+}
+
+.transportMapRowGrid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:8px 12px;
+  font-size:12px;
+  color:#dbe4ee;
+}
+
+.transportMapRowGrid span{
+  display:grid;
+  gap:2px;
+}
+
+.transportMapRowGrid b{
+  font-size:11px;
+  color:#94a3b8;
+}
+
+.transportMapRowActions{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+}
+
+.transportMapMiniHint{
+  color:#94a3b8;
+  font-size:11px;
+}
+
+.transportMapStatusPill{
+  --status-color:#475569;
+  display:inline-flex;
+  align-items:center;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid color-mix(in srgb, var(--status-color) 38%, transparent);
+  background:color-mix(in srgb, var(--status-color) 18%, rgba(15,23,42,.65));
+  color:#fff;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+
+.transportMapCanvas{
+  min-height:620px;
+  border-radius:18px;
+  overflow:hidden;
+  border:1px solid rgba(148,163,184,.16);
+}
+
+.transportMapMapBadge{
+  display:inline-flex;
+  align-items:center;
+  padding:8px 12px;
+  border-radius:999px;
+  background:rgba(37,99,235,.18);
+  border:1px solid rgba(96,165,250,.32);
+  color:#dbeafe;
+  font-size:12px;
+  font-weight:700;
+}
+
+.transportMapFootNote{
+  color:#94a3b8;
+  font-size:12px;
+}
+
+.transportMapEmpty,
+.transportMapEmptyInline{
+  color:#94a3b8;
+  font-size:13px;
+}
+
+.transportMapEmpty{
+  padding:24px 10px;
+  text-align:center;
+}
+
+.transportMapEmptyError{
+  color:#fecaca;
+}
+
+.transportMapMarkerWrap,
+.transportMapStoreWrap{
+  background:transparent;
+  border:none;
+}
+
+.transportMapMarkerIcon{
+  --pin-color:#475569;
+  display:block;
+  width:18px;
+  height:18px;
+  border-radius:999px;
+  background:var(--pin-color);
+  border:3px solid rgba(255,255,255,.9);
+  box-shadow:0 6px 14px rgba(15,23,42,.35);
+}
+
+.transportMapMarkerIcon--unassigned{
+  box-shadow:0 0 0 3px rgba(248,113,113,.25), 0 8px 14px rgba(15,23,42,.35);
+}
+
+.transportMapStoreIcon{
+  display:grid;
+  place-items:center;
+  width:26px;
+  height:26px;
+  border-radius:999px;
+  background:#0f172a;
+  color:#f8fafc;
+  border:2px solid #fbbf24;
+  font-size:12px;
+  font-weight:800;
+  box-shadow:0 6px 16px rgba(15,23,42,.35);
+}
+
+.transportMapPopup{
+  display:grid;
+  gap:8px;
+  min-width:220px;
+}
+
+.transportMapPopupTitle{
+  font-size:14px;
+  font-weight:700;
+}
+
+.transportMapPopupGrid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:6px 10px;
+  font-size:12px;
+}
+
+.transportMapPopupGrid span{
+  display:grid;
+  gap:2px;
+}
+
+.transportMapPopupGrid b{
+  color:#64748b;
+  font-size:11px;
+}
+
+.transportMapPopupAddress,
+.transportMapPopupNote{
+  font-size:12px;
+}
+
+.transportMapPopupButton{
+  width:100%;
+  justify-content:center;
+}
+
+@media (max-width: 1200px){
+  .transportMapFilterForm{
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+  }
+
+  .transportMapSummaryGrid{
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+  }
+
+  .transportMapLayout{
+    grid-template-columns:1fr;
+    min-height:0;
+  }
+}
+
+@media (max-width: 720px){
+  .transportMapFilters,
+  .transportMapListPanel,
+  .transportMapCanvasPanel,
+  .transportMapMetaCard{
+    padding:14px;
+  }
+
+  .transportMapFilterForm,
+  .transportMapSummaryGrid,
+  .transportMapMetaGrid,
+  .transportMapRowGrid{
+    grid-template-columns:1fr;
+  }
+
+  .transportMapFilterActions,
+  .transportMapListHead,
+  .transportMapCanvasHead,
+  .transportMapMetaHead,
+  .transportMapRowHead,
+  .transportMapRowActions{
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .transportMapList{
+    max-height:none;
+  }
+
+  .transportMapCanvas{
+    min-height:420px;
+  }
+}
