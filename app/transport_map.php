@@ -205,9 +205,58 @@ function transport_map_geocode_address(string $address): array {
   return transport_google_geocode($address);
 }
 
+function transport_map_fetch_required_candidates(PDO $pdo, int $storeId, string $businessDate): array {
+  $groups = transport_fetch_route_candidates($pdo, $businessDate, [$storeId]);
+  if ($groups === []) {
+    return [];
+  }
+
+  $group = $groups[0];
+  $items = [];
+  foreach ((array)($group['casts'] ?? []) as $cast) {
+    if (empty($cast['requires_pickup'])) {
+      continue;
+    }
+
+    $castId = (int)($cast['user_id'] ?? 0);
+    if ($castId <= 0) {
+      continue;
+    }
+
+    $items[$castId] = [
+      'id' => -1 * (1000000 + $castId),
+      'store_id' => $storeId,
+      'business_date' => $businessDate,
+      'cast_id' => $castId,
+      'pickup_name' => (string)($cast['display_name'] ?? ''),
+      'cast_name' => (string)($cast['display_name'] ?? ''),
+      'pickup_address' => (string)($cast['pickup_address'] ?? ''),
+      'pickup_lat' => ($cast['pickup_lat'] ?? null) !== null ? (float)$cast['pickup_lat'] : null,
+      'pickup_lng' => ($cast['pickup_lng'] ?? null) !== null ? (float)$cast['pickup_lng'] : null,
+      'pickup_note' => (string)($cast['pickup_note'] ?? ''),
+      'pickup_time_from' => (string)($cast['start_time'] ?? ''),
+      'pickup_time_to' => '',
+      'area_name' => '',
+      'direction_bucket' => '',
+      'status' => 'pending',
+      'driver_user_id' => null,
+      'driver_name' => '',
+      'vehicle_label' => null,
+      'sort_order' => 0,
+      'source_type' => 'shift_plan',
+      'pickup_target' => (string)($cast['pickup_target'] ?? 'primary'),
+      'pickup_target_label' => (string)($cast['pickup_target_label'] ?? transport_pickup_target_label((string)($cast['pickup_target'] ?? 'primary'))),
+      'has_coords' => !empty($cast['has_coords']),
+      'has_address' => !empty($cast['has_address']),
+    ];
+  }
+
+  return $items;
+}
+
 function transport_map_fetch_rows(PDO $pdo, array $filters): array {
   if (!transport_map_table_exists($pdo, 'transport_assignments')) {
-    throw new RuntimeException('transport_assignments テーブルが未作成です。先にSQLを適用してください。');
+    return [];
   }
 
   $where = [
@@ -290,7 +339,18 @@ function transport_map_fetch_rows(PDO $pdo, array $filters): array {
 function transport_map_fetch_data(PDO $pdo, array $filters): array {
   $base = transport_map_fetch_base_context($pdo, (int)$filters['store_id']);
   $rows = transport_map_fetch_rows($pdo, $filters);
+  $requiredCandidates = transport_map_fetch_required_candidates($pdo, (int)$filters['store_id'], (string)$filters['business_date']);
   $canViewFullAddress = transport_map_can_view_full_address();
+
+  foreach ($rows as $row) {
+    $castId = (int)($row['cast_id'] ?? 0);
+    if ($castId > 0 && isset($requiredCandidates[$castId])) {
+      unset($requiredCandidates[$castId]);
+    }
+  }
+  if ($requiredCandidates !== []) {
+    $rows = array_merge($rows, array_values($requiredCandidates));
+  }
 
   $items = [];
   $summary = [
@@ -354,6 +414,9 @@ function transport_map_fetch_data(PDO $pdo, array $filters): array {
       'distance_km' => $distanceKm,
       'sort_order' => (int)($row['sort_order'] ?? 0),
       'note_exists' => trim((string)($row['pickup_note'] ?? '')) !== '',
+      'source_type' => (string)($row['source_type'] ?? 'assignment'),
+      'pickup_target' => (string)($row['pickup_target'] ?? 'primary'),
+      'pickup_target_label' => (string)($row['pickup_target_label'] ?? transport_pickup_target_label((string)($row['pickup_target'] ?? 'primary'))),
       'route_hint' => [
         'direction_bucket' => $direction,
         'distance_km' => $distanceKm,

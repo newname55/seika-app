@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../app/auth.php';
 require_once __DIR__ . '/../app/db.php';
 require_once __DIR__ . '/../app/layout.php';
+require_once __DIR__ . '/../app/service_transport.php';
 
 /**
  * Manager daily schedule dashboard.
@@ -700,6 +701,38 @@ foreach ($rows as $r) {
   }
 }
 
+$transportNeededRows = [];
+$transportNeededCount = 0;
+$transportCoordReadyCount = 0;
+$transportMapUrl = '/wbss/public/transport/map.php?store_id=' . (int)$storeId . '&business_date=' . urlencode($bizDate);
+try {
+  $transportGroups = transport_fetch_route_candidates($pdo, $bizDate, [$storeId]);
+  $transportCasts = (array)($transportGroups[0]['casts'] ?? []);
+  foreach ($transportCasts as $cast) {
+    if (empty($cast['requires_pickup'])) {
+      continue;
+    }
+    $transportNeededRows[] = [
+      'user_id' => (int)($cast['user_id'] ?? 0),
+      'display_name' => (string)($cast['display_name'] ?? ''),
+      'shop_tag' => (string)($cast['shop_tag'] ?? ''),
+      'start_time' => (string)($cast['start_time'] ?? ''),
+      'pickup_address' => (string)($cast['pickup_address'] ?? ''),
+      'pickup_note' => (string)($cast['pickup_note'] ?? ''),
+      'pickup_target_label' => (string)($cast['pickup_target_label'] ?? transport_pickup_target_label((string)($cast['pickup_target'] ?? 'primary'))),
+      'has_coords' => !empty($cast['has_coords']),
+    ];
+    $transportNeededCount++;
+    if (!empty($cast['has_coords'])) {
+      $transportCoordReadyCount++;
+    }
+  }
+} catch (Throwable $e) {
+  $transportNeededRows = [];
+  $transportNeededCount = 0;
+  $transportCoordReadyCount = 0;
+}
+
 /* =========================
    Render
 ========================= */
@@ -707,6 +740,7 @@ $dashboardUrl = '/wbss/public/dashboard.php';
 $attendanceUrl = '/wbss/public/attendance/index.php?store_id=' . (int)$storeId . '&date=' . urlencode($bizDate);
 $transportUrl = '/wbss/public/transport_routes.php?store_id=' . (int)$storeId . '&business_date=' . urlencode($bizDate);
 $headerActions = '
+  <a class="btn" href="' . h($transportMapUrl) . '">送迎マップへ</a>
   <a class="btn" href="' . h($transportUrl) . '">送迎ルートへ</a>
   <a class="btn" href="' . h($attendanceUrl) . '">出勤一覧へ</a>
   <a class="btn" href="' . h($dashboardUrl) . '">ダッシュボード</a>
@@ -778,12 +812,14 @@ render_header('本日の勤務予定', [
           <div class="boardSummary__item is-attention">要対応 <?= (int)$attentionCount ?>名</div>
           <div class="boardSummary__item">返信あり <?= (int)$replyCount ?>名</div>
           <div class="boardSummary__item">出勤確定 <?= (int)$confirmPendingCount ?>名</div>
+          <div class="boardSummary__item <?= $transportNeededCount > 0 ? 'is-transport' : '' ?>">送迎必要 <?= (int)$transportNeededCount ?>名</div>
         </div>
         <div class="boardToolbar__actions">
           <form class="boardSearch" id="castSearchForm">
             <span class="boardSearch__label">検索</span>
             <input type="search" id="castSearch" class="boardSearch__input" placeholder="店番・名前で絞り込み">
           </form>
+          <a class="btn boardMapBtn" href="<?= h($transportMapUrl) ?>">送迎マップを開く</a>
           <button type="button" class="btn boardDensityBtn" id="densityToggle" aria-pressed="false">高密度表示</button>
         </div>
       </div>
@@ -798,6 +834,42 @@ render_header('本日の勤務予定', [
         <button type="button" class="boardFilter" data-toolbar-filter="done">退勤済</button>
         <button type="button" class="boardFilter" data-toolbar-filter="off">休み</button>
       </div>
+    </div>
+
+    <div class="card subtleCard transportNeededCard">
+      <div class="sectionHead transportNeededCard__head">
+        <div>
+          <div class="cardTitle">本日送迎が必要なキャスト</div>
+          <div class="muted">勤務予定のうち、送迎設定が有効で自走ではないキャストを表示しています。</div>
+        </div>
+        <div class="transportNeededCard__meta">
+          <span class="transportNeededBadge">対象 <?= (int)$transportNeededCount ?>名</span>
+          <span class="transportNeededBadge">地図表示可 <?= (int)$transportCoordReadyCount ?>名</span>
+          <a class="btn" href="<?= h($transportMapUrl) ?>">送迎マップへ</a>
+        </div>
+      </div>
+      <?php if ($transportNeededRows !== []): ?>
+        <div class="transportNeededList">
+          <?php foreach ($transportNeededRows as $cast): ?>
+            <a class="transportNeededItem" href="<?= h($transportMapUrl) ?>">
+              <div class="transportNeededItem__main">
+                <span class="transportNeededItem__tag">【<?= h((string)($cast['shop_tag'] !== '' ? $cast['shop_tag'] : (string)$cast['user_id'])) ?>】</span>
+                <b class="transportNeededItem__name"><?= h((string)$cast['display_name']) ?></b>
+                <span class="transportNeededItem__time"><?= h((string)($cast['start_time'] !== '' ? substr((string)$cast['start_time'], 0, 5) : '--:--')) ?></span>
+              </div>
+              <div class="transportNeededItem__sub">
+                <span class="transportNeededItem__pill"><?= h((string)$cast['pickup_target_label']) ?></span>
+                <span class="transportNeededItem__addr"><?= h((string)($cast['pickup_address'] !== '' ? $cast['pickup_address'] : '住所未登録')) ?></span>
+                <?php if (!empty($cast['pickup_note'])): ?>
+                  <span class="transportNeededItem__note">メモ: <?= h((string)$cast['pickup_note']) ?></span>
+                <?php endif; ?>
+              </div>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      <?php else: ?>
+        <div class="muted">この営業日に送迎が必要なキャストはいません。</div>
+      <?php endif; ?>
     </div>
 
     <?php if ($recentPlanChanges !== []): ?>
@@ -1280,6 +1352,11 @@ render_header('本日の勤務予定', [
   border-color:rgba(239,68,68,.22);
   color:#991b1b;
 }
+.boardSummary__item.is-transport{
+  background:rgba(59,130,246,.10);
+  border-color:rgba(59,130,246,.22);
+  color:#1d4ed8;
+}
 .boardToolbar__actions{
   display:flex;
   align-items:center;
@@ -1312,6 +1389,11 @@ render_header('本日の勤務予定', [
 .boardDensityBtn[aria-pressed="true"]{
   background:rgba(59,130,246,.12);
   border-color:rgba(59,130,246,.30);
+  color:#1d4ed8;
+}
+.boardMapBtn{
+  background:rgba(59,130,246,.08);
+  border-color:rgba(59,130,246,.20);
   color:#1d4ed8;
 }
 .boardFilters{
@@ -1363,6 +1445,107 @@ render_header('本日の勤務予定', [
 .subtleCard{
   margin-top:14px;
   background:linear-gradient(180deg, rgba(255,255,255,.94), rgba(248,250,252,.90));
+}
+.transportNeededCard{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.transportNeededCard__head{
+  align-items:flex-start;
+}
+.transportNeededCard__meta{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.transportNeededBadge{
+  display:inline-flex;
+  align-items:center;
+  min-height:32px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(15,23,42,.10);
+  background:#fff;
+  color:#334155;
+  font-size:12px;
+  font-weight:900;
+}
+.transportNeededList{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+  gap:10px;
+}
+.transportNeededItem{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:12px;
+  border-radius:14px;
+  border:1px solid rgba(15,23,42,.08);
+  background:rgba(255,255,255,.82);
+  text-decoration:none;
+  color:#0f172a;
+  box-shadow:0 10px 24px rgba(15,23,42,.04);
+}
+.transportNeededItem:hover{
+  border-color:rgba(59,130,246,.22);
+  box-shadow:0 12px 28px rgba(59,130,246,.10);
+}
+.transportNeededItem__main{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.transportNeededItem__tag{
+  color:#64748b;
+  font-size:12px;
+  font-weight:800;
+}
+.transportNeededItem__name{
+  font-size:15px;
+}
+.transportNeededItem__time{
+  margin-left:auto;
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  padding:4px 10px;
+  border-radius:999px;
+  background:rgba(15,23,42,.06);
+  color:#0f172a;
+  font-size:12px;
+  font-weight:900;
+}
+.transportNeededItem__sub{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.transportNeededItem__pill{
+  width:max-content;
+  max-width:100%;
+  display:inline-flex;
+  align-items:center;
+  min-height:26px;
+  padding:4px 10px;
+  border-radius:999px;
+  background:rgba(59,130,246,.10);
+  color:#1d4ed8;
+  font-size:11px;
+  font-weight:900;
+}
+.transportNeededItem__addr{
+  color:#0f172a;
+  font-size:13px;
+  line-height:1.45;
+}
+.transportNeededItem__note{
+  color:#64748b;
+  font-size:12px;
+  line-height:1.4;
 }
 .recentPlanCard__head{
   margin-bottom:10px;
@@ -1667,6 +1850,18 @@ render_header('本日の勤務予定', [
 @media (max-width: 820px){
   .mobileSimpleGrid{
     grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+  .transportNeededCard__head{
+    flex-direction:column;
+  }
+  .transportNeededCard__meta{
+    width:100%;
+  }
+  .transportNeededItem{
+    padding:10px;
+  }
+  .transportNeededItem__time{
+    margin-left:0;
   }
 }
 .mobileSimpleCard{
