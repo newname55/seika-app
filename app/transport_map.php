@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/service_transport.php';
+require_once __DIR__ . '/transport_vehicle_location.php';
 
 function transport_map_status_definitions(): array {
   return [
@@ -613,6 +614,7 @@ function transport_map_fetch_data(PDO $pdo, array $filters): array {
   $base = transport_map_fetch_base_context($pdo, (int)$filters['store_id']);
   $rows = transport_map_fetch_rows($pdo, $filters);
   $requiredCandidates = transport_map_fetch_required_candidates($pdo, (int)$filters['store_id'], (string)$filters['business_date']);
+  $vehicles = transport_vehicle_fetch_latest($pdo, (int)$filters['store_id']);
   $canViewFullAddress = transport_map_can_view_full_address();
 
   foreach ($rows as $row) {
@@ -739,5 +741,6 @@ function transport_map_fetch_data(PDO $pdo, array $filters): array {
     'base' => $base,
     'summary' => $summary,
     'items' => $items,
+    'vehicles' => $vehicles,
   ];
 }

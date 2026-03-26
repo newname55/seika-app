@@ -67,6 +67,7 @@ if ($selectedStoreId > 0) {
   if ($routeReturnUrl !== '') {
     $rightHtml .= '<a class="btn btn-primary" href="' . h($routeReturnUrl) . '">ルートへ戻る</a> ';
   }
+  $rightHtml .= '<a class="btn" href="/wbss/public/transport/driver_location.php?store_id=' . (int)$selectedStoreId . '">現在地送信</a> ';
   $rightHtml .= '<a class="btn" href="/wbss/public/store_transport_bases.php?store_id=' . (int)$selectedStoreId . '">拠点設定</a> ';
   $rightHtml .= '<a class="btn" href="/wbss/public/transport_routes.php?store_id=' . (int)$selectedStoreId . '&business_date=' . urlencode($businessDate) . '">送迎ルート</a>';
 }
@@ -78,7 +79,7 @@ render_header('送迎マップ', [
   'right_html' => $rightHtml,
 ]);
 ?>
-<link rel="stylesheet" href="/wbss/public/assets/css/transport-map.css?v=20260327g">
+<link rel="stylesheet" href="/wbss/public/assets/css/transport-map.css?v=20260327h">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -294,5 +295,5 @@ window.WBSS_TRANSPORT_MAP_CONFIG = <?= json_encode([
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="/wbss/public/assets/js/transport-map.js?v=20260327g"></script>
+<script src="/wbss/public/assets/js/transport-map.js?v=20260327i"></script>
 <?php render_page_end(); ?>
