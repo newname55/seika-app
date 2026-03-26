@@ -5,6 +5,7 @@
   const pageConfig = configRoot.page || {};
   const driversByStore = configRoot.driversByStore || {};
   const apiUrl = pageConfig.apiUrl || '/wbss/public/api/transport_map.php';
+  const pagePath = pageConfig.pagePath || window.location.pathname;
   const statusOptions = pageConfig.statusOptions || {};
   const focusCastId = Number(pageConfig.focusCastId || 0);
   const autoRefreshMs = 60000;
@@ -18,7 +19,7 @@
   const driverToggleEl = document.querySelector('[data-driver-toggles]');
   const vehicleUpdatedEl = document.querySelector('[data-vehicle-updated]');
 
-  if (!form || !listEl) {
+  if (!form) {
     return;
   }
 
@@ -140,6 +141,9 @@
   }
 
   function renderList(items) {
+    if (!listEl) {
+      return;
+    }
     markerById = markerById || new Map();
     rowById = new Map();
     itemById = new Map();
@@ -593,62 +597,64 @@
     }
   });
 
-  listEl.addEventListener('click', function (event) {
-    const saveTrigger = event.target && event.target.closest ? event.target.closest('[data-save-assignment]') : null;
-    if (saveTrigger) {
-      const itemId = Number(saveTrigger.getAttribute('data-save-assignment') || '0');
-      if (itemId > 0) {
-        saveAssignment(itemId, saveTrigger);
+  if (listEl) {
+    listEl.addEventListener('click', function (event) {
+      const saveTrigger = event.target && event.target.closest ? event.target.closest('[data-save-assignment]') : null;
+      if (saveTrigger) {
+        const itemId = Number(saveTrigger.getAttribute('data-save-assignment') || '0');
+        if (itemId > 0) {
+          saveAssignment(itemId, saveTrigger);
+        }
+        return;
       }
-      return;
-    }
 
-    const focusTrigger = event.target && event.target.closest ? event.target.closest('[data-focus-row]') : null;
-    if (focusTrigger) {
-      const itemId = Number(focusTrigger.getAttribute('data-focus-row') || '0');
+      const focusTrigger = event.target && event.target.closest ? event.target.closest('[data-focus-row]') : null;
+      if (focusTrigger) {
+        const itemId = Number(focusTrigger.getAttribute('data-focus-row') || '0');
+        if (itemId > 0) {
+          focusItem(itemId, true);
+        }
+        return;
+      }
+
+      const interactive = event.target && event.target.closest
+        ? event.target.closest('select, input, button, a, label')
+        : null;
+      if (interactive) {
+        return;
+      }
+
+      const row = event.target && event.target.closest ? event.target.closest('[data-row-id]') : null;
+      if (!row) {
+        return;
+      }
+      const itemId = Number(row.getAttribute('data-row-id') || '0');
       if (itemId > 0) {
         focusItem(itemId, true);
       }
-      return;
-    }
+    });
 
-    const interactive = event.target && event.target.closest
-      ? event.target.closest('select, input, button, a, label')
-      : null;
-    if (interactive) {
-      return;
-    }
-
-    const row = event.target && event.target.closest ? event.target.closest('[data-row-id]') : null;
-    if (!row) {
-      return;
-    }
-    const itemId = Number(row.getAttribute('data-row-id') || '0');
-    if (itemId > 0) {
-      focusItem(itemId, true);
-    }
-  });
-
-  listEl.addEventListener('change', function (event) {
-    const driverField = event.target && event.target.matches ? (event.target.matches('[data-assign-driver]') ? event.target : null) : null;
-    if (!driverField) {
-      return;
-    }
-    const rowEl = driverField.closest('[data-row-id]');
-    if (!rowEl) {
-      return;
-    }
-    const statusField = rowEl.querySelector('[data-assign-status]');
-    if (!statusField) {
-      return;
-    }
-    if (String(driverField.value || '0') === '0' && ['assigned'].indexOf(String(statusField.value || '')) >= 0) {
-      statusField.value = 'pending';
-    }
-    if (String(driverField.value || '0') !== '0' && String(statusField.value || '') === 'pending') {
-      statusField.value = 'assigned';
-    }
-  });
+    listEl.addEventListener('change', function (event) {
+      const driverField = event.target && event.target.matches ? (event.target.matches('[data-assign-driver]') ? event.target : null) : null;
+      if (!driverField) {
+        return;
+      }
+      const rowEl = driverField.closest('[data-row-id]');
+      if (!rowEl) {
+        return;
+      }
+      const statusField = rowEl.querySelector('[data-assign-status]');
+      if (!statusField) {
+        return;
+      }
+      if (String(driverField.value || '0') === '0' && ['assigned'].indexOf(String(statusField.value || '')) >= 0) {
+        statusField.value = 'pending';
+      }
+      if (String(driverField.value || '0') !== '0' && String(statusField.value || '') === 'pending') {
+        statusField.value = 'assigned';
+      }
+    });
+  }
 
   document.addEventListener('click', function (event) {
     const toggle = event.target && event.target.closest ? event.target.closest('[data-driver-toggle]') : null;
@@ -677,7 +683,9 @@
     if (reloadButton) {
       reloadButton.disabled = true;
     }
-    listEl.innerHTML = '<div class="transportMapEmpty">送迎データを読み込んでいます…</div>';
+    if (listEl) {
+      listEl.innerHTML = '<div class="transportMapEmpty">送迎データを読み込んでいます…</div>';
+    }
     if (mapBadgeEl) {
       mapBadgeEl.textContent = '読込中';
     }
@@ -707,15 +715,20 @@
       }
 
       if (pushHistory) {
-        const nextUrl = '/wbss/public/transport/map.php?' + params.toString();
+        const nextUrl = pagePath + '?' + params.toString();
         window.history.replaceState({}, '', nextUrl);
       }
     } catch (error) {
-      listEl.innerHTML = '<div class="transportMapEmpty transportMapEmptyError">' + escapeHtml(error.message || '送迎データの取得に失敗しました') + '</div>';
+      if (listEl) {
+        listEl.innerHTML = '<div class="transportMapEmpty transportMapEmptyError">' + escapeHtml(error.message || '送迎データの取得に失敗しました') + '</div>';
+      }
       renderChipSummary(summaryRefs.direction, {}, '取得失敗');
       renderChipSummary(summaryRefs.driver, {}, '取得失敗');
       if (mapBadgeEl) {
         mapBadgeEl.textContent = '取得失敗';
+      }
+      if (footNoteEl) {
+        footNoteEl.textContent = error.message || '送迎データの取得に失敗しました';
       }
     } finally {
       if (reloadButton) {
