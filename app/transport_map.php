@@ -230,6 +230,7 @@ function transport_map_fetch_required_candidates(PDO $pdo, int $storeId, string 
       'cast_id' => $castId,
       'pickup_name' => (string)($cast['display_name'] ?? ''),
       'cast_name' => (string)($cast['display_name'] ?? ''),
+      'shop_tag' => (string)($cast['shop_tag'] ?? ''),
       'pickup_address' => (string)($cast['pickup_address'] ?? ''),
       'pickup_lat' => ($cast['pickup_lat'] ?? null) !== null ? (float)$cast['pickup_lat'] : null,
       'pickup_lng' => ($cast['pickup_lng'] ?? null) !== null ? (float)$cast['pickup_lng'] : null,
@@ -578,10 +579,14 @@ function transport_map_fetch_rows(PDO $pdo, array $filters): array {
       ta.created_at,
       ta.updated_at,
       COALESCE(NULLIF(TRIM(cu.display_name), ''), NULLIF(TRIM(cu.login_id), ''), CONCAT('cast#', ta.cast_id)) AS cast_name,
+      COALESCE(NULLIF(TRIM(cp.shop_tag), ''), '') AS shop_tag,
       COALESCE(NULLIF(TRIM(du.display_name), ''), NULLIF(TRIM(du.login_id), ''), '') AS driver_name
     FROM transport_assignments ta
     LEFT JOIN users cu
       ON cu.id = ta.cast_id
+    LEFT JOIN cast_profiles cp
+      ON cp.user_id = ta.cast_id
+     AND (cp.store_id = ta.store_id OR cp.store_id IS NULL)
     LEFT JOIN users du
       ON du.id = ta.driver_user_id
     WHERE " . implode(' AND ', $where) . "
@@ -660,6 +665,7 @@ function transport_map_fetch_data(PDO $pdo, array $filters): array {
       'id' => (int)($row['id'] ?? 0),
       'cast_id' => (int)($row['cast_id'] ?? 0),
       'cast_name' => (string)($row['cast_name'] ?? ''),
+      'shop_tag' => (string)($row['shop_tag'] ?? ''),
       'display_name' => trim((string)($row['pickup_name'] ?? '')) !== '' ? (string)$row['pickup_name'] : (string)($row['cast_name'] ?? ''),
       'store_id' => (int)($row['store_id'] ?? 0),
       'business_date' => (string)($row['business_date'] ?? ''),

@@ -17,10 +17,18 @@ $storeName = '';
 $businessDate = '';
 $driversByStore = [];
 $initialFilters = [];
+$focusCastId = 0;
+$returnTo = '';
+$returnStoreId = 0;
+$returnCastId = 0;
 
 try {
   $stores = transport_allowed_stores($pdo);
   $initialFilters = transport_map_filters_from_request($pdo, $_GET);
+  $focusCastId = max(0, (int)($_GET['cast_id'] ?? 0));
+  $returnTo = trim((string)($_GET['return_to'] ?? ''));
+  $returnStoreId = max(0, (int)($_GET['return_store_id'] ?? 0));
+  $returnCastId = max(0, (int)($_GET['return_cast_id'] ?? 0));
   $selectedStoreId = (int)$initialFilters['store_id'];
   $storeRow = transport_map_fetch_store_row($pdo, $selectedStoreId);
   $storeName = (string)($storeRow['name'] ?? '');
@@ -43,17 +51,29 @@ $pageConfig = [
   'statusOptions' => transport_map_status_definitions(),
   'directionOptions' => transport_map_direction_options(),
   'csrfToken' => csrf_token(),
+  'focusCastId' => $focusCastId,
 ];
+
+$routeReturnUrl = '';
+if ($returnTo === 'routes' && $selectedStoreId > 0) {
+  $routeReturnUrl = '/wbss/public/transport_routes.php?store_id=' . (int)$selectedStoreId
+    . '&business_date=' . urlencode($businessDate)
+    . ($returnStoreId > 0 ? '&focus_store_id=' . $returnStoreId : '')
+    . ($returnCastId > 0 ? '&focus_cast_id=' . $returnCastId : '');
+}
 
 $rightHtml = '';
 if ($selectedStoreId > 0) {
+  if ($routeReturnUrl !== '') {
+    $rightHtml .= '<a class="btn btn-primary" href="' . h($routeReturnUrl) . '">ルートへ戻る</a> ';
+  }
   $rightHtml .= '<a class="btn" href="/wbss/public/store_transport_bases.php?store_id=' . (int)$selectedStoreId . '">拠点設定</a> ';
   $rightHtml .= '<a class="btn" href="/wbss/public/transport_routes.php?store_id=' . (int)$selectedStoreId . '&business_date=' . urlencode($businessDate) . '">送迎ルート</a>';
 }
 
 render_page_start('送迎マップ');
 render_header('送迎マップ', [
-  'back_href' => $selectedStoreId > 0 ? '/wbss/public/transport_routes.php?store_id=' . (int)$selectedStoreId : '/wbss/public/dashboard.php',
+  'back_href' => $routeReturnUrl !== '' ? $routeReturnUrl : ($selectedStoreId > 0 ? '/wbss/public/transport_routes.php?store_id=' . (int)$selectedStoreId : '/wbss/public/dashboard.php'),
   'back_label' => '← 送迎導線へ',
   'right_html' => $rightHtml,
 ]);

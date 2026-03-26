@@ -41,6 +41,8 @@ $onlyMissingAddress = ((string)($_GET['only_missing_address'] ?? '0') === '1');
 $onlyMissingCoords = ((string)($_GET['only_missing_coords'] ?? '0') === '1');
 $vehicleCount = transport_normalize_positive_int($_GET['vehicle_count'] ?? $_POST['vehicle_count'] ?? 1, 1, 1, 20);
 $maxPassengers = transport_normalize_positive_int($_GET['max_passengers'] ?? $_POST['max_passengers'] ?? 6, 6, 1, 6);
+$focusStoreId = max(0, (int)($_GET['focus_store_id'] ?? 0));
+$focusCastId = max(0, (int)($_GET['focus_cast_id'] ?? 0));
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && (string)($_POST['action'] ?? '') === 'generate_route') {
   try {
@@ -279,7 +281,11 @@ render_header('送迎ルート', [
           }
           $unavailableReasons = (array)($previewSet['unavailable_reasons'] ?? []);
         ?>
-        <section class="card routeGroupCard transportPanel">
+        <section
+          class="card routeGroupCard transportPanel<?= ($focusStoreId > 0 && $focusStoreId === $storeId) ? ' is-focused-store' : '' ?>"
+          id="route-store-<?= $storeId ?>"
+          data-route-store-id="<?= $storeId ?>"
+        >
           <div class="routeGroupHead">
             <div>
               <div class="cardTitle"><?= h((string)($group['store_name'] ?? '')) ?> (#<?= $storeId ?>)</div>
@@ -293,7 +299,7 @@ render_header('送迎ルート', [
               <?php endif; ?>
             </div>
             <div class="routeGroupActions">
-              <a class="btn" href="/wbss/public/transport/map.php?store_id=<?= $storeId ?>&business_date=<?= urlencode($businessDate) ?>">送迎マップを見る</a>
+              <a class="btn" href="/wbss/public/transport/map.php?store_id=<?= $storeId ?>&business_date=<?= urlencode($businessDate) ?>&return_to=routes&return_store_id=<?= $storeId ?>">送迎マップを見る</a>
               <form method="post">
                 <input type="hidden" name="csrf_token" value="<?= h(csrf_token()) ?>">
                 <input type="hidden" name="action" value="generate_route">
@@ -331,10 +337,21 @@ render_header('送迎ルート', [
               <div class="routePaneTitle">候補キャスト</div>
               <div class="routeCastList">
                 <?php foreach (($group['casts_filtered'] ?? []) as $cast): ?>
-                  <div class="routeCastItem">
-                    <div>
-                      <b><?= h((string)$cast['display_name']) ?></b>
-                      <span class="muted"><?= h((string)($cast['shop_tag'] !== '' ? ' / ' . $cast['shop_tag'] : '')) ?></span>
+                  <?php
+                    $castUserId = (int)($cast['user_id'] ?? 0);
+                    $castMapUrl = '/wbss/public/transport/map.php?store_id=' . $storeId
+                      . '&business_date=' . urlencode($businessDate)
+                      . '&cast_id=' . $castUserId
+                      . '&return_to=routes'
+                      . '&return_store_id=' . $storeId
+                      . '&return_cast_id=' . $castUserId;
+                  ?>
+                  <div class="routeCastItem<?= ($focusCastId > 0 && $focusCastId === $castUserId) ? ' is-focused-cast' : '' ?>" data-route-cast-id="<?= $castUserId ?>">
+                    <div class="routeCastMain">
+                      <div>
+                        <b><?= h((string)(($cast['shop_tag'] !== '' ? '【' . $cast['shop_tag'] . '】 ' : '') . (string)$cast['display_name'])) ?></b>
+                      </div>
+                      <a class="routeCastMapLink" href="<?= h($castMapUrl) ?>">地図で確認</a>
                     </div>
                     <div class="routeCastFlags">
                       <span class="badge mode <?= (($cast['pickup_target'] ?? 'primary') === 'secondary') ? 'secondary' : ((($cast['pickup_target'] ?? 'primary') === 'self') ? 'self' : 'primary') ?>"><?= h((string)($cast['pickup_target_label'] ?? '基本')) ?></span>
@@ -367,10 +384,24 @@ render_header('送迎ルート', [
                       </div>
                       <ol class="routePreviewList">
                         <?php foreach ((array)($preview['stops'] ?? []) as $stop): ?>
+                          <?php
+                            $stopCastId = (int)($stop['cast_user_id'] ?? 0);
+                            $stopMapUrl = '/wbss/public/transport/map.php?store_id=' . $storeId
+                              . '&business_date=' . urlencode($businessDate)
+                              . '&cast_id=' . $stopCastId
+                              . '&return_to=routes'
+                              . '&return_store_id=' . $storeId
+                              . '&return_cast_id=' . $stopCastId;
+                          ?>
                           <li>
                             <div class="routeStopMain">
-                              <b><?= h((string)$stop['display_name']) ?></b>
-                              <span class="muted"><?= h((string)($stop['planned_at'] ?? '')) ?></span>
+                              <div class="routeStopMainText">
+                                <b><?= h((string)(((string)($stop['shop_tag'] ?? '') !== '' ? '【' . (string)$stop['shop_tag'] . '】 ' : '') . (string)$stop['display_name'])) ?></b>
+                                <span class="muted"><?= h((string)($stop['planned_at'] ?? '')) ?></span>
+                              </div>
+                              <?php if ($stopCastId > 0): ?>
+                                <a class="routeCastMapLink" href="<?= h($stopMapUrl) ?>">地図で確認</a>
+                              <?php endif; ?>
                             </div>
                             <div class="muted">
                               <?= h((string)($stop['pickup_address'] ?? '')) ?>
@@ -480,6 +511,10 @@ render_header('送迎ルート', [
 }
 .transportRoutesPage .transportRouteGroupList{ display:grid; gap:14px; }
 .routeGroupCard{ display:grid; gap:14px; padding:18px; }
+.routeGroupCard.is-focused-store{
+  border-color:rgba(59,130,246,.28);
+  box-shadow:0 0 0 2px rgba(59,130,246,.12), 0 12px 30px rgba(15,18,34,.08);
+}
 .routeGroupHead{ display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
 .routeGroupActions{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .routeSummaryRow{ display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px; }
@@ -497,6 +532,27 @@ render_header('送迎ルート', [
 .vehiclePreviewCard{ border:1px solid rgba(15,23,42,.08); border-radius:16px; padding:12px; background:rgba(255,255,255,.82); display:grid; gap:10px; }
 .vehiclePreviewHead{ display:flex; justify-content:space-between; gap:10px; align-items:center; }
 .routeCastItem{ border:1px solid rgba(15,23,42,.08); border-radius:14px; padding:12px; display:grid; gap:6px; background:rgba(255,255,255,.82); }
+.routeCastItem.is-focused-cast{
+  border-color:rgba(59,130,246,.28);
+  box-shadow:0 0 0 2px rgba(59,130,246,.10) inset;
+  background:linear-gradient(180deg, rgba(239,246,255,.95), rgba(255,255,255,.92));
+}
+.routeCastMain{ display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+.routeCastMapLink{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:30px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(59,130,246,.18);
+  background:rgba(59,130,246,.08);
+  color:#1d4ed8;
+  font-size:11px;
+  font-weight:800;
+  text-decoration:none;
+  white-space:nowrap;
+}
 .badge.mode.primary{ border-color:rgba(96,165,250,.35); background:rgba(96,165,250,.12); }
 .badge.mode.secondary{ border-color:rgba(244,114,182,.35); background:rgba(244,114,182,.12); }
 .badge.mode.self{ border-color:rgba(34,197,94,.35); background:rgba(34,197,94,.12); }
@@ -504,6 +560,7 @@ render_header('送迎ルート', [
 .routeCastFlags{ display:flex; gap:8px; flex-wrap:wrap; }
 .routePreviewList{ margin:0; padding-left:20px; display:grid; gap:10px; }
 .routeStopMain{ display:flex; justify-content:space-between; gap:12px; }
+.routeStopMainText{ display:grid; gap:2px; }
 .savedRouteLink{ display:block; padding:12px 14px; border:1px solid rgba(15,23,42,.08); border-radius:14px; text-decoration:none; color:inherit; background:rgba(255,255,255,.82); }
 @media (max-width: 900px){
   .transportRouteSummaryGrid,
@@ -523,7 +580,27 @@ render_header('送迎ルート', [
 @media (max-width: 640px){
   .transportRouteQuickCard,
   .routeGroupHead,
-  .routeStopMain{ flex-direction:column; align-items:stretch; }
+  .routeStopMain,
+  .routeCastMain{ flex-direction:column; align-items:stretch; }
 }
 </style>
+<script>
+(function () {
+  const focusStoreId = <?= (int)$focusStoreId ?>;
+  const focusCastId = <?= (int)$focusCastId ?>;
+  if (!focusStoreId && !focusCastId) {
+    return;
+  }
+
+  window.addEventListener('load', function () {
+    const storeEl = focusStoreId ? document.querySelector('[data-route-store-id="' + focusStoreId + '"]') : null;
+    const castEl = focusCastId ? document.querySelector('[data-route-cast-id="' + focusCastId + '"]') : null;
+    const target = castEl || storeEl;
+    if (!target) {
+      return;
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+})();
+</script>
 <?php render_page_end(); ?>
