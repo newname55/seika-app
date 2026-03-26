@@ -253,6 +253,14 @@ $commonTodayItems = [
     'tone' => 'primary',
   ],
   [
+    'icon' => '🗺️',
+    'title' => '送迎マップを見る',
+    'desc' => '今日の送迎対象、未割当、方面の偏りを1画面で確認します。',
+    'href' => dashboard_link('/wbss/public/transport/map.php', $storeId),
+    'tag'  => '送迎確認',
+    'tone' => 'primary',
+  ],
+  [
     'icon' => '🍺',
     'title' => '注文対応を見る',
     'desc' => '注文状況を確認して現場対応します。',
@@ -553,6 +561,14 @@ $managerSections = [
           : '自分が見られる店舗の出勤予定をタブで確認します。',
         'href' => dashboard_link('/wbss/public/all_store_shift_plans.php', $storeId),
         'tag'  => $canViewAllStoreShift ? '全店予定' : '予定ビュー',
+        'tone' => 'primary',
+      ],
+      [
+        'icon' => '🗺️',
+        'title' => '送迎マップを見る',
+        'desc' => '今日の送迎対象、未割当、方面の偏りを地図で確認します。',
+        'href' => dashboard_link('/wbss/public/transport/map.php', $storeId),
+        'tag'  => '送迎確認',
         'tone' => 'primary',
       ],
       [
