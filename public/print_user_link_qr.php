@@ -3,9 +3,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../app/auth.php';
 require_once __DIR__ . '/../app/db.php';
+require_once __DIR__ . '/../app/store_access.php';
 
 require_login();
-require_role(['super_user', 'admin']);
+require_role(['super_user', 'admin', 'manager']);
 
 if (!function_exists('h')) {
   function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
@@ -18,22 +19,53 @@ if ($userId <= 0) {
 }
 
 $pdo = db();
-$st = $pdo->prepare("
-  SELECT
-    u.id,
-    u.login_id,
-    u.display_name,
-    ui.provider_user_id AS line_user_id
-  FROM users u
-  LEFT JOIN user_identities ui
-    ON ui.user_id = u.id
-   AND ui.provider = 'line'
-   AND ui.is_active = 1
-  WHERE u.id = ?
-  LIMIT 1
-");
-$st->execute([$userId]);
-$user = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+$storeId = (int)($_GET['store_id'] ?? 0);
+$shopTag = '';
+
+if ($storeId > 0) {
+  $storeId = store_access_resolve_manageable_store_id($pdo, $storeId);
+  $st = $pdo->prepare("
+    SELECT
+      u.id,
+      u.login_id,
+      u.display_name,
+      ui.provider_user_id AS line_user_id,
+      COALESCE(NULLIF(TRIM(cp.shop_tag), ''), '') AS shop_tag
+    FROM users u
+    JOIN store_users su
+      ON su.user_id = u.id
+     AND su.store_id = ?
+    LEFT JOIN cast_profiles cp
+      ON cp.user_id = u.id
+     AND (cp.store_id = su.store_id OR cp.store_id IS NULL)
+    LEFT JOIN user_identities ui
+      ON ui.user_id = u.id
+     AND ui.provider = 'line'
+     AND ui.is_active = 1
+    WHERE u.id = ?
+    LIMIT 1
+  ");
+  $st->execute([$storeId, $userId]);
+  $user = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+  $shopTag = trim((string)($user['shop_tag'] ?? ''));
+} else {
+  $st = $pdo->prepare("
+    SELECT
+      u.id,
+      u.login_id,
+      u.display_name,
+      ui.provider_user_id AS line_user_id
+    FROM users u
+    LEFT JOIN user_identities ui
+      ON ui.user_id = u.id
+     AND ui.provider = 'line'
+     AND ui.is_active = 1
+    WHERE u.id = ?
+    LIMIT 1
+  ");
+  $st->execute([$userId]);
+  $user = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+}
 
 if (!$user) {
   http_response_code(404);
@@ -71,6 +103,10 @@ $userLabel = trim((string)($user['display_name'] ?? ''));
 if ($userLabel === '') {
   $userLabel = (string)($user['login_id'] ?? '');
 }
+
+$userHeading = $shopTag !== ''
+  ? '店番 ' . $shopTag . ' ' . $userLabel
+  : '#' . (int)$user['id'] . ' ' . $userLabel;
 ?>
 <!doctype html>
 <html lang="ja">
@@ -278,7 +314,7 @@ body{
     <div class="content">
       <h1 class="title">WBSS LINE 連携</h1>
       <div class="lead">QR コードをスマホで読み取ってください</div>
-      <div class="user">#<?= (int)$user['id'] ?> <?= h($userLabel) ?></div>
+      <div class="user"><?= h($userHeading) ?></div>
       <div class="main">
         <div class="qr-box">
           <img src="<?= h(qr_url($linkUrl)) ?>" alt="LINE連携QR">
