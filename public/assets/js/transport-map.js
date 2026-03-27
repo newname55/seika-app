@@ -27,6 +27,7 @@
   const suggestStatusEl = document.getElementById('transportMapSuggestStatus');
   const suggestRoutePanelEl = document.querySelector('[data-suggest-route-summary]');
   const suggestRouteListEl = document.querySelector('[data-suggest-route-list]');
+  const autoRefreshToggleButton = document.getElementById('transportMapAutoRefreshToggle');
 
   if (!form) {
     return;
@@ -58,6 +59,7 @@
   let activeId = null;
   let lastFetchSeq = 0;
   let autoRefreshTimer = null;
+  let autoRefreshEnabled = true;
   let hiddenDriverIds = new Set();
   let suggestionById = new Map();
 
@@ -530,6 +532,7 @@
     if (!suggestionLayer || typeof L === 'undefined') {
       return;
     }
+    const showGroupTags = pagePath.indexOf('/transport/map_screen.php') === -1;
     const groups = new Map();
     (items || []).forEach(function (item) {
       const suggestion = suggestionById.get(Number(item.id || 0));
@@ -571,6 +574,9 @@
         dashArray: '6 6',
         interactive: false
       }).addTo(suggestionLayer);
+      if (!showGroupTags) {
+        return;
+      }
       L.marker([centerLat, centerLng], {
         icon: L.divIcon({
           className: 'transportMapSuggestGroupWrap',
@@ -1154,9 +1160,36 @@
     if (autoRefreshTimer !== null) {
       window.clearTimeout(autoRefreshTimer);
     }
+    if (!autoRefreshEnabled) {
+      autoRefreshTimer = null;
+      return;
+    }
     autoRefreshTimer = window.setTimeout(function () {
       fetchData(false);
     }, autoRefreshMs);
+  }
+
+  function updateAutoRefreshToggleButton() {
+    if (!autoRefreshToggleButton) {
+      return;
+    }
+    autoRefreshToggleButton.textContent = autoRefreshEnabled ? '自動更新ON' : '自動更新OFF';
+    autoRefreshToggleButton.classList.toggle('is-muted', !autoRefreshEnabled);
+  }
+
+  function toggleAutoRefresh() {
+    autoRefreshEnabled = !autoRefreshEnabled;
+    updateAutoRefreshToggleButton();
+    if (autoRefreshEnabled) {
+      setSuggestStatus('自動更新を再開しました', false);
+      scheduleAutoRefresh();
+    } else {
+      if (autoRefreshTimer !== null) {
+        window.clearTimeout(autoRefreshTimer);
+        autoRefreshTimer = null;
+      }
+      setSuggestStatus('自動更新を停止しました', false);
+    }
   }
 
   async function saveAssignment(itemId, triggerEl) {
@@ -1511,10 +1544,15 @@
   }
 
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') {
+    if (document.visibilityState === 'visible' && autoRefreshEnabled) {
       fetchData(false);
     }
   });
+
+  if (autoRefreshToggleButton) {
+    autoRefreshToggleButton.addEventListener('click', toggleAutoRefresh);
+    updateAutoRefreshToggleButton();
+  }
 
   updateDriverOptions();
   fetchData(false);

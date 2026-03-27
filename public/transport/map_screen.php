@@ -80,6 +80,7 @@ render_page_start('送迎マップ TV');
       </div>
       <div class="transportMapScreenTopBarActions">
         <button type="button" class="miniBtn" id="transportMapScreenMenuToggle" aria-expanded="false" aria-controls="transportMapScreenDrawer">☰ 表示設定</button>
+        <button type="button" class="miniBtn" id="transportMapAutoRefreshToggle">自動更新ON</button>
         <a class="miniBtn" href="<?= h($selectedStoreId > 0 ? '/wbss/public/transport/map.php?store_id=' . (int)$selectedStoreId . '&business_date=' . urlencode($businessDate) : ($canViewAllStores ? '/wbss/public/transport/map.php?store_id=all&business_date=' . urlencode($businessDate) : '/wbss/public/dashboard.php')) ?>">通常表示</a>
         <?php if ($selectedStoreId > 0): ?>
           <a class="miniBtn" href="/wbss/public/transport/driver_location.php?store_id=<?= (int)$selectedStoreId ?>">現在地送信</a>
