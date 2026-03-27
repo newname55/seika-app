@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../app/auth.php';
 require_once __DIR__ . '/../app/db.php';
+require_once __DIR__ . '/../app/bootstrap.php';
 require_once __DIR__ . '/../app/layout.php';
+require_once __DIR__ . '/../app/service_transport.php';
 
 /**
  * Shift planning weekly screen.
@@ -225,6 +227,7 @@ $st = $pdo->prepare("
   SELECT
     id,
     name,
+    business_day_start,
     weekly_holiday_dow,
     open_time,
     close_time_weekday,
@@ -273,6 +276,9 @@ if ($isSuper) {
 /* =========================
   cast list
 ========================= */
+$transportPickupTargetSelect = (function_exists('transport_profile_has_pickup_target_field') && transport_profile_has_pickup_target_field($pdo))
+  ? "ctp.pickup_target"
+  : "'primary' AS pickup_target";
 $st = $pdo->prepare("
   SELECT
     u.id,
@@ -292,6 +298,10 @@ $st = $pdo->prepare("
       'part'
     ) AS employment_type,
 
+    ctp.pickup_enabled,
+    {$transportPickupTargetSelect},
+    CASE WHEN ctp.user_id IS NULL THEN 0 ELSE 1 END AS has_transport_profile,
+
     -- セルのデフォルト開始（あれば優先）
     cp.default_start_time
 
@@ -303,6 +313,9 @@ $st = $pdo->prepare("
     ON su.store_id = ur.store_id AND su.user_id = u.id
 
   LEFT JOIN cast_profiles cp ON cp.user_id = u.id
+
+  LEFT JOIN cast_transport_profiles ctp
+    ON ctp.store_id = ur.store_id AND ctp.user_id = u.id
 
   WHERE ur.store_id = ?
     -- 退店キャストは除外（store_usersが無い古い人は通す）
@@ -377,6 +390,45 @@ if ($dates) {
   }
 }
 
+$castRowMap = [];
+foreach ($castRows as $castRow) {
+  $castRowMap[(int)$castRow['id']] = $castRow;
+}
+
+$currentBusinessDate = function_exists('business_date_for_store')
+  ? business_date_for_store($storeRow, null)
+  : ymd(jst_now());
+$isQuickBusinessDateOpen = is_store_open_for_week_plan($pdo, $storeRow, $currentBusinessDate);
+$quickDateLabel = substr($currentBusinessDate, 5) . '（' . jp_dow_label($currentBusinessDate) . '）';
+$viewMode = ((string)($_GET['mode'] ?? '') === 'quick') ? 'quick' : 'week';
+
+if (!isset($plans[(int)($castRows[0]['id'] ?? 0)][$currentBusinessDate]) && $castRows !== []) {
+  $st = $pdo->prepare("
+    SELECT user_id, business_date, start_time, is_off, note
+    FROM cast_shift_plans
+    WHERE store_id=?
+      AND business_date=?
+      AND status='planned'
+  ");
+  $st->execute([$storeId, $currentBusinessDate]);
+  foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $r) {
+    $uid = (int)$r['user_id'];
+    $d = (string)$r['business_date'];
+    $note = (string)($r['note'] ?? '');
+    $douhan = (strpos($note, '#douhan') !== false);
+    $end = 'LAST';
+    if (preg_match('/#end=(\d{2}:\d{2}|LAST)\b/u', $note, $m)) {
+      $end = strtoupper((string)$m[1]);
+    }
+    $off = ((int)$r['is_off'] === 1);
+    $start = (!$off && $r['start_time'] !== null) ? substr((string)$r['start_time'], 0, 5) : '';
+    $plans[$uid][$d] = [
+      'start' => $start,
+      'end' => $end,
+      'douhan' => $douhan,
+    ];
+  }
+}
 
 
 /* =========================
@@ -404,7 +456,163 @@ function note_from_flags(bool $douhan, string $endHm): string {
   return implode(' ', $parts);
 }
 
+function json_response(array $payload, int $status = 200): never {
+  http_response_code($status);
+  header('Content-Type: application/json; charset=utf-8');
+  echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  exit;
+}
+
+function transport_needed_state(array $castRow): bool {
+  $pickupEnabled = array_key_exists('pickup_enabled', $castRow) && $castRow['pickup_enabled'] !== null
+    ? (int)$castRow['pickup_enabled']
+    : 1;
+  $pickupTarget = trim((string)($castRow['pickup_target'] ?? 'primary'));
+  if (function_exists('transport_pickup_target_requires_pickup')) {
+    return transport_pickup_target_requires_pickup($pickupTarget !== '' ? $pickupTarget : 'primary', $pickupEnabled);
+  }
+  return $pickupEnabled === 1 && $pickupTarget !== 'self';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  if ((string)($_POST['action'] ?? '') === 'toggle_today_quick') {
+    if (function_exists('csrf_verify')) {
+      csrf_verify((string)($_POST['_csrf'] ?? ''));
+    }
+
+    $targetUserId = (int)($_POST['target_user_id'] ?? 0);
+    $toggleKind = (string)($_POST['toggle_kind'] ?? '');
+    if ($targetUserId <= 0 || !isset($castRowMap[$targetUserId])) {
+      json_response(['ok' => false, 'error' => '対象キャストが見つかりません'], 404);
+    }
+    if ($castOnly && $targetUserId !== $userId) {
+      json_response(['ok' => false, 'error' => '自分以外は変更できません'], 403);
+    }
+    if (!$isQuickBusinessDateOpen) {
+      json_response(['ok' => false, 'error' => '本日は店休日のため特急モードは使えません'], 400);
+    }
+
+    $castRow = $castRowMap[$targetUserId];
+
+    try {
+      if ($toggleKind === 'shift') {
+        $currentPlan = $plans[$targetUserId][$currentBusinessDate] ?? ['start'=>'','end'=>'LAST','douhan'=>false];
+        $isCurrentlyWorking = trim((string)($currentPlan['start'] ?? '')) !== '';
+        $nextWorking = !$isCurrentlyWorking;
+        $defaultStart = trim((string)($castRow['default_start_time'] ?? ''));
+        $startHm = preg_match('/^\d{2}:\d{2}/', $defaultStart)
+          ? substr($defaultStart, 0, 5)
+          : $openTimeHm;
+        $startTime = $nextWorking ? normalize_time_hm($startHm) : null;
+
+        $upPlan = $pdo->prepare("
+          INSERT INTO cast_shift_plans
+            (store_id, user_id, business_date, start_time, is_off, status, note, created_by_user_id)
+          VALUES
+            (?, ?, ?, ?, ?, 'planned', ?, ?)
+          ON DUPLICATE KEY UPDATE
+            start_time=VALUES(start_time),
+            is_off=VALUES(is_off),
+            status='planned',
+            note=VALUES(note),
+            created_by_user_id=VALUES(created_by_user_id),
+            updated_at=NOW()
+        ");
+        $note = $nextWorking ? note_from_flags(false, 'LAST') : '';
+        $upPlan->execute([
+          $storeId,
+          $targetUserId,
+          $currentBusinessDate,
+          $startTime,
+          $nextWorking ? 0 : 1,
+          $note,
+          $userId ?: null,
+        ]);
+
+        json_response([
+          'ok' => true,
+          'kind' => 'shift',
+          'is_working' => $nextWorking,
+          'label' => $nextWorking ? '出勤' : '休み',
+          'start' => $nextWorking ? $startHm : '',
+          'message' => $nextWorking ? '出勤にしました' : '休みにしました',
+        ]);
+      }
+
+      if ($toggleKind === 'transport') {
+        $currentlyNeeded = transport_needed_state($castRow);
+        $nextNeeded = !$currentlyNeeded;
+        $currentTarget = trim((string)($castRow['pickup_target'] ?? 'primary'));
+        if ($currentTarget === '') $currentTarget = 'primary';
+        if ($nextNeeded && $currentTarget === 'self') {
+          $currentTarget = 'primary';
+        }
+
+        $hasPickupTarget = function_exists('transport_profile_has_pickup_target_field') && transport_profile_has_pickup_target_field($pdo);
+        $insertCols = [
+          'store_id',
+          'user_id',
+          'pickup_enabled',
+          'privacy_level',
+          'created_by_user_id',
+          'updated_by_user_id',
+        ];
+        $insertVals = [
+          ':store_id',
+          ':user_id',
+          ':pickup_enabled',
+          ':privacy_level',
+          ':created_by_user_id',
+          ':updated_by_user_id',
+        ];
+        $updateCols = [
+          'pickup_enabled = VALUES(pickup_enabled)',
+          'privacy_level = VALUES(privacy_level)',
+          'updated_by_user_id = VALUES(updated_by_user_id)',
+          'updated_at = NOW()',
+        ];
+        if ($hasPickupTarget) {
+          $insertCols[] = 'pickup_target';
+          $insertVals[] = ':pickup_target';
+          $updateCols[] = 'pickup_target = VALUES(pickup_target)';
+        }
+        $sql = "
+          INSERT INTO cast_transport_profiles (
+            " . implode(", ", $insertCols) . "
+          ) VALUES (
+            " . implode(", ", $insertVals) . "
+          )
+          ON DUPLICATE KEY UPDATE
+            " . implode(", ", $updateCols) . "
+        ";
+        $params = [
+          ':store_id' => $storeId,
+          ':user_id' => $targetUserId,
+          ':pickup_enabled' => $nextNeeded ? 1 : 0,
+          ':privacy_level' => 'manager_only',
+          ':created_by_user_id' => $userId ?: null,
+          ':updated_by_user_id' => $userId ?: null,
+        ];
+        if ($hasPickupTarget) {
+          $params[':pickup_target'] = $currentTarget;
+        }
+        $pdo->prepare($sql)->execute($params);
+
+        json_response([
+          'ok' => true,
+          'kind' => 'transport',
+          'transport_needed' => $nextNeeded,
+          'label' => $nextNeeded ? '送迎あり' : '送迎なし',
+          'message' => $nextNeeded ? '送迎ありにしました' : '送迎なしにしました',
+        ]);
+      }
+
+      json_response(['ok' => false, 'error' => '不明な操作です'], 400);
+    } catch (Throwable $e) {
+      json_response(['ok' => false, 'error' => $e->getMessage()], 500);
+    }
+  }
+
   try {
     if ($isSuper) $storeId = (int)($_POST['store_id'] ?? $storeId);
 
@@ -601,6 +809,107 @@ render_header('出勤予定（週）', [
       </div>
     </div>
 
+    <div class="modeSwitch" role="tablist" aria-label="表示モード">
+      <button type="button" class="modeSwitchBtn <?= $viewMode === 'quick' ? 'is-active' : '' ?>" data-mode-switch="quick">今日の特急</button>
+      <button type="button" class="modeSwitchBtn <?= $viewMode === 'week' ? 'is-active' : '' ?>" data-mode-switch="week">通常の週表示</button>
+    </div>
+
+    <section class="card quickModeCard<?= $viewMode === 'quick' ? ' is-active' : '' ?>" id="quickModeSection">
+      <div class="quickModeHead">
+        <div>
+          <div class="quickModeEyebrow">Quick Attendance Mode</div>
+          <div class="quickModeTitle">今日の特急モード</div>
+          <div class="quickModeSub">
+            対象営業日：<b><?= h($quickDateLabel) ?></b>
+            <?php if (!$isQuickBusinessDateOpen): ?>
+              / 本日は店休日
+            <?php else: ?>
+              / 名前と店番をタップして出勤切替
+            <?php endif; ?>
+          </div>
+        </div>
+        <div class="quickModeLegend">
+          <span class="quickLegend is-work">出勤</span>
+          <span class="quickLegend is-off">休み</span>
+          <span class="quickLegend is-transport">送迎あり</span>
+        </div>
+      </div>
+
+      <div class="quickStats">
+        <?php
+          $quickWorkingCount = 0;
+          $quickTransportCount = 0;
+          foreach ($castRows as $quickCast) {
+            $quickUid = (int)$quickCast['id'];
+            $quickPlan = $plans[$quickUid][$currentBusinessDate] ?? ['start'=>'','end'=>'LAST','douhan'=>false];
+            if (trim((string)($quickPlan['start'] ?? '')) !== '') {
+              $quickWorkingCount++;
+            }
+            if (transport_needed_state($quickCast)) {
+              $quickTransportCount++;
+            }
+          }
+        ?>
+        <div class="quickStatCard">
+          <span>出勤予定</span>
+          <b id="quickWorkingCount"><?= (int)$quickWorkingCount ?></b>
+        </div>
+        <div class="quickStatCard">
+          <span>送迎あり</span>
+          <b id="quickTransportCount"><?= (int)$quickTransportCount ?></b>
+        </div>
+        <div class="quickStatCard">
+          <span>対象人数</span>
+          <b><?= count($castRows) ?></b>
+        </div>
+      </div>
+
+      <?php if (!$isQuickBusinessDateOpen): ?>
+        <div class="notice ng">本日は店休日設定のため、特急モードは編集できません。</div>
+      <?php endif; ?>
+
+      <div class="quickGrid">
+        <?php foreach ($castRows as $quickCast): ?>
+          <?php
+            $quickUid = (int)$quickCast['id'];
+            $quickPlan = $plans[$quickUid][$currentBusinessDate] ?? ['start'=>'','end'=>'LAST','douhan'=>false];
+            $quickWorking = trim((string)($quickPlan['start'] ?? '')) !== '';
+            $quickTransportNeeded = transport_needed_state($quickCast);
+            $quickReadonly = ($castOnly && $quickUid !== $userId) || !$isQuickBusinessDateOpen;
+            $quickCode = trim((string)($quickCast['staff_code'] ?? ''));
+          ?>
+          <article
+            class="quickCastCard<?= $quickWorking ? ' is-working' : ' is-off' ?><?= $quickTransportNeeded ? ' needs-transport' : '' ?><?= $quickReadonly ? ' is-readonly' : '' ?>"
+            data-quick-card
+            data-uid="<?= (int)$quickUid ?>"
+            data-working="<?= $quickWorking ? '1' : '0' ?>"
+            data-transport="<?= $quickTransportNeeded ? '1' : '0' ?>"
+          >
+            <button
+              type="button"
+              class="quickMainBtn"
+              data-quick-toggle="shift"
+              <?= $quickReadonly ? 'disabled' : '' ?>
+            >
+              <span class="quickCode"><?= h($quickCode !== '' ? $quickCode : '--') ?></span>
+              <span class="quickName"><?= h((string)$quickCast['display_name']) ?></span>
+              <span class="quickState" data-quick-shift-label><?= $quickWorking ? '出勤' : '休み' ?></span>
+            </button>
+            <button
+              type="button"
+              class="quickTransportBtn<?= $quickTransportNeeded ? ' is-on' : '' ?>"
+              data-quick-toggle="transport"
+              <?= $quickReadonly ? 'disabled' : '' ?>
+            >
+              <span>送迎</span>
+              <strong data-quick-transport-label><?= $quickTransportNeeded ? 'あり' : 'なし' ?></strong>
+            </button>
+          </article>
+        <?php endforeach; ?>
+      </div>
+    </section>
+
+    <div class="weeklyModeWrap<?= $viewMode === 'week' ? ' is-active' : '' ?>" id="weeklyModeSection">
     <form method="post">
       <input type="hidden" name="store_id" value="<?= (int)$storeId ?>">
       <input type="hidden" name="week_start" value="<?= h($weekStart) ?>">
@@ -783,6 +1092,7 @@ render_header('出勤予定（週）', [
         <button class="btn primary" type="submit">保存</button>
       </div>
     </form>
+    </div>
 
   </div>
 </div>
@@ -1000,6 +1310,198 @@ body[data-theme="dark"] .notice{
 }
 .weekLineItem b{
   color: var(--txt);
+}
+
+.modeSwitch{
+  margin-top: 12px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.modeSwitchBtn{
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line2);
+  background: var(--chip);
+  color: var(--txt);
+  font-weight: 1000;
+  cursor: pointer;
+}
+.modeSwitchBtn.is-active{
+  background: var(--priBg);
+  border-color: color-mix(in srgb, var(--pri) 45%, var(--line2) 55%);
+  color: var(--pri);
+}
+.quickModeCard,
+.weeklyModeWrap{
+  display:none;
+}
+.quickModeCard.is-active,
+.weeklyModeWrap.is-active{
+  display:block;
+}
+.quickModeCard{
+  margin-top: 12px;
+  padding: 16px;
+  display:none;
+  gap: 14px;
+}
+.quickModeHead{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+  flex-wrap:wrap;
+}
+.quickModeEyebrow{
+  font-size:12px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--pri);
+  font-weight:900;
+}
+.quickModeTitle{
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 1000;
+  line-height: 1.05;
+}
+.quickModeSub{
+  margin-top:6px;
+  color:var(--mut);
+  font-size:14px;
+}
+.quickModeLegend{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.quickLegend{
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  padding:0 12px;
+  border-radius:999px;
+  border:1px solid var(--line2);
+  background:var(--chip);
+  font-size:12px;
+  font-weight:900;
+}
+.quickLegend.is-work{
+  background: var(--priBg);
+  color: var(--pri);
+}
+.quickLegend.is-off{
+  background: color-mix(in srgb, var(--ngBg) 85%, var(--card) 15%);
+  color: var(--ng);
+}
+.quickLegend.is-transport{
+  background: color-mix(in srgb, #f59e0b 14%, var(--card) 86%);
+  color: #b45309;
+}
+.quickStats{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap:10px;
+  margin-top: 14px;
+}
+.quickStatCard{
+  padding:12px 14px;
+  border-radius:16px;
+  border:1px solid var(--line);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--panel) 74%, var(--card) 26%), var(--card));
+  display:grid;
+  gap:4px;
+}
+.quickStatCard span{
+  color:var(--mut);
+  font-size:12px;
+  font-weight:800;
+}
+.quickStatCard b{
+  font-size:24px;
+  line-height:1;
+}
+.quickGrid{
+  margin-top: 14px;
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap:10px;
+}
+.quickCastCard{
+  padding:10px;
+  border-radius:16px;
+  border:1px solid var(--line);
+  background:var(--card);
+  display:grid;
+  gap:8px;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+  box-shadow: var(--shadow);
+}
+.quickCastCard.is-working{
+  border-color: rgba(37,99,235,.40);
+  background: linear-gradient(180deg, rgba(37,99,235,.10), rgba(37,99,235,.04));
+}
+.quickCastCard.is-off{
+  border-color: rgba(239,68,68,.24);
+}
+.quickCastCard.needs-transport{
+  box-shadow: var(--shadow), 0 0 0 2px rgba(245,158,11,.16) inset;
+}
+.quickCastCard.is-readonly{
+  opacity:.72;
+}
+.quickMainBtn,
+.quickTransportBtn{
+  width:100%;
+  border:1px solid var(--line2);
+  border-radius:14px;
+  background:var(--chip);
+  color:var(--txt);
+  cursor:pointer;
+}
+.quickMainBtn{
+  min-height:96px;
+  padding:14px 12px;
+  display:grid;
+  gap:6px;
+  justify-items:start;
+  text-align:left;
+}
+.quickTransportBtn{
+  min-height:42px;
+  padding:0 12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:13px;
+  font-weight:900;
+}
+.quickTransportBtn.is-on{
+  border-color:#d97706;
+  background:rgba(245,158,11,.18);
+  color:#92400e;
+}
+.quickCode{
+  font-size:14px;
+  font-weight:1000;
+  color:var(--mut);
+}
+.quickName{
+  font-size:22px;
+  line-height:1.1;
+  font-weight:1000;
+}
+.quickState{
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  padding:0 12px;
+  border-radius:999px;
+  background:var(--card);
+  border:1px solid var(--line2);
+  font-size:12px;
+  font-weight:1000;
 }
 
 /* 上の曜日ヘッダ：透明/ぼかしはやめて不透明に（読みやすさ優先） */
@@ -1422,6 +1924,7 @@ body[data-theme="dark"] .small{ color: var(--mut); }
   .grid{ grid-template-columns: repeat(4, minmax(132px, 1fr)); }
   .btnMini{ width: auto; }
   .castStats{ grid-template-columns: repeat(2, minmax(92px, 1fr)); }
+  .quickStats{ grid-template-columns: 1fr; }
 }
 
 @media (max-width: 680px){
@@ -1464,13 +1967,109 @@ body[data-theme="dark"] .small{ color: var(--mut); }
   .dateHeaderGrid{ grid-template-columns: repeat(3, minmax(132px, 1fr)); }
   .grid{ grid-template-columns: repeat(3, minmax(132px, 1fr)); }
   .dhMeta strong{ font-size: 18px; }
+  .quickModeCard{ padding: 14px; }
+  .quickGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quickName{ font-size: 18px; }
+  .quickMainBtn{ min-height: 86px; }
 }
 </style>
 
 <script>
 (() => {
+  const csrfToken = <?= json_encode(function_exists('csrf_token') ? csrf_token() : '', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const quickBusinessDateOpen = <?= $isQuickBusinessDateOpen ? 'true' : 'false' ?>;
+
   function isReadonly(cell){
     return (cell?.dataset?.readonly === '1');
+  }
+
+  function updateQuickCounts(){
+    let workingCount = 0;
+    let transportCount = 0;
+    document.querySelectorAll('[data-quick-card]').forEach(card => {
+      if (card.dataset.working === '1') workingCount += 1;
+      if (card.dataset.transport === '1') transportCount += 1;
+    });
+    const workingNode = document.getElementById('quickWorkingCount');
+    const transportNode = document.getElementById('quickTransportCount');
+    if (workingNode) workingNode.textContent = String(workingCount);
+    if (transportNode) transportNode.textContent = String(transportCount);
+  }
+
+  function syncQuickCard(card){
+    const isWorking = card.dataset.working === '1';
+    const needsTransport = card.dataset.transport === '1';
+    const shiftLabel = card.querySelector('[data-quick-shift-label]');
+    const transportLabel = card.querySelector('[data-quick-transport-label]');
+    const transportBtn = card.querySelector('.quickTransportBtn');
+
+    card.classList.toggle('is-working', isWorking);
+    card.classList.toggle('is-off', !isWorking);
+    card.classList.toggle('needs-transport', needsTransport);
+    if (shiftLabel) shiftLabel.textContent = isWorking ? '出勤' : '休み';
+    if (transportLabel) transportLabel.textContent = needsTransport ? 'あり' : 'なし';
+    if (transportBtn) transportBtn.classList.toggle('is-on', needsTransport);
+  }
+
+  async function quickToggle(card, kind, button){
+    if (!card || !kind || !quickBusinessDateOpen) return;
+    const uid = card.dataset.uid || '';
+    if (!uid) return;
+
+    const body = new URLSearchParams();
+    body.set('action', 'toggle_today_quick');
+    body.set('target_user_id', uid);
+    body.set('toggle_kind', kind);
+    body.set('_csrf', csrfToken);
+
+    const buttons = card.querySelectorAll('button');
+    buttons.forEach(node => { node.disabled = true; });
+    card.classList.add('is-loading');
+
+    try {
+      const res = await fetch(window.location.pathname + window.location.search, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: body.toString(),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || '保存に失敗しました');
+      }
+
+      if (kind === 'shift') {
+        card.dataset.working = data.is_working ? '1' : '0';
+      } else if (kind === 'transport') {
+        card.dataset.transport = data.transport_needed ? '1' : '0';
+      }
+      syncQuickCard(card);
+      updateQuickCounts();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '保存に失敗しました');
+    } finally {
+      card.classList.remove('is-loading');
+      buttons.forEach(node => {
+        if (!button?.closest('.is-readonly')) {
+          node.disabled = false;
+        }
+      });
+      if (card.classList.contains('is-readonly')) {
+        buttons.forEach(node => { node.disabled = true; });
+      }
+    }
+  }
+
+  function setMode(mode){
+    const quickSection = document.getElementById('quickModeSection');
+    const weekSection = document.getElementById('weeklyModeSection');
+    document.querySelectorAll('[data-mode-switch]').forEach(btn => {
+      btn.classList.toggle('is-active', btn.dataset.modeSwitch === mode);
+    });
+    if (quickSection) quickSection.classList.toggle('is-active', mode === 'quick');
+    if (weekSection) weekSection.classList.toggle('is-active', mode === 'week');
   }
 
   function updateDayTotals(){
@@ -1593,6 +2192,18 @@ body[data-theme="dark"] .small{ color: var(--mut); }
     }
   });
   updateDayTotals();
+
+  document.querySelectorAll('[data-mode-switch]').forEach(btn => {
+    btn.addEventListener('click', () => setMode(btn.dataset.modeSwitch || 'week'));
+  });
+  document.querySelectorAll('[data-quick-card]').forEach(card => {
+    syncQuickCard(card);
+    card.querySelectorAll('[data-quick-toggle]').forEach(button => {
+      if (button.disabled) return;
+      button.addEventListener('click', () => quickToggle(card, button.dataset.quickToggle || '', button));
+    });
+  });
+  updateQuickCounts();
 })();
 function weekRegularOn(uid){
   const cells = document.querySelectorAll(`.cell[data-uid="${uid}"]`);
