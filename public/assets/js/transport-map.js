@@ -1381,9 +1381,12 @@
       }
       await fetchData(false);
       if (savedCount <= 0) {
+        if (skippedStoreCount > 0) {
+          setSuggestStatus('店舗判定できない提案 ' + skippedStoreCount + '件は保留にしました', false);
+          return;
+        }
         throw new Error(
           skippedAddressCount > 0 ? '住所未登録の提案は確定できません'
-            : skippedStoreCount > 0 ? '対象店舗が不正な提案があります'
             : failedCount > 0 ? (failedMessages[0] || '提案確定に失敗しました')
             : '確定できる提案がありません'
         );
@@ -1403,8 +1406,11 @@
         window.alert(summaryParts.join('\n') + '\n' + failedMessages.slice(0, 3).join('\n'));
       }
     } catch (error) {
-      setSuggestStatus(error.message || '提案確定に失敗しました', true);
-      window.alert(error.message || '提案確定に失敗しました');
+      const message = String((error && error.message) || '提案確定に失敗しました');
+      setSuggestStatus(message, true);
+      if (message.indexOf('対象店舗が不正です') === -1) {
+        window.alert(message);
+      }
     } finally {
       if (confirmSuggestionsButton) {
         confirmSuggestionsButton.disabled = false;
