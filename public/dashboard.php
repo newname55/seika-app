@@ -109,8 +109,30 @@ if (!function_exists('dashboard_link')) {
 }
 
 if (!function_exists('render_dashboard_section')) {
+  function render_dashboard_cards(array $items): void {
+    if (!$items) return;
+    ?>
+    <div class="dash-grid">
+      <?php foreach ($items as $item): ?>
+        <a class="dash-card<?= !empty($item['tone']) ? ' is-' . h((string)$item['tone']) : '' ?>" href="<?= h((string)$item['href']) ?>">
+          <div class="dash-card-top">
+            <span class="dash-icon"><?= h((string)$item['icon']) ?></span>
+            <?php if (!empty($item['tag'])): ?>
+              <span class="dash-tag"><?= h((string)$item['tag']) ?></span>
+            <?php endif; ?>
+          </div>
+          <div class="dash-title"><?= h((string)$item['title']) ?></div>
+          <div class="dash-desc"><?= h((string)$item['desc']) ?></div>
+        </a>
+      <?php endforeach; ?>
+    </div>
+    <?php
+  }
+
   function render_dashboard_section(array $section, bool $isActive = false, int $index = 0): void {
-    if (empty($section['items'])) {
+    $hasItems = !empty($section['items']);
+    $hasGroups = !empty($section['groups']);
+    if (!$hasItems && !$hasGroups) {
       return;
     }
     $sectionClass = trim((string)($section['class'] ?? ''));
@@ -130,20 +152,28 @@ if (!function_exists('render_dashboard_section')) {
           <?php endif; ?>
         </div>
       </div>
-      <div class="dash-grid">
-        <?php foreach ($section['items'] as $item): ?>
-          <a class="dash-card<?= !empty($item['tone']) ? ' is-' . h((string)$item['tone']) : '' ?>" href="<?= h((string)$item['href']) ?>">
-            <div class="dash-card-top">
-              <span class="dash-icon"><?= h((string)$item['icon']) ?></span>
-              <?php if (!empty($item['tag'])): ?>
-                <span class="dash-tag"><?= h((string)$item['tag']) ?></span>
+      <?php if ($hasGroups): ?>
+        <div class="dash-subsections">
+          <?php foreach ($section['groups'] as $group): ?>
+            <?php if (empty($group['items'])) continue; ?>
+            <section class="dash-subsection">
+              <?php if (!empty($group['title']) || !empty($group['lead'])): ?>
+                <div class="dash-subsection-head">
+                  <?php if (!empty($group['title'])): ?>
+                    <h3><?= h((string)$group['title']) ?></h3>
+                  <?php endif; ?>
+                  <?php if (!empty($group['lead'])): ?>
+                    <p><?= h((string)$group['lead']) ?></p>
+                  <?php endif; ?>
+                </div>
               <?php endif; ?>
-            </div>
-            <div class="dash-title"><?= h((string)$item['title']) ?></div>
-            <div class="dash-desc"><?= h((string)$item['desc']) ?></div>
-          </a>
-        <?php endforeach; ?>
-      </div>
+              <?php render_dashboard_cards($group['items']); ?>
+            </section>
+          <?php endforeach; ?>
+        </div>
+      <?php else: ?>
+        <?php render_dashboard_cards($section['items']); ?>
+      <?php endif; ?>
     </section>
     <?php
   }
@@ -384,68 +414,87 @@ $adminSections = [
   ],
   [
     'title' => 'スタッフを整える',
-    'lead'  => 'シフト、所属、招待、未連携確認をまとめています。',
+    'lead'  => '勤務予定の確認から、登録・招待、一覧チェックまでを順番にまとめています。',
     'class' => 'dash-section-staff',
-    'items' => [
+    'groups' => [
       [
-        'icon' => '📆',
-        'title' => '出勤予定を決める',
-        'desc' => '今週のシフトを見たり入力したりします。',
-        'href' => dashboard_link('/wbss/public/cast_week_plans.php', $storeId),
-        'tag'  => 'シフト',
+        'title' => '1. まず勤務予定を確認',
+        'lead'  => '今日の動きと、今週の出勤予定をここで確認します。',
+        'items' => [
+          [
+            'icon' => '📋',
+            'title' => '本日の予定',
+            'desc' => '遅刻や欠勤の連絡をまとめて確認します。',
+            'href' => dashboard_link('/wbss/public/manager_today_schedule.php', $storeId),
+            'tag'  => '今日',
+            'tone' => 'primary',
+          ],
+          [
+            'icon' => '📆',
+            'title' => '出勤予定を決める',
+            'desc' => '今週のシフトを見たり入力したりします。',
+            'href' => dashboard_link('/wbss/public/cast_week_plans.php', $storeId),
+            'tag'  => 'シフト',
+            'tone' => 'primary',
+          ],
+          [
+            'icon' => '🗂️',
+            'title' => $canViewAllStoreShift ? '全店出勤予定ビュー' : '店舗別の出勤予定を見る',
+            'desc' => $canViewAllStoreShift
+              ? '店舗タブを切り替えながら、全店舗分の出勤予定を確認します。'
+              : '店舗タブで切り替えながら、その日の出勤予定を確認します。',
+            'href' => dashboard_link('/wbss/public/all_store_shift_plans.php', $storeId),
+            'tag'  => $canViewAllStoreShift ? '全店予定' : '予定ビュー',
+          ],
+        ],
       ],
       [
-        'icon' => '📋',
-        'title' => '本日の予定',
-        'desc' => '遅刻や欠勤の連絡をまとめて確認します。',
-        'href' => dashboard_link('/wbss/public/manager_today_schedule.php', $storeId),
-        'tag'  => '今日',
+        'title' => '2. 登録や所属を整える',
+        'lead'  => '追加、退店、招待、基本情報の編集はこちらです。',
+        'items' => [
+          [
+            'icon' => '👥',
+            'title' => '店別キャスト管理',
+            'desc' => '追加、退店、復帰、個別の招待確認をまとめて行います。',
+            'href' => dashboard_link('/wbss/public/store_casts.php', $storeId),
+            'tag'  => '登録・所属',
+          ],
+          [
+            'icon' => '✏️',
+            'title' => 'キャスト情報を編集',
+            'desc' => '名前、雇用区分、店番などの基本情報を修正します。',
+            'href' => dashboard_link('/wbss/public/admin/cast_edit.php', $storeId),
+            'tag'  => '情報修正',
+          ],
+          [
+            'icon' => '🔗',
+            'title' => '招待QRを表示',
+            'desc' => '新しく登録する人向けのLINE招待QRを表示します。',
+            'href' => dashboard_link('/wbss/public/store_casts_invite_qr.php', $storeId),
+            'tag'  => '招待QR',
+          ],
+        ],
       ],
       [
-        'icon' => '🗂️',
-        'title' => $canViewAllStoreShift ? '全店出勤予定ビュー' : '店舗別の出勤予定を見る',
-        'desc' => $canViewAllStoreShift
-          ? '店舗タブを切り替えながら、全店舗分の出勤予定を確認します。'
-          : '店舗タブで切り替えながら、その日の出勤予定を確認します。',
-        'href' => dashboard_link('/wbss/public/all_store_shift_plans.php', $storeId),
-        'tag'  => $canViewAllStoreShift ? '全店予定' : '予定ビュー',
-        'tone' => 'primary',
-      ],
-      [
-        'icon' => '👥',
-        'title' => 'キャスト管理',
-        'desc' => '所属や招待リンク、LINE確認を行います。',
-        'href' => dashboard_link('/wbss/public/store_casts.php', $storeId),
-        'tag'  => 'スタッフ',
-      ],
-      [
-        'icon' => '✏️',
-        'title' => 'キャスト情報を直す',
-        'desc' => '名前や雇用区分、店番を編集します。',
-        'href' => dashboard_link('/wbss/public/admin/cast_edit.php', $storeId),
-        'tag'  => '編集',
-      ],
-      [
-        'icon' => '🔗',
-        'title' => '招待QRを開く',
-        'desc' => 'LINE登録用のQRをそのまま表示します。',
-        'href' => dashboard_link('/wbss/public/store_casts_invite_qr.php', $storeId),
-        'tag'  => 'QR',
-      ],
-      [
-        'icon' => '⚠️',
-        'title' => 'LINE未連携を確認',
-        'desc' => 'まだ連携していない人だけ一覧で見ます。',
-        'href' => dashboard_link('/wbss/public/store_casts_list.php', $storeId, ['filter' => 'line_unlinked']),
-        'tag'  => $lineUnlinkedCount > 0 ? ('未連携 ' . $lineUnlinkedCount . '件') : '要確認',
-        'tone' => 'warn',
-      ],
-      [
-        'icon' => '📄',
-        'title' => 'キャスト一覧を見る',
-        'desc' => '今の店舗のキャスト一覧だけを見ます。',
-        'href' => dashboard_link('/wbss/public/store_casts_list.php', $storeId),
-        'tag'  => '一覧',
+        'title' => '3. 一覧と未連携を確認',
+        'lead'  => '在籍状況やLINE連携漏れを一覧で確認します。',
+        'items' => [
+          [
+            'icon' => '⚠️',
+            'title' => 'LINE未連携を確認',
+            'desc' => 'まだ連携していない人だけを絞り込んで確認します。',
+            'href' => dashboard_link('/wbss/public/store_casts_list.php', $storeId, ['filter' => 'line_unlinked']),
+            'tag'  => $lineUnlinkedCount > 0 ? ('未連携 ' . $lineUnlinkedCount . '件') : '要確認',
+            'tone' => 'warn',
+          ],
+          [
+            'icon' => '📄',
+            'title' => 'キャスト一覧を見る',
+            'desc' => '閲覧専用の一覧で在籍状況と連携状況を確認します。',
+            'href' => dashboard_link('/wbss/public/store_casts_list.php', $storeId),
+            'tag'  => '一覧',
+          ],
+        ],
       ],
     ],
   ],
@@ -596,37 +645,56 @@ $managerSections = [
   ],
   [
     'title' => 'スタッフを整える',
-    'lead'  => 'キャスト情報、招待、未連携確認をまとめています。',
+    'lead'  => '登録や編集、招待、連携チェックを順番にたどれるようにまとめています。',
     'class' => 'dash-section-staff',
-    'items' => [
+    'groups' => [
       [
-        'icon' => '✏️',
-        'title' => 'キャスト情報を直す',
-        'desc' => '名前や雇用区分、店番を編集します。',
-        'href' => dashboard_link('/wbss/public/admin/cast_edit.php', $storeId),
-        'tag'  => '編集',
+        'title' => '1. 登録や所属を整える',
+        'lead'  => '追加、退店、招待、基本情報の編集はこちらです。',
+        'items' => [
+          [
+            'icon' => '👥',
+            'title' => '店別キャスト管理',
+            'desc' => '追加、退店、復帰、個別の招待確認をまとめて行います。',
+            'href' => dashboard_link('/wbss/public/store_casts.php', $storeId),
+            'tag'  => '登録・所属',
+          ],
+          [
+            'icon' => '✏️',
+            'title' => 'キャスト情報を編集',
+            'desc' => '名前、雇用区分、店番などの基本情報を修正します。',
+            'href' => dashboard_link('/wbss/public/admin/cast_edit.php', $storeId),
+            'tag'  => '情報修正',
+          ],
+          [
+            'icon' => '🔗',
+            'title' => '招待QRを表示',
+            'desc' => '新しく登録する人向けのLINE招待QRを表示します。',
+            'href' => dashboard_link('/wbss/public/store_casts_invite_qr.php', $storeId),
+            'tag'  => '招待QR',
+          ],
+        ],
       ],
       [
-        'icon' => '👥',
-        'title' => 'キャスト管理',
-        'desc' => '所属や招待リンクをまとめて管理します。',
-        'href' => dashboard_link('/wbss/public/store_casts.php', $storeId),
-        'tag'  => 'スタッフ',
-      ],
-      [
-        'icon' => '🔗',
-        'title' => '招待QRを開く',
-        'desc' => '招待用のQRを表示してそのまま共有します。',
-        'href' => dashboard_link('/wbss/public/store_casts_invite_qr.php', $storeId),
-        'tag'  => 'QR',
-      ],
-      [
-        'icon' => '⚠️',
-        'title' => 'LINE未連携を確認',
-        'desc' => 'まだ連携していない人だけを見ます。',
-        'href' => dashboard_link('/wbss/public/store_casts_list.php', $storeId, ['filter' => 'line_unlinked']),
-        'tag'  => $lineUnlinkedCount > 0 ? ('未連携 ' . $lineUnlinkedCount . '件') : '要確認',
-        'tone' => 'warn',
+        'title' => '2. 一覧と未連携を確認',
+        'lead'  => '連携漏れや在籍状況を一覧で確認します。',
+        'items' => [
+          [
+            'icon' => '⚠️',
+            'title' => 'LINE未連携を確認',
+            'desc' => 'まだ連携していない人だけを絞り込んで確認します。',
+            'href' => dashboard_link('/wbss/public/store_casts_list.php', $storeId, ['filter' => 'line_unlinked']),
+            'tag'  => $lineUnlinkedCount > 0 ? ('未連携 ' . $lineUnlinkedCount . '件') : '要確認',
+            'tone' => 'warn',
+          ],
+          [
+            'icon' => '📄',
+            'title' => 'キャスト一覧を見る',
+            'desc' => '閲覧専用の一覧で在籍状況と連携状況を確認します。',
+            'href' => dashboard_link('/wbss/public/store_casts_list.php', $storeId),
+            'tag'  => '一覧',
+          ],
+        ],
       ],
     ],
   ],
@@ -1617,6 +1685,34 @@ render_page_start('ダッシュボード');
 .dash-section-head p{
   margin:4px 0 0;
   font-size:12px;
+  color:var(--muted);
+}
+
+.dash-subsections{
+  display:grid;
+  gap:14px;
+}
+
+.dash-subsection{
+  display:grid;
+  gap:8px;
+}
+
+.dash-subsection-head{
+  display:grid;
+  gap:3px;
+}
+
+.dash-subsection-head h3{
+  margin:0;
+  font-size:14px;
+  font-weight:900;
+}
+
+.dash-subsection-head p{
+  margin:0;
+  font-size:11px;
+  line-height:1.45;
   color:var(--muted);
 }
 
