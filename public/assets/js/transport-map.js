@@ -832,6 +832,9 @@
         rowEl.dataset.suggestedOrder = suggestion.suggested_order != null ? String(suggestion.suggested_order) : '';
       }
     });
+    const nextItems = Array.from(itemById.values());
+    renderDriverToggles(nextItems, window.__transportVehicles || []);
+    renderMap(window.__transportBase || {}, nextItems, window.__transportVehicles || [], window.__transportBases || []);
     setSuggestStatus((items || []).length > 0 ? ((items || []).length + '件の提案を反映しました') : '提案対象はありません', false);
   }
 
