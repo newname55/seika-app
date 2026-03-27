@@ -1302,6 +1302,22 @@
     if (initialStoreId > 0) {
       return initialStoreId;
     }
+    const baseStoreId = Number((window.__transportBase && window.__transportBase.store_id) || 0);
+    if (baseStoreId > 0) {
+      return baseStoreId;
+    }
+    if (Array.isArray(window.__transportBases) && window.__transportBases.length === 1) {
+      const singleBaseStoreId = Number(window.__transportBases[0] && window.__transportBases[0].store_id ? window.__transportBases[0].store_id : 0);
+      if (singleBaseStoreId > 0) {
+        return singleBaseStoreId;
+      }
+    }
+    if (storeSelect && storeSelect.options && storeSelect.options.length === 1) {
+      const onlyStoreId = Number(storeSelect.options[0].value || 0);
+      if (onlyStoreId > 0) {
+        return onlyStoreId;
+      }
+    }
     return 0;
   }
 
