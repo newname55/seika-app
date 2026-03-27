@@ -151,7 +151,7 @@
 }
 
 .transportMapCanvas--screen{
-  min-height:calc(100vh - 72px);
+  min-height:calc(100vh - 28px);
 }
 
 .transportMapScreenFooter{
@@ -1342,6 +1342,6 @@ body[data-theme="staff"] .transportMapDriverToggle{
   }
 
   .transportMapCanvas--screen{
-    min-height:56vh;
+    min-height:68vh;
   }
 }
