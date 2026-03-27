@@ -1189,7 +1189,7 @@
       for (const suggestion of suggestions) {
         const itemId = Number(suggestion.request_id || 0);
         const item = itemById.get(itemId);
-        if (!item || itemId <= 0) {
+        if (!item || Number(item.cast_id || 0) <= 0) {
           continue;
         }
         const rowEl = rowById.get(itemId);
