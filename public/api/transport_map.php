@@ -35,6 +35,15 @@ try {
       transport_map_api_error('不正な操作です', 400);
     }
 
+    error_log('[transport_map_api_save_assignment] raw=' . json_encode([
+      'store_id' => $_POST['store_id'] ?? null,
+      'business_date' => $_POST['business_date'] ?? null,
+      'cast_id' => $_POST['cast_id'] ?? null,
+      'driver_user_id' => $_POST['driver_user_id'] ?? null,
+      'status' => $_POST['status'] ?? null,
+      'sort_order' => $_POST['sort_order'] ?? null,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
     $item = transport_map_save_assignment($pdo, $_POST, (int)(current_user_id() ?? 0));
     echo json_encode([
       'ok' => true,

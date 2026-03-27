@@ -489,6 +489,15 @@ function transport_map_save_assignment(PDO $pdo, array $source, int $actorUserId
     throw new RuntimeException('transport_assignments テーブルが未作成です。先にSQLを適用してください。');
   }
 
+  error_log('[transport_map_save_assignment] source=' . json_encode([
+    'store_id' => $source['store_id'] ?? null,
+    'business_date' => $source['business_date'] ?? null,
+    'cast_id' => $source['cast_id'] ?? null,
+    'driver_user_id' => $source['driver_user_id'] ?? null,
+    'status' => $source['status'] ?? null,
+    'sort_order' => $source['sort_order'] ?? null,
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
   $storeId = transport_resolve_store_id($pdo, (int)($source['store_id'] ?? 0));
   $storeRow = transport_map_fetch_store_row($pdo, $storeId);
   $businessDate = transport_map_normalize_date((string)($source['business_date'] ?? ''), transport_map_default_business_date($storeRow));
@@ -501,6 +510,15 @@ function transport_map_save_assignment(PDO $pdo, array $source, int $actorUserId
   transport_map_validate_driver_user_id($pdo, $storeId, $driverUserId);
   $vehicleLabel = transport_map_normalize_vehicle_label((string)($source['vehicle_label'] ?? ''));
   $sortOrder = transport_map_normalize_sort_order($source['sort_order'] ?? null);
+
+  error_log('[transport_map_save_assignment] normalized=' . json_encode([
+    'store_id' => $storeId,
+    'business_date' => $businessDate,
+    'cast_id' => $castId,
+    'driver_user_id' => $driverUserId,
+    'status' => $source['status'] ?? null,
+    'sort_order' => $sortOrder,
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
   $pdo->beginTransaction();
   try {
