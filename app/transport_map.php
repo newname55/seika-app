@@ -19,6 +19,25 @@ function transport_map_direction_options(): array {
   return ['北', '北東', '東', '南東', '南', '南西', '西', '北西', '未分類'];
 }
 
+function transport_map_store_short_labels(): array {
+  return [
+    1 => '星',
+    2 => 'ク',
+    3 => '麒',
+    4 => 'ス',
+    5 => 'パ',
+  ];
+}
+
+function transport_map_store_short_label(int $storeId): string {
+  $labels = transport_map_store_short_labels();
+  return (string)($labels[$storeId] ?? (string)$storeId);
+}
+
+function transport_map_can_view_all_stores(): bool {
+  return function_exists('can_view_all_store_shift') && can_view_all_store_shift();
+}
+
 function transport_map_table_exists(PDO $pdo, string $tableName): bool {
   try {
     $st = $pdo->prepare("
@@ -99,8 +118,23 @@ function transport_map_default_business_date(array $storeRow): string {
 }
 
 function transport_map_filters_from_request(PDO $pdo, array $source): array {
-  $storeId = transport_resolve_store_id($pdo, (int)($source['store_id'] ?? 0));
-  $storeRow = transport_map_fetch_store_row($pdo, $storeId);
+  $stores = transport_allowed_stores($pdo);
+  $allowedStoreIds = [];
+  foreach ($stores as $store) {
+    $sid = (int)($store['id'] ?? 0);
+    if ($sid > 0) {
+      $allowedStoreIds[] = $sid;
+    }
+  }
+  if ($allowedStoreIds === []) {
+    throw new RuntimeException('閲覧可能な店舗がありません');
+  }
+
+  $requestedStoreRaw = trim((string)($source['store_id'] ?? ''));
+  $isAllStores = transport_map_can_view_all_stores() && in_array($requestedStoreRaw, ['all', '*', '0'], true);
+  $storeId = $isAllStores ? 0 : transport_resolve_store_id($pdo, (int)$requestedStoreRaw);
+  $defaultStoreId = $storeId > 0 ? $storeId : (int)$allowedStoreIds[0];
+  $storeRow = transport_map_fetch_store_row($pdo, $defaultStoreId);
   $defaultBusinessDate = transport_map_default_business_date($storeRow);
 
   $driverUserId = (int)($source['driver_user_id'] ?? 0);
@@ -110,6 +144,8 @@ function transport_map_filters_from_request(PDO $pdo, array $source): array {
 
   return [
     'store_id' => $storeId,
+    'store_scope' => $isAllStores ? 'all' : 'single',
+    'store_ids' => $isAllStores ? $allowedStoreIds : [$defaultStoreId],
     'business_date' => transport_map_normalize_date((string)($source['business_date'] ?? ''), $defaultBusinessDate),
     'status' => transport_map_normalize_status((string)($source['status'] ?? '')),
     'driver_user_id' => $driverUserId,
@@ -138,6 +174,26 @@ function transport_map_fetch_driver_options(PDO $pdo, int $storeId): array {
   $st = $pdo->prepare($sql);
   $st->execute([$storeId]);
   return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+function transport_map_fetch_driver_options_for_stores(PDO $pdo, array $storeIds): array {
+  $merged = [];
+  foreach ($storeIds as $storeId) {
+    foreach (transport_map_fetch_driver_options($pdo, (int)$storeId) as $driver) {
+      $driverId = (int)($driver['id'] ?? 0);
+      if ($driverId <= 0) {
+        continue;
+      }
+      $merged[$driverId] = [
+        'id' => $driverId,
+        'name' => (string)($driver['name'] ?? ''),
+      ];
+    }
+  }
+  uasort($merged, static function (array $a, array $b): int {
+    return strcmp((string)$a['name'], (string)$b['name']);
+  });
+  return array_values($merged);
 }
 
 function transport_map_can_view_full_address(): bool {
@@ -202,6 +258,20 @@ function transport_map_fetch_base_context(PDO $pdo, int $storeId): array {
   ];
 }
 
+function transport_map_fetch_base_contexts(PDO $pdo, array $storeIds): array {
+  $contexts = [];
+  foreach ($storeIds as $storeId) {
+    $storeId = (int)$storeId;
+    if ($storeId <= 0) {
+      continue;
+    }
+    $contexts[$storeId] = transport_map_fetch_base_context($pdo, $storeId);
+    $contexts[$storeId]['store_id'] = $storeId;
+    $contexts[$storeId]['store_short_label'] = transport_map_store_short_label($storeId);
+  }
+  return $contexts;
+}
+
 function transport_map_geocode_address(string $address): array {
   return transport_google_geocode($address);
 }
@@ -251,6 +321,60 @@ function transport_map_fetch_required_candidates(PDO $pdo, int $storeId, string 
       'has_coords' => !empty($cast['has_coords']),
       'has_address' => !empty($cast['has_address']),
     ];
+  }
+
+  return $items;
+}
+
+function transport_map_fetch_required_candidates_for_stores(PDO $pdo, array $storeIds, string $businessDate): array {
+  $groups = transport_fetch_route_candidates($pdo, $businessDate, $storeIds);
+  if ($groups === []) {
+    return [];
+  }
+
+  $items = [];
+  foreach ($groups as $group) {
+    $groupStoreId = (int)($group['store_id'] ?? 0);
+    if ($groupStoreId <= 0) {
+      continue;
+    }
+    foreach ((array)($group['casts'] ?? []) as $cast) {
+      if (empty($cast['requires_pickup'])) {
+        continue;
+      }
+      $castId = (int)($cast['user_id'] ?? 0);
+      if ($castId <= 0) {
+        continue;
+      }
+      $key = $groupStoreId . ':' . $castId;
+      $items[$key] = [
+        'id' => -1 * (1000000 + ($groupStoreId * 10000) + $castId),
+        'store_id' => $groupStoreId,
+        'business_date' => $businessDate,
+        'cast_id' => $castId,
+        'pickup_name' => (string)($cast['display_name'] ?? ''),
+        'cast_name' => (string)($cast['display_name'] ?? ''),
+        'shop_tag' => (string)($cast['shop_tag'] ?? ''),
+        'pickup_address' => (string)($cast['pickup_address'] ?? ''),
+        'pickup_lat' => ($cast['pickup_lat'] ?? null) !== null ? (float)$cast['pickup_lat'] : null,
+        'pickup_lng' => ($cast['pickup_lng'] ?? null) !== null ? (float)$cast['pickup_lng'] : null,
+        'pickup_note' => (string)($cast['pickup_note'] ?? ''),
+        'pickup_time_from' => (string)($cast['start_time'] ?? ''),
+        'pickup_time_to' => '',
+        'area_name' => '',
+        'direction_bucket' => '',
+        'status' => 'pending',
+        'driver_user_id' => null,
+        'driver_name' => '',
+        'vehicle_label' => null,
+        'sort_order' => 0,
+        'source_type' => 'shift_plan',
+        'pickup_target' => (string)($cast['pickup_target'] ?? 'primary'),
+        'pickup_target_label' => (string)($cast['pickup_target_label'] ?? transport_pickup_target_label((string)($cast['pickup_target'] ?? 'primary'))),
+        'has_coords' => !empty($cast['has_coords']),
+        'has_address' => !empty($cast['has_address']),
+      ];
+    }
   }
 
   return $items;
@@ -530,13 +654,27 @@ function transport_map_fetch_rows(PDO $pdo, array $filters): array {
   }
 
   $where = [
-    'ta.store_id = :store_id',
     'ta.business_date = :business_date',
   ];
   $params = [
-    ':store_id' => (int)$filters['store_id'],
     ':business_date' => (string)$filters['business_date'],
   ];
+  $storeIds = array_values(array_filter(array_map('intval', (array)($filters['store_ids'] ?? [])), static fn(int $id): bool => $id > 0));
+  if ($storeIds === []) {
+    throw new RuntimeException('対象店舗が不正です');
+  }
+  if (count($storeIds) === 1) {
+    $where[] = 'ta.store_id = :store_id';
+    $params[':store_id'] = $storeIds[0];
+  } else {
+    $ph = [];
+    foreach ($storeIds as $index => $storeId) {
+      $key = ':store_id_' . $index;
+      $ph[] = $key;
+      $params[$key] = $storeId;
+    }
+    $where[] = 'ta.store_id IN (' . implode(', ', $ph) . ')';
+  }
 
   if ((string)$filters['status'] !== '') {
     $where[] = 'ta.status = :status';
@@ -611,16 +749,32 @@ function transport_map_fetch_rows(PDO $pdo, array $filters): array {
 }
 
 function transport_map_fetch_data(PDO $pdo, array $filters): array {
-  $base = transport_map_fetch_base_context($pdo, (int)$filters['store_id']);
+  $storeIds = array_values(array_filter(array_map('intval', (array)($filters['store_ids'] ?? [])), static fn(int $id): bool => $id > 0));
+  $baseContexts = transport_map_fetch_base_contexts($pdo, $storeIds);
+  $base = (count($storeIds) === 1 && isset($baseContexts[$storeIds[0]])) ? $baseContexts[$storeIds[0]] : [
+    'id' => 0,
+    'name' => '全店舗',
+    'address_text' => '',
+    'lat' => null,
+    'lng' => null,
+  ];
   $rows = transport_map_fetch_rows($pdo, $filters);
-  $requiredCandidates = transport_map_fetch_required_candidates($pdo, (int)$filters['store_id'], (string)$filters['business_date']);
-  $vehicles = transport_vehicle_fetch_latest($pdo, (int)$filters['store_id']);
+  $requiredCandidates = transport_map_fetch_required_candidates_for_stores($pdo, $storeIds, (string)$filters['business_date']);
+  $vehicles = [];
+  foreach ($storeIds as $storeId) {
+    foreach (transport_vehicle_fetch_latest($pdo, (int)$storeId) as $vehicle) {
+      $vehicle['store_short_label'] = transport_map_store_short_label((int)($vehicle['store_id'] ?? 0));
+      $vehicles[] = $vehicle;
+    }
+  }
   $canViewFullAddress = transport_map_can_view_full_address();
 
   foreach ($rows as $row) {
     $castId = (int)($row['cast_id'] ?? 0);
-    if ($castId > 0 && isset($requiredCandidates[$castId])) {
-      unset($requiredCandidates[$castId]);
+    $storeId = (int)($row['store_id'] ?? 0);
+    $candidateKey = $storeId . ':' . $castId;
+    if ($castId > 0 && isset($requiredCandidates[$candidateKey])) {
+      unset($requiredCandidates[$candidateKey]);
     }
   }
   if ($requiredCandidates !== []) {
@@ -643,19 +797,21 @@ function transport_map_fetch_data(PDO $pdo, array $filters): array {
   ];
 
   foreach ($rows as $row) {
+    $rowStoreId = (int)($row['store_id'] ?? 0);
+    $rowBase = $baseContexts[$rowStoreId] ?? $base;
     $pickupLat = ($row['pickup_lat'] ?? null) !== null ? (float)$row['pickup_lat'] : null;
     $pickupLng = ($row['pickup_lng'] ?? null) !== null ? (float)$row['pickup_lng'] : null;
     $direction = trim((string)($row['direction_bucket'] ?? ''));
     if ($direction === '') {
-      $direction = transport_map_compute_direction($base['lat'], $base['lng'], $pickupLat, $pickupLng, trim((string)($row['area_name'] ?? '')));
+      $direction = transport_map_compute_direction($rowBase['lat'], $rowBase['lng'], $pickupLat, $pickupLng, trim((string)($row['area_name'] ?? '')));
     }
     if (!in_array($direction, transport_map_direction_options(), true)) {
       $direction = $direction !== '' ? $direction : '未分類';
     }
 
     $distanceKm = null;
-    if ($base['lat'] !== null && $base['lng'] !== null && $pickupLat !== null && $pickupLng !== null) {
-      $distanceKm = transport_map_round_distance(transport_haversine_km((float)$base['lat'], (float)$base['lng'], $pickupLat, $pickupLng));
+    if ($rowBase['lat'] !== null && $rowBase['lng'] !== null && $pickupLat !== null && $pickupLng !== null) {
+      $distanceKm = transport_map_round_distance(transport_haversine_km((float)$rowBase['lat'], (float)$rowBase['lng'], $pickupLat, $pickupLng));
     }
 
     $status = (string)($row['status'] ?? 'pending');
@@ -670,6 +826,7 @@ function transport_map_fetch_data(PDO $pdo, array $filters): array {
       'shop_tag' => (string)($row['shop_tag'] ?? ''),
       'display_name' => trim((string)($row['pickup_name'] ?? '')) !== '' ? (string)$row['pickup_name'] : (string)($row['cast_name'] ?? ''),
       'store_id' => (int)($row['store_id'] ?? 0),
+      'store_short_label' => transport_map_store_short_label($rowStoreId),
       'business_date' => (string)($row['business_date'] ?? ''),
       'pickup_address' => $canViewFullAddress ? (string)($row['pickup_address'] ?? '') : transport_map_mask_address((string)($row['pickup_address'] ?? '')),
       'pickup_address_short' => transport_map_shorten_address((string)($row['pickup_address'] ?? '')),
@@ -696,7 +853,7 @@ function transport_map_fetch_data(PDO $pdo, array $filters): array {
       'route_hint' => [
         'direction_bucket' => $direction,
         'distance_km' => $distanceKm,
-        'store_base_id' => $base['id'],
+        'store_base_id' => $rowBase['id'],
       ],
     ];
 
@@ -739,6 +896,7 @@ function transport_map_fetch_data(PDO $pdo, array $filters): array {
   return [
     'filters' => $filters,
     'base' => $base,
+    'bases' => array_values($baseContexts),
     'summary' => $summary,
     'items' => $items,
     'vehicles' => $vehicles,

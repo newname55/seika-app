@@ -4,6 +4,7 @@
   const configRoot = window.WBSS_TRANSPORT_MAP_CONFIG || {};
   const pageConfig = configRoot.page || {};
   const driversByStore = configRoot.driversByStore || {};
+  const storeShortLabels = pageConfig.storeShortLabels || {};
   const apiUrl = pageConfig.apiUrl || '/wbss/public/api/transport_map.php';
   const pagePath = pageConfig.pagePath || window.location.pathname;
   const statusOptions = pageConfig.statusOptions || {};
@@ -36,8 +37,8 @@
 
   let map = null;
   let clusterLayer = null;
-  let storeMarker = null;
   let rangeLayer = null;
+  let storeLayer = null;
   let vehicleLayer = null;
   let connectionLayer = null;
   let markerById = new Map();
@@ -70,6 +71,7 @@
     map.addLayer(clusterLayer);
 
     rangeLayer = L.layerGroup().addTo(map);
+    storeLayer = L.layerGroup().addTo(map);
     vehicleLayer = L.layerGroup().addTo(map);
     connectionLayer = L.layerGroup().addTo(map);
   }
@@ -80,7 +82,7 @@
     }
     const storeId = String(storeSelect.value || '0');
     const selected = driverSelect.value;
-    const options = driversByStore[storeId] || [];
+    const options = driversByStore[storeId] || driversByStore.all || [];
     const fragments = ['<option value="0">すべて</option>'];
     options.forEach(function (driver) {
       const id = String(driver.id || 0);
@@ -159,7 +161,7 @@
       if (Number(item.cast_id || 0) > 0) {
         itemIdByCastId.set(Number(item.cast_id), item.id);
       }
-      const shopTag = item.shop_tag ? String(item.shop_tag) : (Number(item.cast_id || 0) > 0 ? String(item.cast_id) : '');
+      const shopTag = buildStoreScopedTag(item.store_id, item.shop_tag, item.cast_id);
       const tagText = shopTag ? '【' + shopTag + '】' : '';
       const displayLabel = (tagText ? tagText + ' ' : '') + (item.display_name || item.cast_name || '-');
       const status = statusOptions[item.status] || {};
@@ -215,12 +217,12 @@
     });
   }
 
-  function renderMap(base, items, vehicles) {
+  function renderMap(base, items, vehicles, bases) {
     const visibleItems = filterItemsByDriver(items);
     const visibleVehicles = filterVehiclesByDriver(vehicles || []);
 
     ensureMap();
-    if (!map || !clusterLayer || !rangeLayer || !vehicleLayer || !connectionLayer) {
+    if (!map || !clusterLayer || !rangeLayer || !storeLayer || !vehicleLayer || !connectionLayer) {
       if (mapBadgeEl) {
         mapBadgeEl.textContent = '地図初期化失敗';
       }
@@ -229,26 +231,31 @@
 
     clusterLayer.clearLayers();
     rangeLayer.clearLayers();
+    storeLayer.clearLayers();
     vehicleLayer.clearLayers();
     connectionLayer.clearLayers();
     markerById = new Map();
 
-    if (storeMarker) {
-      map.removeLayer(storeMarker);
-      storeMarker = null;
-    }
-
     const bounds = [];
-    if (base && base.lat !== null && base.lng !== null) {
-      const latLng = [base.lat, base.lng];
-      storeMarker = L.marker(latLng, {
-        icon: buildStoreIcon()
-      }).addTo(map);
-      storeMarker.bindPopup('<div class="transportMapPopup"><b>' + escapeHtml(base.name || '店舗') + '</b><div>店舗基準点</div></div>');
+    const activeBases = Array.isArray(bases) && bases.length
+      ? bases
+      : (base && base.lat !== null && base.lng !== null ? [base] : []);
+    activeBases.forEach(function (baseItem) {
+      if (baseItem.lat === null || baseItem.lng === null) {
+        return;
+      }
+      const latLng = [baseItem.lat, baseItem.lng];
+      const marker = L.marker(latLng, {
+        icon: buildStoreIcon(baseItem)
+      });
+      marker.bindPopup('<div class="transportMapPopup"><b>' + escapeHtml(baseItem.name || '店舗') + '</b><div>店舗基準点</div></div>');
+      storeLayer.addLayer(marker);
       bounds.push(latLng);
-      L.circle(latLng, { radius: 5000, color: '#94a3b8', weight: 1, fillOpacity: 0.03 }).addTo(rangeLayer);
-      L.circle(latLng, { radius: 10000, color: '#64748b', weight: 1, dashArray: '4 4', fillOpacity: 0.02 }).addTo(rangeLayer);
-    }
+      if (activeBases.length === 1) {
+        L.circle(latLng, { radius: 5000, color: '#94a3b8', weight: 1, fillOpacity: 0.03 }).addTo(rangeLayer);
+        L.circle(latLng, { radius: 10000, color: '#64748b', weight: 1, dashArray: '4 4', fillOpacity: 0.02 }).addTo(rangeLayer);
+      }
+    });
 
     visibleItems.forEach(function (item) {
       if (!item.has_coords) {
@@ -348,7 +355,7 @@
     const isUnassigned = item.driver_user_id === null;
     const color = (statusOptions[status] && statusOptions[status].color) || '#475569';
     const className = isUnassigned ? ' transportMapMarkerIcon--unassigned' : '';
-    const shopTag = item.shop_tag ? String(item.shop_tag) : (Number(item.cast_id || 0) > 0 ? String(item.cast_id) : '');
+    const shopTag = buildStoreScopedTag(item.store_id, item.shop_tag, item.cast_id);
     const nameText = String(item.display_name || item.cast_name || '-');
     const labelHtml = ''
       + '<span class="transportMapMarkerTag">' + escapeHtml(shopTag || '-') + '</span>'
@@ -364,10 +371,11 @@
     });
   }
 
-  function buildStoreIcon() {
+  function buildStoreIcon(baseItem) {
+    const storeLabel = storeShortLabels[String((baseItem && baseItem.store_id) || '')] || '店';
     return L.divIcon({
       className: 'transportMapStoreWrap',
-      html: '<span class="transportMapStoreIcon">店</span>',
+      html: '<span class="transportMapStoreIcon">' + escapeHtml(storeLabel) + '</span>',
       iconSize: [26, 26],
       iconAnchor: [13, 13]
     });
@@ -377,10 +385,11 @@
     const className = vehicle.is_stale ? ' transportMapVehicleIcon--stale' : '';
     const label = (vehicle.vehicle_label || '車両') + ' ' + (vehicle.driver_name || '');
     const timeLabel = formatDateTimeShort(vehicle.recorded_at);
+    const storeLabel = storeShortLabels[String(vehicle.store_id || '')] || '';
     return L.divIcon({
       className: 'transportMapVehicleWrap',
       html: '<span class="transportMapVehicleIcon' + className + '">'
-        + '<span class="transportMapVehicleBadge">' + escapeHtml(vehicle.vehicle_label || '車') + '</span>'
+        + '<span class="transportMapVehicleBadge">' + escapeHtml((storeLabel ? storeLabel + ' ' : '') + (vehicle.vehicle_label || '車')) + '</span>'
         + '<span class="transportMapVehicleName">' + escapeHtml(label.trim()) + '</span>'
         + '<span class="transportMapVehicleTime">' + escapeHtml(timeLabel || '--:--') + '</span>'
         + '</span>',
@@ -392,7 +401,7 @@
 
   function buildPopupHtml(item) {
     const status = statusOptions[item.status] || {};
-    const shopTag = item.shop_tag ? String(item.shop_tag) : (Number(item.cast_id || 0) > 0 ? String(item.cast_id) : '');
+    const shopTag = buildStoreScopedTag(item.store_id, item.shop_tag, item.cast_id);
     const tagText = shopTag ? '【' + shopTag + '】' : '';
     const displayLabel = (tagText ? tagText + ' ' : '') + (item.display_name || item.cast_name || '-');
     return '' +
@@ -413,9 +422,10 @@
   }
 
   function buildVehiclePopupHtml(vehicle) {
+    const storeLabel = storeShortLabels[String(vehicle.store_id || '')] || String(vehicle.store_id || '');
     return '' +
       '<div class="transportMapPopup">' +
-        '<div class="transportMapPopupTitle">' + escapeHtml((vehicle.vehicle_label || '車両') + ' / ' + (vehicle.driver_name || '-')) + '</div>' +
+        '<div class="transportMapPopupTitle">' + escapeHtml((storeLabel ? storeLabel + ' ' : '') + (vehicle.vehicle_label || '車両') + ' / ' + (vehicle.driver_name || '-')) + '</div>' +
         '<div class="transportMapPopupGrid">' +
           '<span><b>更新</b>' + escapeHtml(vehicle.recorded_at || '-') + '</span>' +
           '<span><b>状態</b>' + escapeHtml(vehicle.is_stale ? '位置古め' : '送信中') + '</span>' +
@@ -671,7 +681,7 @@
       hiddenDriverIds.add(driverId);
     }
     renderDriverToggles(Array.from(itemById.values()), window.__transportVehicles || []);
-    renderMap(window.__transportBase || {}, Array.from(itemById.values()), window.__transportVehicles || []);
+    renderMap(window.__transportBase || {}, Array.from(itemById.values()), window.__transportVehicles || [], window.__transportBases || []);
   });
 
   async function fetchData(pushHistory) {
@@ -708,8 +718,9 @@
       renderList(json.items || []);
       renderDriverToggles(json.items || [], json.vehicles || []);
       window.__transportBase = json.base || {};
+      window.__transportBases = json.bases || [];
       window.__transportVehicles = json.vehicles || [];
-      renderMap(json.base || {}, json.items || [], json.vehicles || []);
+      renderMap(json.base || {}, json.items || [], json.vehicles || [], json.bases || []);
       if (focusCastId > 0 && activeId === null) {
         focusCast(focusCastId, true);
       }
@@ -829,6 +840,15 @@
       return parts[1].slice(0, 5);
     }
     return text.slice(-5);
+  }
+
+  function buildStoreScopedTag(storeId, shopTag, castId) {
+    const prefix = storeShortLabels[String(storeId || '')] || String(storeId || '');
+    const localTag = String(shopTag || (Number(castId || 0) > 0 ? castId : '')).trim();
+    if (prefix && localTag) {
+      return prefix + localTag;
+    }
+    return localTag || prefix;
   }
 
   form.addEventListener('submit', function (event) {

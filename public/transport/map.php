@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../app/layout.php';
 require_once __DIR__ . '/../../app/transport_map.php';
 
 require_login();
-require_role(['manager', 'admin', 'super_user']);
+require_role(['manager', 'admin', 'super_user', ROLE_ALL_STORE_SHIFT_VIEW]);
 
 $pdo = db();
 $err = '';
@@ -21,17 +21,23 @@ $focusCastId = 0;
 $returnTo = '';
 $returnStoreId = 0;
 $returnCastId = 0;
+$canViewAllStores = false;
 
 try {
   $stores = transport_allowed_stores($pdo);
+  $canViewAllStores = transport_map_can_view_all_stores() && count($stores) > 1;
   $initialFilters = transport_map_filters_from_request($pdo, $_GET);
   $focusCastId = max(0, (int)($_GET['cast_id'] ?? 0));
   $returnTo = trim((string)($_GET['return_to'] ?? ''));
   $returnStoreId = max(0, (int)($_GET['return_store_id'] ?? 0));
   $returnCastId = max(0, (int)($_GET['return_cast_id'] ?? 0));
   $selectedStoreId = (int)$initialFilters['store_id'];
-  $storeRow = transport_map_fetch_store_row($pdo, $selectedStoreId);
-  $storeName = (string)($storeRow['name'] ?? '');
+  if ($selectedStoreId > 0) {
+    $storeRow = transport_map_fetch_store_row($pdo, $selectedStoreId);
+    $storeName = (string)($storeRow['name'] ?? '');
+  } else {
+    $storeName = '全店舗';
+  }
   $businessDate = (string)$initialFilters['business_date'];
 
   foreach ($stores as $store) {
@@ -40,6 +46,9 @@ try {
       continue;
     }
     $driversByStore[$sid] = transport_map_fetch_driver_options($pdo, $sid);
+  }
+  if ($canViewAllStores) {
+    $driversByStore['all'] = transport_map_fetch_driver_options_for_stores($pdo, array_map(static fn(array $store): int => (int)($store['id'] ?? 0), $stores));
   }
 } catch (Throwable $e) {
   $err = $e->getMessage();
@@ -50,6 +59,7 @@ $pageConfig = [
   'initialFilters' => $initialFilters,
   'statusOptions' => transport_map_status_definitions(),
   'directionOptions' => transport_map_direction_options(),
+  'storeShortLabels' => transport_map_store_short_labels(),
   'csrfToken' => csrf_token(),
   'focusCastId' => $focusCastId,
 ];
@@ -63,6 +73,9 @@ if ($returnTo === 'routes' && $selectedStoreId > 0) {
 }
 
 $rightHtml = '';
+if ($selectedStoreId === 0 && $canViewAllStores) {
+  $rightHtml .= '<a class="btn" href="/wbss/public/transport/map_screen.php?store_id=all&business_date=' . urlencode($businessDate) . '">TV表示</a> ';
+}
 if ($selectedStoreId > 0) {
   if ($routeReturnUrl !== '') {
     $rightHtml .= '<a class="btn btn-primary" href="' . h($routeReturnUrl) . '">ルートへ戻る</a> ';
@@ -118,6 +131,9 @@ render_header('送迎マップ', [
             <label class="field field-store">
               <span class="fieldLabel">店舗</span>
               <select class="sel" name="store_id" id="transportMapStore">
+                <?php if ($canViewAllStores): ?>
+                  <option value="all" <?= $selectedStoreId === 0 ? 'selected' : '' ?>>全店舗</option>
+                <?php endif; ?>
                 <?php foreach ($stores as $store): ?>
                   <?php $sid = (int)($store['id'] ?? 0); ?>
                   <option value="<?= $sid ?>" <?= $sid === $selectedStoreId ? 'selected' : '' ?>>
@@ -166,7 +182,7 @@ render_header('送迎マップ', [
               <span class="fieldLabel">ドライバー</span>
               <select class="sel" name="driver_user_id" id="transportMapDriver">
                 <option value="0">すべて</option>
-                <?php foreach (($driversByStore[$selectedStoreId] ?? []) as $driver): ?>
+                <?php foreach (($driversByStore[$selectedStoreId > 0 ? $selectedStoreId : 'all'] ?? []) as $driver): ?>
                   <?php $driverId = (int)($driver['id'] ?? 0); ?>
                   <option value="<?= $driverId ?>" <?= ((int)($initialFilters['driver_user_id'] ?? 0) === $driverId) ? 'selected' : '' ?>>
                     <?= h((string)($driver['name'] ?? '')) ?>

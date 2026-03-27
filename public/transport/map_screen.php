@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../app/layout.php';
 require_once __DIR__ . '/../../app/transport_map.php';
 
 require_login();
-require_role(['manager', 'admin', 'super_user']);
+require_role(['manager', 'admin', 'super_user', ROLE_ALL_STORE_SHIFT_VIEW]);
 
 $pdo = db();
 $err = '';
@@ -17,13 +17,19 @@ $storeName = '';
 $businessDate = '';
 $driversByStore = [];
 $initialFilters = [];
+$canViewAllStores = false;
 
 try {
   $stores = transport_allowed_stores($pdo);
+  $canViewAllStores = transport_map_can_view_all_stores() && count($stores) > 1;
   $initialFilters = transport_map_filters_from_request($pdo, $_GET);
   $selectedStoreId = (int)$initialFilters['store_id'];
-  $storeRow = transport_map_fetch_store_row($pdo, $selectedStoreId);
-  $storeName = (string)($storeRow['name'] ?? '');
+  if ($selectedStoreId > 0) {
+    $storeRow = transport_map_fetch_store_row($pdo, $selectedStoreId);
+    $storeName = (string)($storeRow['name'] ?? '');
+  } else {
+    $storeName = '全店舗';
+  }
   $businessDate = (string)$initialFilters['business_date'];
 
   foreach ($stores as $store) {
@@ -32,6 +38,9 @@ try {
       continue;
     }
     $driversByStore[$sid] = transport_map_fetch_driver_options($pdo, $sid);
+  }
+  if ($canViewAllStores) {
+    $driversByStore['all'] = transport_map_fetch_driver_options_for_stores($pdo, array_map(static fn(array $store): int => (int)($store['id'] ?? 0), $stores));
   }
 } catch (Throwable $e) {
   $err = $e->getMessage();
@@ -43,6 +52,7 @@ $pageConfig = [
   'initialFilters' => $initialFilters,
   'statusOptions' => transport_map_status_definitions(),
   'directionOptions' => transport_map_direction_options(),
+  'storeShortLabels' => transport_map_store_short_labels(),
   'csrfToken' => csrf_token(),
   'focusCastId' => 0,
 ];
@@ -66,7 +76,7 @@ render_page_start('送迎マップ TV');
         </div>
       </div>
       <div class="transportMapScreenTopBarActions">
-        <a class="miniBtn" href="<?= h($selectedStoreId > 0 ? '/wbss/public/transport/map.php?store_id=' . (int)$selectedStoreId . '&business_date=' . urlencode($businessDate) : '/wbss/public/dashboard.php') ?>">通常表示</a>
+        <a class="miniBtn" href="<?= h($selectedStoreId > 0 ? '/wbss/public/transport/map.php?store_id=' . (int)$selectedStoreId . '&business_date=' . urlencode($businessDate) : ($canViewAllStores ? '/wbss/public/transport/map.php?store_id=all&business_date=' . urlencode($businessDate) : '/wbss/public/dashboard.php')) ?>">通常表示</a>
         <?php if ($selectedStoreId > 0): ?>
           <a class="miniBtn" href="/wbss/public/transport/driver_location.php?store_id=<?= (int)$selectedStoreId ?>">現在地送信</a>
         <?php endif; ?>
@@ -82,6 +92,9 @@ render_page_start('送迎マップ TV');
         <label class="field">
           <span class="fieldLabel">店舗</span>
           <select class="sel" name="store_id" id="transportMapStore">
+            <?php if ($canViewAllStores): ?>
+              <option value="all" <?= $selectedStoreId === 0 ? 'selected' : '' ?>>全店舗</option>
+            <?php endif; ?>
             <?php foreach ($stores as $store): ?>
               <?php $sid = (int)($store['id'] ?? 0); ?>
               <option value="<?= $sid ?>" <?= $sid === $selectedStoreId ? 'selected' : '' ?>>

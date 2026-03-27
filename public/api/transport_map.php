@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../../app/transport_map.php';
 
 require_login();
-require_role(['manager', 'admin', 'super_user']);
+require_role(['manager', 'admin', 'super_user', ROLE_ALL_STORE_SHIFT_VIEW]);
 
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -51,6 +51,7 @@ try {
     'ok' => true,
     'filters' => $data['filters'],
     'base' => $data['base'],
+    'bases' => $data['bases'],
     'summary' => $data['summary'],
     'items' => $data['items'],
     'vehicles' => $data['vehicles'],
