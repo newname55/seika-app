@@ -1091,11 +1091,15 @@
     const statusField = rowEl.querySelector('[data-assign-status]');
     const driverUserId = driverField ? String(driverField.value || '0') : '0';
     const requestedStatus = statusField ? String(statusField.value || 'pending') : 'pending';
+    const storeId = resolveItemStoreId(item);
+    if (storeId <= 0) {
+      throw new Error('対象店舗が不正です');
+    }
 
     const payload = new URLSearchParams();
     payload.set('action', 'save_assignment');
     payload.set('csrf_token', String(pageConfig.csrfToken || ''));
-    payload.set('store_id', String(item.store_id || storeSelect.value || '0'));
+    payload.set('store_id', String(storeId));
     payload.set('business_date', String(item.business_date || ''));
     payload.set('cast_id', String(item.cast_id || '0'));
     payload.set('driver_user_id', driverUserId);
@@ -1195,10 +1199,14 @@
         const rowEl = rowById.get(itemId);
         const driverField = rowEl ? rowEl.querySelector('[data-assign-driver]') : null;
         const statusField = rowEl ? rowEl.querySelector('[data-assign-status]') : null;
+        const storeId = resolveItemStoreId(item);
+        if (storeId <= 0) {
+          throw new Error('対象店舗が不正です');
+        }
         const payload = new URLSearchParams();
         payload.set('action', 'save_assignment');
         payload.set('csrf_token', String(pageConfig.csrfToken || ''));
-        payload.set('store_id', String(item.store_id || '0'));
+        payload.set('store_id', String(storeId));
         payload.set('business_date', String(item.business_date || ''));
         payload.set('cast_id', String(item.cast_id || '0'));
         payload.set('driver_user_id', driverField ? String(driverField.value || '0') : String(suggestion.suggested_driver_id || 0));
@@ -1279,6 +1287,22 @@
       return prefix + localTag;
     }
     return localTag || prefix;
+  }
+
+  function resolveItemStoreId(item) {
+    const itemStoreId = Number(item && item.store_id ? item.store_id : 0);
+    if (itemStoreId > 0) {
+      return itemStoreId;
+    }
+    const selectedStoreId = Number(storeSelect && storeSelect.value ? storeSelect.value : 0);
+    if (selectedStoreId > 0) {
+      return selectedStoreId;
+    }
+    const initialStoreId = Number((pageConfig.initialFilters && pageConfig.initialFilters.store_id) || 0);
+    if (initialStoreId > 0) {
+      return initialStoreId;
+    }
+    return 0;
   }
 
   form.addEventListener('submit', function (event) {
