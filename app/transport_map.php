@@ -741,6 +741,89 @@ function transport_map_save_assignment(PDO $pdo, array $source, int $actorUserId
   throw new RuntimeException('保存後の送迎データを一覧へ反映できませんでした');
 }
 
+function transport_map_bulk_unassign(PDO $pdo, array $source, int $actorUserId): array {
+  if (!transport_map_table_exists($pdo, 'transport_assignments')) {
+    throw new RuntimeException('transport_assignments テーブルが未作成です。先にSQLを適用してください。');
+  }
+
+  $storeId = transport_map_resolve_save_store_id($pdo, $source);
+  $storeRow = transport_map_fetch_store_row($pdo, $storeId);
+  $businessDate = transport_map_normalize_date((string)($source['business_date'] ?? ''), transport_map_default_business_date($storeRow));
+
+  $st = $pdo->prepare("
+    SELECT *
+    FROM transport_assignments
+    WHERE store_id = ?
+      AND business_date = ?
+      AND driver_user_id IS NOT NULL
+      AND status IN ('assigned', 'in_progress')
+    ORDER BY id ASC
+  ");
+  $st->execute([$storeId, $businessDate]);
+  $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  if ($rows === []) {
+    return [
+      'updated' => 0,
+      'store_id' => $storeId,
+      'business_date' => $businessDate,
+    ];
+  }
+
+  $pdo->beginTransaction();
+  try {
+    $updateSt = $pdo->prepare("
+      UPDATE transport_assignments
+      SET driver_user_id = NULL,
+          status = 'pending',
+          vehicle_label = NULL,
+          sort_order = 0,
+          updated_by_user_id = :updated_by_user_id,
+          updated_at = NOW()
+      WHERE id = :id
+        AND store_id = :store_id
+    ");
+
+    foreach ($rows as $row) {
+      $assignmentId = (int)($row['id'] ?? 0);
+      if ($assignmentId <= 0) {
+        continue;
+      }
+      $updateSt->execute([
+        ':updated_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        ':id' => $assignmentId,
+        ':store_id' => $storeId,
+      ]);
+      $after = $row;
+      $after['driver_user_id'] = null;
+      $after['status'] = 'pending';
+      $after['vehicle_label'] = null;
+      $after['sort_order'] = 0;
+      transport_map_log_assignment_change(
+        $pdo,
+        $assignmentId,
+        $storeId,
+        'bulk_unassign',
+        $actorUserId,
+        $row,
+        $after
+      );
+    }
+
+    $pdo->commit();
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+      $pdo->rollBack();
+    }
+    throw $e;
+  }
+
+  return [
+    'updated' => count($rows),
+    'store_id' => $storeId,
+    'business_date' => $businessDate,
+  ];
+}
+
 function transport_map_fetch_rows(PDO $pdo, array $filters): array {
   if (!transport_map_table_exists($pdo, 'transport_assignments')) {
     return [];

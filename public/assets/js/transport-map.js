@@ -22,6 +22,7 @@
   const driverToggleEl = document.querySelector('[data-driver-toggles]');
   const vehicleUpdatedEl = document.querySelector('[data-vehicle-updated]');
   const autoAssignButton = document.getElementById('transportMapAutoAssign');
+  const bulkUnassignButton = document.getElementById('transportMapBulkUnassign');
   const resetSuggestionsButton = document.getElementById('transportMapResetSuggestions');
   const confirmSuggestionsButton = document.getElementById('transportMapConfirmSuggestions');
   const suggestStatusEl = document.getElementById('transportMapSuggestStatus');
@@ -1311,6 +1312,63 @@
     }
   }
 
+  async function bulkUnassignAssignments() {
+    const params = serializeForm();
+    const currentStoreId = Number(params.get('store_id') || pageConfig.currentStoreId || 0);
+    const businessDate = String(params.get('business_date') || (pageConfig.initialFilters && pageConfig.initialFilters.business_date) || '');
+    if (currentStoreId <= 0) {
+      setSuggestStatus('全店舗表示では一括未割当できません', true);
+      return;
+    }
+    if (businessDate === '') {
+      setSuggestStatus('業務日を指定してください', true);
+      return;
+    }
+    if (!window.confirm('この店舗・この業務日の割当済みを未割当に戻します。よろしいですか？')) {
+      return;
+    }
+    try {
+      if (bulkUnassignButton) {
+        bulkUnassignButton.disabled = true;
+      }
+      setSuggestStatus('未割当へ戻しています…', false);
+      const payload = new URLSearchParams();
+      payload.set('action', 'bulk_unassign');
+      payload.set('csrf_token', String(pageConfig.csrfToken || ''));
+      payload.set('store_id', String(currentStoreId));
+      payload.set('business_date', businessDate);
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
+        body: payload.toString()
+      });
+      const json = await response.json().catch(function () { return {}; });
+      if (!response.ok || !json.ok) {
+        throw new Error(json.error || '一括未割当に失敗しました');
+      }
+      suggestionById = new Map();
+      await fetchData(false);
+      if (Number(json.updated || 0) > 0) {
+        setSuggestStatus(String(json.updated) + '件を未割当に戻しました', false);
+      } else {
+        setSuggestStatus('未割当へ戻す対象はありませんでした', false);
+      }
+    } catch (error) {
+      const message = String((error && error.message) || '一括未割当に失敗しました');
+      setSuggestStatus(message, true);
+      window.alert(message);
+    } finally {
+      if (bulkUnassignButton) {
+        bulkUnassignButton.disabled = false;
+      }
+    }
+  }
+
   async function confirmSuggestions() {
     const suggestions = Array.from(suggestionById.values()).filter(function (suggestion) {
       return Number(suggestion.suggested_driver_id || 0) > 0;
@@ -1532,6 +1590,10 @@
 
   if (autoAssignButton) {
     autoAssignButton.addEventListener('click', runAutoAssign);
+  }
+
+  if (bulkUnassignButton) {
+    bulkUnassignButton.addEventListener('click', bulkUnassignAssignments);
   }
 
   if (resetSuggestionsButton) {

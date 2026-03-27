@@ -31,24 +31,36 @@ try {
   if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     csrf_verify($_POST['csrf_token'] ?? null);
     $action = trim((string)($_POST['action'] ?? ''));
-    if ($action !== 'save_assignment') {
+    if (!in_array($action, ['save_assignment', 'bulk_unassign'], true)) {
       transport_map_api_error('不正な操作です', 400);
     }
 
-    error_log('[transport_map_api_save_assignment] raw=' . json_encode([
-      'store_id' => $_POST['store_id'] ?? null,
-      'business_date' => $_POST['business_date'] ?? null,
-      'cast_id' => $_POST['cast_id'] ?? null,
-      'driver_user_id' => $_POST['driver_user_id'] ?? null,
-      'status' => $_POST['status'] ?? null,
-      'sort_order' => $_POST['sort_order'] ?? null,
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    if ($action === 'save_assignment') {
+      error_log('[transport_map_api_save_assignment] raw=' . json_encode([
+        'store_id' => $_POST['store_id'] ?? null,
+        'business_date' => $_POST['business_date'] ?? null,
+        'cast_id' => $_POST['cast_id'] ?? null,
+        'driver_user_id' => $_POST['driver_user_id'] ?? null,
+        'status' => $_POST['status'] ?? null,
+        'sort_order' => $_POST['sort_order'] ?? null,
+      ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-    $item = transport_map_save_assignment($pdo, $_POST, (int)(current_user_id() ?? 0));
+      $item = transport_map_save_assignment($pdo, $_POST, (int)(current_user_id() ?? 0));
+      echo json_encode([
+        'ok' => true,
+        'message' => '送迎割当を保存しました',
+        'item' => $item,
+      ], JSON_UNESCAPED_UNICODE);
+      exit;
+    }
+
+    $result = transport_map_bulk_unassign($pdo, $_POST, (int)(current_user_id() ?? 0));
     echo json_encode([
       'ok' => true,
-      'message' => '送迎割当を保存しました',
-      'item' => $item,
+      'message' => '送迎割当を未割当に戻しました',
+      'updated' => (int)($result['updated'] ?? 0),
+      'store_id' => (int)($result['store_id'] ?? 0),
+      'business_date' => (string)($result['business_date'] ?? ''),
     ], JSON_UNESCAPED_UNICODE);
     exit;
   }

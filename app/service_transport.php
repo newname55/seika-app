@@ -1620,6 +1620,13 @@ function transport_speed_km_per_min(): float {
   return 0.5;
 }
 
+function transport_normalize_travel_minutes(int $minutes): int {
+  if ($minutes <= 0) {
+    return 0;
+  }
+  return max(3, $minutes);
+}
+
 function transport_build_distance_matrix(array $points): array {
   $n = count($points);
   $matrix = array_fill(0, $n, array_fill(0, $n, 0.0));
@@ -1705,10 +1712,12 @@ function transport_optimize_pickup_order(array $casts, array $base, ?array $disp
     foreach ($distanceMatrix as $i => $row) {
       $durationMatrix[$i] = [];
       foreach ($row as $j => $km) {
-        $durationMatrix[$i][$j] = ($i === $j) ? 0.0 : (float)ceil($km / $speed);
+        $durationMatrix[$i][$j] = ($i === $j)
+          ? 0.0
+          : (float)(transport_normalize_travel_minutes((int)ceil($km / $speed)) * 60);
       }
-      $fromDispatchDuration[$i] = (float)ceil($fromDispatchDistance[$i] / $speed);
-      $toBaseDuration[$i] = (float)ceil($toBaseDistance[$i] / $speed);
+      $fromDispatchDuration[$i] = (float)(transport_normalize_travel_minutes((int)ceil($fromDispatchDistance[$i] / $speed)) * 60);
+      $toBaseDuration[$i] = (float)(transport_normalize_travel_minutes((int)ceil($toBaseDistance[$i] / $speed)) * 60);
     }
   }
 
@@ -1817,10 +1826,10 @@ function transport_optimize_pickup_order(array $casts, array $base, ?array $disp
     if ($seq > 0) {
       $prevIdx = $order[$seq - 1];
       $distanceFromPrev = (float)$distanceMatrix[$prevIdx][$pointIdx];
-      $durationFromPrev = (int)ceil((float)$durationMatrix[$prevIdx][$pointIdx] / 60);
+      $durationFromPrev = transport_normalize_travel_minutes((int)ceil((float)$durationMatrix[$prevIdx][$pointIdx] / 60));
     } else {
       $distanceFromPrev = (float)$fromDispatchDistance[$pointIdx];
-      $durationFromPrev = (int)ceil((float)$fromDispatchDuration[$pointIdx] / 60);
+      $durationFromPrev = transport_normalize_travel_minutes((int)ceil((float)$fromDispatchDuration[$pointIdx] / 60));
     }
     $totalDistance += $distanceFromPrev;
     $totalDuration += $durationFromPrev;
@@ -1841,7 +1850,9 @@ function transport_optimize_pickup_order(array $casts, array $base, ?array $disp
 
   $lastIdx = $order[count($order) - 1] ?? null;
   $toBaseDistance = $lastIdx === null ? 0.0 : (float)$toBaseDistance[$lastIdx];
-  $toBaseMinutes = $lastIdx === null ? 0 : (int)ceil((float)$toBaseDuration[$lastIdx] / 60);
+  $toBaseMinutes = $lastIdx === null
+    ? 0
+    : transport_normalize_travel_minutes((int)ceil((float)$toBaseDuration[$lastIdx] / 60));
   $totalDistance += $toBaseDistance;
   $totalDuration += $toBaseMinutes;
   $stops[] = [
@@ -2066,21 +2077,21 @@ function transport_recalculate_route_from_stops(array $pickupStops, array $base,
     if ($index > 0) {
       if (is_array($googleMatrix)) {
         $distance = (float)$googleMatrix['distance_matrix'][$index - 1][$index];
-        $minutes = (int)ceil((float)$googleMatrix['duration_matrix'][$index - 1][$index] / 60);
+        $minutes = transport_normalize_travel_minutes((int)ceil((float)$googleMatrix['duration_matrix'][$index - 1][$index] / 60));
       } else {
         $prev = $pickupStops[$index - 1];
         $prevLat = (float)($prev['dest_lat'] ?? $prev['lat'] ?? 0.0);
         $prevLng = (float)($prev['dest_lng'] ?? $prev['lng'] ?? 0.0);
         $distance = transport_haversine_km($prevLat, $prevLng, $destLat, $destLng);
-        $minutes = (int)ceil($distance / $speed);
+        $minutes = transport_normalize_travel_minutes((int)ceil($distance / $speed));
       }
     } else {
       if (is_array($googleMatrix)) {
         $distance = (float)$googleMatrix['from_dispatch_distance'][$index];
-        $minutes = (int)ceil((float)$googleMatrix['from_dispatch_duration'][$index] / 60);
+        $minutes = transport_normalize_travel_minutes((int)ceil((float)$googleMatrix['from_dispatch_duration'][$index] / 60));
       } else {
         $distance = transport_haversine_km($dispatchLat, $dispatchLng, $destLat, $destLng);
-        $minutes = (int)ceil($distance / $speed);
+        $minutes = transport_normalize_travel_minutes((int)ceil($distance / $speed));
       }
     }
     $totalDistance += $distance;
@@ -2111,10 +2122,10 @@ function transport_recalculate_route_from_stops(array $pickupStops, array $base,
   } elseif (is_array($googleMatrix)) {
     $lastIndex = count($pickupStops) - 1;
     $toBaseDistance = (float)$googleMatrix['to_base_distance'][$lastIndex];
-    $toBaseMinutes = (int)ceil((float)$googleMatrix['to_base_duration'][$lastIndex] / 60);
+    $toBaseMinutes = transport_normalize_travel_minutes((int)ceil((float)$googleMatrix['to_base_duration'][$lastIndex] / 60));
   } else {
     $toBaseDistance = transport_haversine_km($lastLat, $lastLng, $baseLat, $baseLng);
-    $toBaseMinutes = (int)ceil($toBaseDistance / $speed);
+    $toBaseMinutes = transport_normalize_travel_minutes((int)ceil($toBaseDistance / $speed));
   }
   $totalDistance += $toBaseDistance;
   $stops[] = [
