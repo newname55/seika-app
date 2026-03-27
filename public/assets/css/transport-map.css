@@ -2,6 +2,7 @@
   max-width:none;
   width:100%;
   padding:10px 12px;
+  min-height:100vh;
 }
 
 .transportMapPage.transportShell{
@@ -12,11 +13,13 @@
 
 .transportMapScreenPage{
   display:grid;
+  grid-template-rows:auto auto minmax(0, 1fr) auto;
   gap:10px;
-  padding-bottom:16px;
+  padding-bottom:0;
   width:min(100%, 1680px);
   max-width:none;
   margin:0 auto;
+  min-height:calc(100vh - 20px);
 }
 
 .admin-wrap.transportMapScreenPage{
@@ -147,17 +150,20 @@
   position:relative;
   padding:6px;
   display:grid;
+  align-content:stretch;
   gap:0;
+  min-height:0;
 }
 
 .transportMapCanvas--screen{
-  min-height:calc(100vh - 28px);
+  min-height:0;
+  height:100%;
 }
 
 .transportMapScreenFooter{
-  padding:8px 10px;
+  padding:6px 10px;
   display:grid;
-  gap:8px;
+  gap:6px;
   border-radius:12px;
 }
 
