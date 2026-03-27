@@ -56,6 +56,8 @@ try {
 
 $pageConfig = [
   'apiUrl' => '/wbss/public/api/transport_map.php',
+  'autoAssignUrl' => '/wbss/public/api/transport/auto_assign.php',
+  'optimizeRouteUrl' => '/wbss/public/api/transport/optimize_route.php',
   'initialFilters' => $initialFilters,
   'statusOptions' => transport_map_status_definitions(),
   'directionOptions' => transport_map_direction_options(),
@@ -93,7 +95,7 @@ render_header('送迎マップ', [
   'right_html' => $rightHtml,
 ]);
 ?>
-<link rel="stylesheet" href="/wbss/public/assets/css/transport-map.css?v=20260327l">
+<link rel="stylesheet" href="/wbss/public/assets/css/transport-map.css?v=20260327q">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -293,6 +295,11 @@ render_header('送迎マップ', [
             <?php endforeach; ?>
           </div>
         </div>
+        <div class="transportMapSuggestActions">
+          <button type="button" class="btn" id="transportMapAutoAssign">自動提案</button>
+          <button type="button" class="btn btn-primary" id="transportMapConfirmSuggestions">提案を確定</button>
+          <span class="transportMapSuggestStatus" id="transportMapSuggestStatus">未割当へ提案を出せます</span>
+        </div>
         <div class="transportMapList" id="transportMapList">
           <div class="transportMapEmpty">データを読み込み中です。</div>
         </div>
@@ -321,5 +328,5 @@ window.WBSS_TRANSPORT_MAP_CONFIG = <?= json_encode([
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="/wbss/public/assets/js/transport-map.js?v=20260327l"></script>
+<script src="/wbss/public/assets/js/transport-map.js?v=20260327q"></script>
 <?php render_page_end(); ?>
