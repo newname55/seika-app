@@ -570,6 +570,82 @@
   color:#b91c1c;
 }
 
+.transportMapSuggestRoutePanel{
+  display:grid;
+  gap:8px;
+  padding:8px 10px;
+  border:1px solid rgba(37,99,235,.08);
+  border-radius:12px;
+  background:rgba(248,250,252,.72);
+}
+
+.transportMapSuggestRouteList{
+  display:grid;
+  gap:6px;
+}
+
+.transportMapSuggestRouteCard{
+  display:grid;
+  gap:4px;
+  padding:8px 10px;
+  border-radius:10px;
+  background:rgba(255,255,255,.9);
+  border:1px solid rgba(15,23,42,.06);
+}
+
+.transportMapSuggestRouteDriver{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:#0f172a;
+  font-size:12px;
+  font-weight:800;
+}
+
+.transportMapSuggestRouteDriver b{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  min-height:20px;
+  padding:0 6px;
+  border-radius:999px;
+  background:rgba(37,99,235,.1);
+  color:#1d4ed8;
+  font-size:11px;
+}
+
+.transportMapSuggestRouteStops{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.transportMapSuggestRouteStop{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 8px;
+  border-radius:999px;
+  background:rgba(219,234,254,.52);
+  color:#1e3a8a;
+  font-size:11px;
+  font-weight:700;
+}
+
+.transportMapSuggestRouteStop i{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:16px;
+  height:16px;
+  border-radius:999px;
+  background:#2563eb;
+  color:#eff6ff;
+  font-size:10px;
+  font-style:normal;
+}
+
 .transportMapRow{
   width:100%;
   text-align:left;

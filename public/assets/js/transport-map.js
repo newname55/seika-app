@@ -25,6 +25,8 @@
   const resetSuggestionsButton = document.getElementById('transportMapResetSuggestions');
   const confirmSuggestionsButton = document.getElementById('transportMapConfirmSuggestions');
   const suggestStatusEl = document.getElementById('transportMapSuggestStatus');
+  const suggestRoutePanelEl = document.querySelector('[data-suggest-route-summary]');
+  const suggestRouteListEl = document.querySelector('[data-suggest-route-list]');
 
   if (!form) {
     return;
@@ -830,6 +832,59 @@
     suggestStatusEl.classList.toggle('is-error', !!isError);
   }
 
+  function renderSuggestionRouteSummary() {
+    if (!suggestRoutePanelEl || !suggestRouteListEl) {
+      return;
+    }
+    const grouped = new Map();
+    suggestionById.forEach(function (suggestion, requestId) {
+      const driverId = Number(suggestion.suggested_driver_id || 0);
+      if (driverId <= 0) {
+        return;
+      }
+      const item = itemById.get(Number(requestId));
+      if (!item) {
+        return;
+      }
+      const key = String(driverId);
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          driver_name: suggestion.suggested_driver_name || ('ドライバー' + driverId),
+          stops: []
+        });
+      }
+      grouped.get(key).stops.push({
+        order: Number(suggestion.suggested_order || 0),
+        name: buildStoreScopedTag(item.store_id, item.shop_tag, item.cast_id) + ' ' + (item.display_name || item.cast_name || '-')
+      });
+    });
+
+    const groups = Array.from(grouped.values()).map(function (group) {
+      group.stops.sort(function (a, b) {
+        return a.order - b.order;
+      });
+      return group;
+    });
+
+    if (!groups.length) {
+      suggestRoutePanelEl.hidden = true;
+      suggestRouteListEl.innerHTML = '';
+      return;
+    }
+
+    suggestRouteListEl.innerHTML = groups.map(function (group) {
+      const stopsHtml = group.stops.map(function (stop) {
+        return '<span class="transportMapSuggestRouteStop"><i>' + escapeHtml(String(stop.order || '-')) + '</i><span>' + escapeHtml(stop.name) + '</span></span>';
+      }).join('');
+      return ''
+        + '<div class="transportMapSuggestRouteCard">'
+        +   '<div class="transportMapSuggestRouteDriver"><b>' + escapeHtml(String(group.stops.length)) + '</b><span>' + escapeHtml(group.driver_name) + '</span></div>'
+        +   '<div class="transportMapSuggestRouteStops">' + stopsHtml + '</div>'
+        + '</div>';
+    }).join('');
+    suggestRoutePanelEl.hidden = false;
+  }
+
   function applySuggestionsToUi(items) {
     suggestionById = new Map();
     (items || []).forEach(function (suggestion) {
@@ -874,6 +929,7 @@
     const nextItems = Array.from(itemById.values());
     renderDriverToggles(nextItems, window.__transportVehicles || []);
     renderMap(window.__transportBase || {}, nextItems, window.__transportVehicles || [], window.__transportBases || []);
+    renderSuggestionRouteSummary();
     setSuggestStatus((items || []).length > 0 ? ((items || []).length + '件の提案を反映しました') : '提案対象はありません', false);
   }
 
@@ -1061,6 +1117,7 @@
       suggestionById = new Map();
       renderList(json.items || []);
       renderDriverToggles(json.items || [], json.vehicles || []);
+      renderSuggestionRouteSummary();
       window.__transportBase = json.base || {};
       window.__transportBases = json.bases || [];
       window.__transportVehicles = json.vehicles || [];
@@ -1152,7 +1209,10 @@
       await fetchData(false);
       focusItem(nextFocusId, true);
     } catch (error) {
-      window.alert(error.message || '送迎割当の保存に失敗しました');
+      const message = String((error && error.message) || '送迎割当の保存に失敗しました');
+      if (message.indexOf('対象店舗が不正です') === -1) {
+        window.alert(message);
+      }
     } finally {
       if (triggerEl) {
         triggerEl.disabled = false;
