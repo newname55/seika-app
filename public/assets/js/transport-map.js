@@ -6,6 +6,7 @@
   const driversByStore = configRoot.driversByStore || {};
   const storeShortLabels = pageConfig.storeShortLabels || {};
   const apiUrl = pageConfig.apiUrl || '/wbss/public/api/transport_map.php';
+  const autoAssignUrl = pageConfig.autoAssignUrl || '/wbss/public/api/transport/auto_assign.php';
   const pagePath = pageConfig.pagePath || window.location.pathname;
   const statusOptions = pageConfig.statusOptions || {};
   const focusCastId = Number(pageConfig.focusCastId || 0);
@@ -19,6 +20,9 @@
   const footNoteEl = document.getElementById('transportMapFootNote');
   const driverToggleEl = document.querySelector('[data-driver-toggles]');
   const vehicleUpdatedEl = document.querySelector('[data-vehicle-updated]');
+  const autoAssignButton = document.getElementById('transportMapAutoAssign');
+  const confirmSuggestionsButton = document.getElementById('transportMapConfirmSuggestions');
+  const suggestStatusEl = document.getElementById('transportMapSuggestStatus');
 
   if (!form) {
     return;
@@ -49,6 +53,7 @@
   let lastFetchSeq = 0;
   let autoRefreshTimer = null;
   let hiddenDriverIds = new Set();
+  let suggestionById = new Map();
 
   function ensureMap() {
     if (map || typeof L === 'undefined') {
@@ -174,8 +179,11 @@
       const driverText = item.driver_name || '未割当';
       const addressText = item.pickup_address_short || '住所未登録';
       const sourceBadge = item.source_type === 'shift_plan' ? '<span class="transportMapSourceTag">勤務予定由来</span>' : '';
+      const suggestion = suggestionById.get(item.id) || null;
+      const suggestionClass = suggestion ? ' is-suggested' : '';
+      const suggestionHtml = suggestion ? buildSuggestionHtml(suggestion) : '';
       return '' +
-        '<article class="transportMapRow' + unassignedClass + noCoordsClass + '" data-row-id="' + escapeHtml(String(item.id)) + '">' +
+        '<article class="transportMapRow' + unassignedClass + noCoordsClass + suggestionClass + '" data-row-id="' + escapeHtml(String(item.id)) + '">' +
           '<div class="transportMapRowHead">' +
             '<div>' +
               '<div class="transportMapRowNameWrap">' +
@@ -204,6 +212,7 @@
             '</label>' +
             '<button type="button" class="btn miniBtn transportMapSaveBtn" data-save-assignment="' + escapeHtml(String(item.id)) + '">保存</button>' +
           '</div>' +
+          suggestionHtml +
           '<div class="transportMapRowActions">' +
             '<span class="transportMapMiniHint">' + (item.has_coords ? '地図で表示可能' : '座標未登録のため一覧のみ') + '</span>' +
             '<button type="button" class="miniBtn" data-focus-row="' + escapeHtml(String(item.id)) + '">地図へ移動</button>' +
@@ -597,6 +606,66 @@
     return html.join('');
   }
 
+  function buildSuggestionHtml(suggestion) {
+    const parts = [];
+    parts.push('<div class="transportMapSuggestion" title="' + escapeHtml(suggestion.reason || '') + '">');
+    parts.push('<span><b>提案</b>' + escapeHtml(suggestion.suggested_driver_name || '候補なし') + '</span>');
+    parts.push('<span><b>グループ</b>' + escapeHtml(suggestion.group_id || '-') + '</span>');
+    parts.push('<span><b>順番</b>' + escapeHtml(suggestion.suggested_order != null ? String(suggestion.suggested_order) : '-') + '</span>');
+    parts.push('<span><b>理由</b>' + escapeHtml(suggestion.reason || '-') + '</span>');
+    parts.push('</div>');
+    return parts.join('');
+  }
+
+  function setSuggestStatus(text, isError) {
+    if (!suggestStatusEl) {
+      return;
+    }
+    suggestStatusEl.textContent = text;
+    suggestStatusEl.classList.toggle('is-error', !!isError);
+  }
+
+  function applySuggestionsToUi(items) {
+    suggestionById = new Map();
+    (items || []).forEach(function (suggestion) {
+      suggestionById.set(Number(suggestion.request_id || 0), suggestion);
+    });
+    itemById.forEach(function (item, itemId) {
+      const suggestion = suggestionById.get(itemId);
+      if (!suggestion) {
+        return;
+      }
+      item.driver_user_id = suggestion.suggested_driver_id || item.driver_user_id;
+      item.driver_name = suggestion.suggested_driver_name || item.driver_name;
+      if (item.status === 'pending' && suggestion.suggested_driver_id) {
+        item.status = 'assigned';
+      }
+    });
+    rowById.forEach(function (rowEl, itemId) {
+      const suggestion = suggestionById.get(itemId);
+      if (!suggestion) {
+        return;
+      }
+      const driverField = rowEl.querySelector('[data-assign-driver]');
+      const statusField = rowEl.querySelector('[data-assign-status]');
+      if (driverField && suggestion.suggested_driver_id) {
+        driverField.value = String(suggestion.suggested_driver_id);
+      }
+      if (statusField && suggestion.suggested_driver_id && String(statusField.value || '') === 'pending') {
+        statusField.value = 'assigned';
+      }
+      rowEl.dataset.suggestedOrder = suggestion.suggested_order != null ? String(suggestion.suggested_order) : '';
+    });
+    renderList(Array.from(itemById.values()));
+    rowById.forEach(function (rowEl, itemId) {
+      const suggestion = suggestionById.get(itemId);
+      if (suggestion) {
+        rowEl.dataset.suggestedOrder = suggestion.suggested_order != null ? String(suggestion.suggested_order) : '';
+      }
+    });
+    setSuggestStatus((items || []).length > 0 ? ((items || []).length + '件の提案を反映しました') : '提案対象はありません', false);
+  }
+
   document.addEventListener('click', function (event) {
     const trigger = event.target && event.target.closest ? event.target.closest('[data-focus-id]') : null;
     if (!trigger) {
@@ -716,6 +785,7 @@
       }
 
       renderSummary(json.summary || {});
+      suggestionById = new Map();
       renderList(json.items || []);
       renderDriverToggles(json.items || [], json.vehicles || []);
       window.__transportBase = json.base || {};
@@ -779,6 +849,7 @@
     payload.set('cast_id', String(item.cast_id || '0'));
     payload.set('driver_user_id', driverUserId);
     payload.set('status', requestedStatus);
+    payload.set('sort_order', String(rowEl.dataset.suggestedOrder || ''));
 
     if (triggerEl) {
       triggerEl.disabled = true;
@@ -809,6 +880,97 @@
       if (triggerEl) {
         triggerEl.disabled = false;
         triggerEl.textContent = '保存';
+      }
+    }
+  }
+
+  async function runAutoAssign() {
+    const params = serializeForm();
+    params.set('csrf_token', String(pageConfig.csrfToken || ''));
+    try {
+      if (autoAssignButton) {
+        autoAssignButton.disabled = true;
+      }
+      setSuggestStatus('提案を生成しています…', false);
+      const response = await fetch(autoAssignUrl, {
+        method: 'POST',
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
+        body: params.toString()
+      });
+      const json = await response.json().catch(function () { return {}; });
+      if (!response.ok || !json.ok) {
+        throw new Error(json.error || '自動提案の生成に失敗しました');
+      }
+      applySuggestionsToUi(json.items || []);
+    } catch (error) {
+      setSuggestStatus(error.message || '自動提案の生成に失敗しました', true);
+      window.alert(error.message || '自動提案の生成に失敗しました');
+    } finally {
+      if (autoAssignButton) {
+        autoAssignButton.disabled = false;
+      }
+    }
+  }
+
+  async function confirmSuggestions() {
+    const suggestions = Array.from(suggestionById.values()).filter(function (suggestion) {
+      return Number(suggestion.suggested_driver_id || 0) > 0;
+    });
+    if (!suggestions.length) {
+      setSuggestStatus('確定できる提案がありません', true);
+      return;
+    }
+    if (confirmSuggestionsButton) {
+      confirmSuggestionsButton.disabled = true;
+    }
+    setSuggestStatus('提案を確定しています…', false);
+    try {
+      for (const suggestion of suggestions) {
+        const itemId = Number(suggestion.request_id || 0);
+        const item = itemById.get(itemId);
+        if (!item || itemId <= 0) {
+          continue;
+        }
+        const rowEl = rowById.get(itemId);
+        const driverField = rowEl ? rowEl.querySelector('[data-assign-driver]') : null;
+        const statusField = rowEl ? rowEl.querySelector('[data-assign-status]') : null;
+        const payload = new URLSearchParams();
+        payload.set('action', 'save_assignment');
+        payload.set('csrf_token', String(pageConfig.csrfToken || ''));
+        payload.set('store_id', String(item.store_id || '0'));
+        payload.set('business_date', String(item.business_date || ''));
+        payload.set('cast_id', String(item.cast_id || '0'));
+        payload.set('driver_user_id', driverField ? String(driverField.value || '0') : String(suggestion.suggested_driver_id || 0));
+        payload.set('status', statusField ? String(statusField.value || 'assigned') : 'assigned');
+        payload.set('sort_order', suggestion.suggested_order != null ? String(suggestion.suggested_order) : '');
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          cache: 'no-store',
+          credentials: 'same-origin',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+          },
+          body: payload.toString()
+        });
+        const json = await response.json().catch(function () { return {}; });
+        if (!response.ok || !json.ok) {
+          throw new Error(json.error || '提案確定に失敗しました');
+        }
+      }
+      await fetchData(false);
+      setSuggestStatus('提案を確定しました', false);
+    } catch (error) {
+      setSuggestStatus(error.message || '提案確定に失敗しました', true);
+      window.alert(error.message || '提案確定に失敗しました');
+    } finally {
+      if (confirmSuggestionsButton) {
+        confirmSuggestionsButton.disabled = false;
       }
     }
   }
@@ -861,6 +1023,14 @@
     reloadButton.addEventListener('click', function () {
       fetchData(true);
     });
+  }
+
+  if (autoAssignButton) {
+    autoAssignButton.addEventListener('click', runAutoAssign);
+  }
+
+  if (confirmSuggestionsButton) {
+    confirmSuggestionsButton.addEventListener('click', confirmSuggestions);
   }
 
   if (storeSelect) {

@@ -411,6 +411,17 @@ function transport_map_normalize_vehicle_label(?string $value): ?string {
   return mb_substr($value, 0, 64);
 }
 
+function transport_map_normalize_sort_order($value): ?int {
+  if ($value === null || $value === '') {
+    return null;
+  }
+  if (!is_numeric($value)) {
+    throw new RuntimeException('並び順が不正です');
+  }
+  $sortOrder = (int)$value;
+  return $sortOrder >= 0 ? $sortOrder : null;
+}
+
 function transport_map_fetch_assignment_by_cast(PDO $pdo, int $storeId, string $businessDate, int $castId): ?array {
   $st = $pdo->prepare("
     SELECT *
@@ -489,6 +500,7 @@ function transport_map_save_assignment(PDO $pdo, array $source, int $actorUserId
   $driverUserId = transport_map_normalize_driver_user_id($source['driver_user_id'] ?? null);
   transport_map_validate_driver_user_id($pdo, $storeId, $driverUserId);
   $vehicleLabel = transport_map_normalize_vehicle_label((string)($source['vehicle_label'] ?? ''));
+  $sortOrder = transport_map_normalize_sort_order($source['sort_order'] ?? null);
 
   $pdo->beginTransaction();
   try {
@@ -504,6 +516,7 @@ function transport_map_save_assignment(PDO $pdo, array $source, int $actorUserId
         SET driver_user_id = :driver_user_id,
             status = :status,
             vehicle_label = :vehicle_label,
+            sort_order = COALESCE(:sort_order, sort_order),
             updated_by_user_id = :updated_by_user_id,
             updated_at = NOW()
         WHERE id = :id
@@ -513,6 +526,7 @@ function transport_map_save_assignment(PDO $pdo, array $source, int $actorUserId
         ':driver_user_id' => $driverUserId,
         ':status' => $nextStatus,
         ':vehicle_label' => $vehicleLabel,
+        ':sort_order' => $sortOrder,
         ':updated_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
         ':id' => $assignmentId,
         ':store_id' => $storeId,
@@ -596,7 +610,7 @@ function transport_map_save_assignment(PDO $pdo, array $source, int $actorUserId
         ':status' => $nextStatus,
         ':driver_user_id' => $driverUserId,
         ':vehicle_label' => $vehicleLabel,
-        ':sort_order' => (int)($candidate['sort_order'] ?? 0),
+        ':sort_order' => (int)($sortOrder ?? (int)($candidate['sort_order'] ?? 0)),
         ':source_type' => 'shift_plan',
         ':created_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
         ':updated_by_user_id' => $actorUserId > 0 ? $actorUserId : null,

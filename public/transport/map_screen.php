@@ -48,6 +48,8 @@ try {
 
 $pageConfig = [
   'apiUrl' => '/wbss/public/api/transport_map.php',
+  'autoAssignUrl' => '/wbss/public/api/transport/auto_assign.php',
+  'optimizeRouteUrl' => '/wbss/public/api/transport/optimize_route.php',
   'pagePath' => '/wbss/public/transport/map_screen.php',
   'initialFilters' => $initialFilters,
   'statusOptions' => transport_map_status_definitions(),
@@ -59,7 +61,7 @@ $pageConfig = [
 
 render_page_start('送迎マップ TV');
 ?>
-<link rel="stylesheet" href="/wbss/public/assets/css/transport-map.css?v=20260327p">
+<link rel="stylesheet" href="/wbss/public/assets/css/transport-map.css?v=20260327q">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
@@ -118,10 +120,13 @@ render_page_start('送迎マップ TV');
         <input type="hidden" name="unassigned_only" value="<?= h((string)($initialFilters['unassigned_only'] ?? '0')) ?>">
 
         <div class="transportMapScreenActions">
+          <button type="button" class="btn" id="transportMapAutoAssign">自動提案</button>
+          <button type="button" class="btn btn-primary" id="transportMapConfirmSuggestions">提案を確定</button>
           <button type="submit" class="btn">条件反映</button>
           <button type="button" class="btn btn-primary" id="transportMapReload">再読込</button>
         </div>
       </form>
+      <div class="transportMapSuggestStatus" id="transportMapSuggestStatus">未割当へ提案を出せます</div>
       <div class="transportMapDriverVisibility transportMapDriverVisibility--screen">
         <div class="transportMapDriverVisibilityHead">
           <span class="transportMapMiniHint">ドライバー表示切替</span>
@@ -179,7 +184,7 @@ window.WBSS_TRANSPORT_MAP_CONFIG = <?= json_encode([
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
-<script src="/wbss/public/assets/js/transport-map.js?v=20260327p"></script>
+<script src="/wbss/public/assets/js/transport-map.js?v=20260327q"></script>
 <script>
 (function () {
   const toggle = document.getElementById('transportMapScreenMenuToggle');
