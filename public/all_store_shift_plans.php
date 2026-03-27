@@ -756,8 +756,8 @@ body[data-theme="cast"] .date-nav .date-btn.is-active{
             <tr>
               <th>キャスト名</th>
               <th>出勤予定</th>
-              <th>ステータス</th>
-              <th>来店手段</th>
+              <th>状態</th>
+              <th>出勤手段</th>
               <th>同伴</th>
             </tr>
           </thead>
@@ -813,7 +813,7 @@ body[data-theme="cast"] .date-nav .date-btn.is-active{
                   <div><span class="status-badge <?= h((string)($row['state']['class'] ?? 'muted')) ?>"><?= h((string)($row['state']['label'] ?? '予定のみ')) ?></span></div>
                 </div>
                 <div class="plan-card__item">
-                  <div class="plan-card__label">出勤来店手段</div>
+                  <div class="plan-card__label">出勤手段</div>
                   <div><?= h((string)($row['transport_text'] ?? '未設定')) ?></div>
                 </div>
                 <div class="plan-card__item">
