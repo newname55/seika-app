@@ -1210,7 +1210,7 @@
         const statusField = rowEl ? rowEl.querySelector('[data-assign-status]') : null;
         const storeId = resolveSuggestionStoreId(item, suggestion);
         if (storeId <= 0) {
-          throw new Error('対象店舗が不正です');
+          throw new Error('対象店舗が不正です request=' + itemId + ' cast=' + Number(item.cast_id || 0));
         }
         const payload = new URLSearchParams();
         payload.set('action', 'save_assignment');
