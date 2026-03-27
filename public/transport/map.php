@@ -64,6 +64,7 @@ $pageConfig = [
   'storeShortLabels' => transport_map_store_short_labels(),
   'csrfToken' => csrf_token(),
   'focusCastId' => $focusCastId,
+  'currentStoreId' => $selectedStoreId,
 ];
 
 $routeReturnUrl = '';

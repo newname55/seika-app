@@ -57,6 +57,7 @@ $pageConfig = [
   'storeShortLabels' => transport_map_store_short_labels(),
   'csrfToken' => csrf_token(),
   'focusCastId' => 0,
+  'currentStoreId' => $selectedStoreId,
 ];
 
 render_page_start('送迎マップ TV');

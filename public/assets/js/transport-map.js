@@ -1344,6 +1344,17 @@
     if (suggestionStoreId > 0) {
       return suggestionStoreId;
     }
+    const groupMatch = String((suggestion && suggestion.group_id) || '').match(/^S(\d+)-/);
+    if (groupMatch) {
+      const groupStoreId = Number(groupMatch[1] || 0);
+      if (groupStoreId > 0) {
+        return groupStoreId;
+      }
+    }
+    const currentStoreId = Number(pageConfig.currentStoreId || 0);
+    if (currentStoreId > 0) {
+      return currentStoreId;
+    }
     return resolveItemStoreId(item);
   }
 
