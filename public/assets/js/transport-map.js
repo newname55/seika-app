@@ -1387,7 +1387,7 @@
         }
         throw new Error(
           skippedAddressCount > 0 ? '住所未登録の提案は確定できません'
-            : failedCount > 0 ? (failedMessages[0] || '提案確定に失敗しました')
+            : failedCount > 0 ? ('保存できない提案 ' + failedCount + '件がありました')
             : '確定できる提案がありません'
         );
       }
@@ -1399,16 +1399,16 @@
         summaryParts.push('店舗不正 ' + skippedStoreCount + '件スキップ');
       }
       if (failedCount > 0) {
-        summaryParts.push('保存失敗 ' + failedCount + '件');
+        summaryParts.push('一部保留 ' + failedCount + '件');
       }
-      setSuggestStatus(summaryParts.join(' / '), failedCount > 0);
+      setSuggestStatus(summaryParts.join(' / '), false);
       if (failedCount > 0 && savedCount <= 0) {
         window.alert(summaryParts.join('\n') + '\n' + failedMessages.slice(0, 3).join('\n'));
       }
     } catch (error) {
       const message = String((error && error.message) || '提案確定に失敗しました');
       setSuggestStatus(message, true);
-      if (message.indexOf('対象店舗が不正です') === -1) {
+      if (message.indexOf('対象店舗が不正です') === -1 && message.indexOf('保存できない提案') === -1) {
         window.alert(message);
       }
     } finally {
