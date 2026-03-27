@@ -33,12 +33,16 @@ function transport_assign_service_target_rows(PDO $pdo, array $filters): array {
     if (empty($item['has_coords'])) {
       continue;
     }
+    if (trim((string)($item['pickup_address'] ?? '')) === '') {
+      continue;
+    }
     $rows[] = [
       'id' => (int)($item['id'] ?? 0),
       'store_id' => (int)($item['store_id'] ?? 0),
       'business_date' => (string)($item['business_date'] ?? ''),
       'cast_id' => (int)($item['cast_id'] ?? 0),
       'pickup_name' => (string)($item['display_name'] ?? ''),
+      'pickup_address' => (string)($item['pickup_address'] ?? ''),
       'pickup_lat' => ($item['pickup_lat'] ?? null) !== null ? (float)$item['pickup_lat'] : null,
       'pickup_lng' => ($item['pickup_lng'] ?? null) !== null ? (float)$item['pickup_lng'] : null,
       'direction_bucket' => (string)($item['direction_bucket'] ?? ''),

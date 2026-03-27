@@ -1190,10 +1190,16 @@
     }
     setSuggestStatus('提案を確定しています…', false);
     try {
+      let savedCount = 0;
+      let skippedAddressCount = 0;
       for (const suggestion of suggestions) {
         const itemId = Number(suggestion.request_id || 0);
         const item = itemById.get(itemId);
         if (!item || Number(item.cast_id || 0) <= 0) {
+          continue;
+        }
+        if (String(item.pickup_address || '').trim() === '') {
+          skippedAddressCount += 1;
           continue;
         }
         const rowEl = rowById.get(itemId);
@@ -1226,9 +1232,18 @@
         if (!response.ok || !json.ok) {
           throw new Error(json.error || '提案確定に失敗しました');
         }
+        savedCount += 1;
       }
       await fetchData(false);
-      setSuggestStatus('提案を確定しました', false);
+      if (savedCount <= 0) {
+        throw new Error(skippedAddressCount > 0 ? '住所未登録の提案は確定できません' : '確定できる提案がありません');
+      }
+      setSuggestStatus(
+        skippedAddressCount > 0
+          ? (savedCount + '件を確定、住所未登録 ' + skippedAddressCount + '件はスキップしました')
+          : (savedCount + '件を確定しました'),
+        false
+      );
     } catch (error) {
       setSuggestStatus(error.message || '提案確定に失敗しました', true);
       window.alert(error.message || '提案確定に失敗しました');
