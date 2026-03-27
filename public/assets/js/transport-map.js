@@ -593,21 +593,34 @@
         return;
       }
       const color = colorForDriver(group.driver_id);
+      const isSuggested = !!group.is_suggested;
       L.polyline(latLngs, {
         color: color,
-        weight: 3,
-        opacity: 0.34,
+        weight: isSuggested ? 4 : 5,
+        opacity: isSuggested ? 0.22 : 0.36,
         lineCap: 'round',
         lineJoin: 'round'
       }).addTo(routeLayer);
       L.polyline(latLngs, {
         color: color,
-        weight: 1,
-        opacity: 0.72,
-        dashArray: '8 8',
+        weight: isSuggested ? 2 : 3,
+        opacity: isSuggested ? 0.82 : 0.94,
+        dashArray: isSuggested ? '8 8' : null,
         lineCap: 'round',
         lineJoin: 'round'
       }).addTo(routeLayer);
+
+      group.items.forEach(function (item, index) {
+        const order = index + 1;
+        L.marker([Number(item.pickup_lat), Number(item.pickup_lng)], {
+          icon: L.divIcon({
+            className: 'transportMapRouteOrderWrap',
+            html: '<span class="transportMapRouteOrderTag" style="--route-color:' + escapeHtml(color) + '">' + escapeHtml(String(order)) + '</span>',
+            iconSize: [22, 22],
+            iconAnchor: [11, 11]
+          })
+        }).addTo(routeLayer);
+      });
     });
   }
 
@@ -633,8 +646,12 @@
         groups.set(key, {
           store_id: Number(item.store_id || 0),
           driver_id: driverId,
+          is_suggested: false,
           items: []
         });
+      }
+      if (suggestion) {
+        groups.get(key).is_suggested = true;
       }
       groups.get(key).items.push(item);
     });

@@ -775,6 +775,28 @@
   font-weight:800;
 }
 
+.transportMapRouteOrderWrap{
+  background:transparent;
+  border:none;
+}
+
+.transportMapRouteOrderTag{
+  --route-color:#2563eb;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:22px;
+  height:22px;
+  border-radius:999px;
+  background:var(--route-color);
+  color:#ffffff;
+  border:2px solid rgba(255,255,255,.92);
+  box-shadow:0 4px 10px rgba(15,23,42,.22);
+  font-size:11px;
+  font-weight:900;
+  line-height:1;
+}
+
 .transportMapInlineSelect{
   min-height:38px;
   width:100%;
