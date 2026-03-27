@@ -168,11 +168,7 @@ render_page_start('送迎マップ TV');
     </section>
 
     <section class="transportMapScreenCanvas transportPanel">
-      <div class="transportMapCanvasHead">
-        <div>
-          <div class="cardTitle">送迎マップ</div>
-          <div class="muted">キャスト名、車両位置、担当線を大画面で確認できます</div>
-        </div>
+      <div class="transportMapCanvasHead transportMapCanvasHead--screen">
         <div class="transportMapMapBadge" id="transportMapMapBadge">読込中</div>
       </div>
       <div id="transportMapCanvas" class="transportMapCanvas transportMapCanvas--screen" aria-label="送迎マップ TV"></div>

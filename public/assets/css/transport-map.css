@@ -61,7 +61,7 @@
   top:62px;
   right:18px;
   z-index:40;
-  width:min(420px, calc(100vw - 36px));
+  width:min(360px, calc(100vw - 36px));
   padding:8px 10px;
   display:grid;
   gap:8px;
@@ -73,14 +73,14 @@
 
 .transportMapScreenForm{
   display:grid;
-  grid-template-columns:minmax(180px, 240px) minmax(180px, 220px) minmax(0, 1fr) auto;
+  grid-template-columns:1fr;
   gap:8px;
-  align-items:end;
+  align-items:stretch;
 }
 
 .transportMapScreenHero{
   display:grid;
-  gap:8px;
+  gap:6px;
   min-width:0;
 }
 
@@ -99,7 +99,7 @@
 
 .transportMapScreenActions{
   display:flex;
-  gap:10px;
+  gap:8px;
   align-items:center;
 }
 
@@ -113,8 +113,8 @@
 
 .transportMapScreenSummaryLine{
   display:flex;
-  align-items:center;
-  gap:10px;
+  align-items:flex-start;
+  gap:6px;
   flex-wrap:wrap;
   padding:6px 8px;
   border-radius:10px;
@@ -150,19 +150,20 @@
 
 .transportMapScreenMetaRow{
   display:grid;
-  grid-template-columns:minmax(0, 1fr) minmax(320px, 480px);
+  grid-template-columns:1fr;
   gap:8px;
   align-items:start;
 }
 
 .transportMapScreenCanvas{
-  padding:12px;
+  position:relative;
+  padding:8px;
   display:grid;
-  gap:8px;
+  gap:0;
 }
 
 .transportMapCanvas--screen{
-  min-height:calc(100vh - 118px);
+  min-height:calc(100vh - 84px);
 }
 
 .transportMapDriverVisibility--screen{
@@ -238,7 +239,18 @@
 }
 
 .transportMapScreenPage .transportMapCanvasHead{
+  position:absolute;
+  top:14px;
+  right:14px;
+  z-index:20;
+  display:flex;
+  justify-content:flex-end;
   align-items:center;
+  pointer-events:none;
+}
+
+.transportMapScreenPage .transportMapCanvasHead .transportMapMapBadge{
+  pointer-events:auto;
 }
 
 .transportPanel{
@@ -1203,7 +1215,7 @@ body[data-theme="staff"] .transportMapDriverToggle{
 
   .transportMapScreenTop{
     right:12px;
-    width:min(420px, calc(100vw - 24px));
+    width:min(360px, calc(100vw - 24px));
   }
 }
 
@@ -1283,7 +1295,7 @@ body[data-theme="staff"] .transportMapDriverToggle{
   .transportMapScreenTop{
     top:52px;
     right:10px;
-    width:calc(100vw - 20px);
+    width:min(360px, calc(100vw - 20px));
     max-height:70vh;
     overflow:auto;
   }
