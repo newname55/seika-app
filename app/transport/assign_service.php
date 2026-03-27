@@ -288,7 +288,7 @@ function transport_assign_service_generate(PDO $pdo, array $filters): array {
     $driverName = (string)($picked['driver']['name'] ?? '');
     $groupId = 'S' . $storeId . '-' . mb_substr((string)$cluster['direction_bucket'], 0, 1) . '-' . str_pad((string)($clusterIndex + 1), 2, '0', STR_PAD_LEFT);
     $routeRows = $driverId > 0
-      ? transport_route_optimizer_nearest_neighbor($baseContexts[$storeId] ?? [], $cluster['rows'])
+      ? transport_route_optimizer_store_return($baseContexts[$storeId] ?? [], $cluster['rows'])
       : [];
     $orderByRequestId = [];
     foreach ($routeRows as $routeRow) {

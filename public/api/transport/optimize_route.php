@@ -48,7 +48,7 @@ try {
   }
 
   $base = transport_map_fetch_base_context($pdo, $storeId);
-  $optimized = transport_route_optimizer_nearest_neighbor($base, $rows);
+  $optimized = transport_route_optimizer_store_return($base, $rows);
   echo json_encode([
     'ok' => true,
     'base' => $base,

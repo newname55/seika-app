@@ -45,6 +45,84 @@ function transport_route_optimizer_nearest_neighbor(array $base, array $requests
   return $ordered;
 }
 
+function transport_route_optimizer_store_return(array $base, array $requests): array {
+  $remaining = array_values(array_filter($requests, static function (array $request): bool {
+    return ($request['pickup_lat'] ?? null) !== null && ($request['pickup_lng'] ?? null) !== null;
+  }));
+  if ($remaining === []) {
+    return [];
+  }
+
+  $baseLat = ($base['lat'] ?? null) !== null ? (float)$base['lat'] : (float)$remaining[0]['pickup_lat'];
+  $baseLng = ($base['lng'] ?? null) !== null ? (float)$base['lng'] : (float)$remaining[0]['pickup_lng'];
+
+  foreach ($remaining as &$request) {
+    $request['_base_distance_km'] = transport_haversine_km(
+      $baseLat,
+      $baseLng,
+      (float)$request['pickup_lat'],
+      (float)$request['pickup_lng']
+    );
+  }
+  unset($request);
+
+  usort($remaining, static function (array $a, array $b): int {
+    $distanceCompare = ((float)($b['_base_distance_km'] ?? 0.0) <=> (float)($a['_base_distance_km'] ?? 0.0));
+    if ($distanceCompare !== 0) {
+      return $distanceCompare;
+    }
+    return ((int)($a['id'] ?? 0) <=> (int)($b['id'] ?? 0));
+  });
+
+  $ordered = [];
+  $elapsedMinutes = 0;
+  $currentLat = $baseLat;
+  $currentLng = $baseLng;
+
+  while ($remaining !== []) {
+    $bestIndex = 0;
+    $bestScore = null;
+
+    foreach ($remaining as $index => $request) {
+      $hopDistance = transport_haversine_km(
+        $currentLat,
+        $currentLng,
+        (float)$request['pickup_lat'],
+        (float)$request['pickup_lng']
+      );
+      $baseDistance = (float)($request['_base_distance_km'] ?? 0.0);
+
+      // Prefer points that keep us moving back toward the store,
+      // while still minimizing the next hop.
+      $score = ($baseDistance * 1000.0) - ($hopDistance * 100.0);
+      if ($bestScore === null || $score > $bestScore) {
+        $bestScore = $score;
+        $bestIndex = $index;
+      }
+    }
+
+    $selected = $remaining[$bestIndex];
+    array_splice($remaining, $bestIndex, 1);
+    $travelKm = transport_haversine_km(
+      $currentLat,
+      $currentLng,
+      (float)$selected['pickup_lat'],
+      (float)$selected['pickup_lng']
+    );
+    $travelMinutes = (int)round(($travelKm / 25.0) * 60.0);
+    $elapsedMinutes += max(3, $travelMinutes);
+    $ordered[] = [
+      'request_id' => (int)($selected['id'] ?? 0),
+      'order' => count($ordered) + 1,
+      'eta_minutes' => $elapsedMinutes,
+    ];
+    $currentLat = (float)$selected['pickup_lat'];
+    $currentLng = (float)$selected['pickup_lng'];
+  }
+
+  return $ordered;
+}
+
 function transport_route_optimizer_normalize_requests(array $requests): array {
   $normalized = [];
   foreach ($requests as $request) {
