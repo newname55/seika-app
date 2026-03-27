@@ -7,6 +7,7 @@
   const storeShortLabels = pageConfig.storeShortLabels || {};
   const apiUrl = pageConfig.apiUrl || '/wbss/public/api/transport_map.php';
   const autoAssignUrl = pageConfig.autoAssignUrl || '/wbss/public/api/transport/auto_assign.php';
+  const optimizeRouteUrl = pageConfig.optimizeRouteUrl || '/wbss/public/api/transport/optimize_route.php';
   const pagePath = pageConfig.pagePath || window.location.pathname;
   const statusOptions = pageConfig.statusOptions || {};
   const focusCastId = Number(pageConfig.focusCastId || 0);
@@ -45,6 +46,7 @@
   let storeLayer = null;
   let vehicleLayer = null;
   let connectionLayer = null;
+  let routeLayer = null;
   let suggestionLayer = null;
   let markerById = new Map();
   let rowById = new Map();
@@ -80,6 +82,7 @@
     storeLayer = L.layerGroup().addTo(map);
     vehicleLayer = L.layerGroup().addTo(map);
     connectionLayer = L.layerGroup().addTo(map);
+    routeLayer = L.layerGroup().addTo(map);
     suggestionLayer = L.layerGroup().addTo(map);
   }
 
@@ -233,7 +236,7 @@
     const visibleVehicles = filterVehiclesByDriver(vehicles || []);
 
     ensureMap();
-    if (!map || !clusterLayer || !rangeLayer || !storeLayer || !vehicleLayer || !connectionLayer || !suggestionLayer) {
+    if (!map || !clusterLayer || !rangeLayer || !storeLayer || !vehicleLayer || !connectionLayer || !routeLayer || !suggestionLayer) {
       if (mapBadgeEl) {
         mapBadgeEl.textContent = '地図初期化失敗';
       }
@@ -245,6 +248,7 @@
     storeLayer.clearLayers();
     vehicleLayer.clearLayers();
     connectionLayer.clearLayers();
+    routeLayer.clearLayers();
     suggestionLayer.clearLayers();
     markerById = new Map();
 
@@ -300,6 +304,7 @@
     });
 
     renderDriverConnections(visibleItems, visibleVehicles);
+    renderRouteLines(visibleItems, activeBases);
     renderSuggestionGroups(visibleItems);
 
     if (bounds.length) {
@@ -311,7 +316,8 @@
     if (mapBadgeEl) {
       const mappedCount = visibleItems.filter(function (item) { return item.has_coords; }).length;
       const vehicleCount = visibleVehicles.filter(function (vehicle) { return vehicle.lat !== null && vehicle.lng !== null; }).length;
-      mapBadgeEl.textContent = mappedCount + '件 + 車両' + vehicleCount + '台';
+      const routeCount = countRouteGroups(visibleItems);
+      mapBadgeEl.textContent = mappedCount + '件 + 車両' + vehicleCount + '台' + (routeCount > 0 ? ' + ルート' + routeCount + '本' : '');
     }
     if (footNoteEl) {
       const hiddenCount = items.filter(function (item) { return !item.has_coords; }).length;
@@ -558,6 +564,105 @@
     });
   }
 
+  function renderRouteLines(items, bases) {
+    if (!routeLayer || typeof L === 'undefined') {
+      return;
+    }
+    const baseByStore = new Map();
+    (bases || []).forEach(function (baseItem) {
+      const storeId = Number(baseItem.store_id || 0);
+      if (storeId > 0 && baseItem.lat !== null && baseItem.lng !== null) {
+        baseByStore.set(storeId, baseItem);
+      }
+    });
+
+    const groups = buildRouteGroups(items);
+    groups.forEach(function (group) {
+      if (group.items.length <= 0) {
+        return;
+      }
+      const base = baseByStore.get(group.store_id);
+      const latLngs = [];
+      if (base && base.lat !== null && base.lng !== null) {
+        latLngs.push([base.lat, base.lng]);
+      }
+      group.items.forEach(function (item) {
+        latLngs.push([Number(item.pickup_lat), Number(item.pickup_lng)]);
+      });
+      if (latLngs.length < 2) {
+        return;
+      }
+      const color = colorForDriver(group.driver_id);
+      L.polyline(latLngs, {
+        color: color,
+        weight: 3,
+        opacity: 0.34,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(routeLayer);
+      L.polyline(latLngs, {
+        color: color,
+        weight: 1,
+        opacity: 0.72,
+        dashArray: '8 8',
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(routeLayer);
+    });
+  }
+
+  function buildRouteGroups(items) {
+    const groups = new Map();
+    (items || []).forEach(function (item) {
+      if (!item.has_coords) {
+        return;
+      }
+      const suggestion = suggestionById.get(Number(item.id || 0)) || null;
+      const driverId = Number((suggestion && suggestion.suggested_driver_id) || item.driver_user_id || 0);
+      if (driverId <= 0 || hiddenDriverIds.has(driverId)) {
+        return;
+      }
+      const order = suggestion && suggestion.suggested_order != null
+        ? Number(suggestion.suggested_order)
+        : Number(item.sort_order || 0);
+      if (order <= 0) {
+        return;
+      }
+      const key = String(item.store_id || 0) + ':' + String(driverId);
+      if (!groups.has(key)) {
+        groups.set(key, {
+          store_id: Number(item.store_id || 0),
+          driver_id: driverId,
+          items: []
+        });
+      }
+      groups.get(key).items.push(item);
+    });
+
+    return Array.from(groups.values()).map(function (group) {
+      group.items.sort(function (a, b) {
+        const suggestionA = suggestionById.get(Number(a.id || 0)) || null;
+        const suggestionB = suggestionById.get(Number(b.id || 0)) || null;
+        const orderA = suggestionA && suggestionA.suggested_order != null ? Number(suggestionA.suggested_order) : Number(a.sort_order || 0);
+        const orderB = suggestionB && suggestionB.suggested_order != null ? Number(suggestionB.suggested_order) : Number(b.sort_order || 0);
+        return orderA - orderB;
+      });
+      return group;
+    }).filter(function (group) {
+      return group.items.length > 0;
+    });
+  }
+
+  function countRouteGroups(items) {
+    return buildRouteGroups(items).length;
+  }
+
+  function colorForDriver(driverId) {
+    const palette = ['#2563eb', '#f97316', '#10b981', '#8b5cf6', '#ec4899', '#eab308', '#ef4444', '#14b8a6'];
+    const index = Math.abs(Number(driverId || 0)) % palette.length;
+    return palette[index];
+  }
+
   function renderDriverToggles(items, vehicles) {
     if (!driverToggleEl) {
       return;
@@ -675,7 +780,8 @@
     parts.push('<span><b>提案</b>' + escapeHtml(suggestion.suggested_driver_name || '候補なし') + '</span>');
     parts.push('<span><b>組</b>' + escapeHtml(suggestion.group_id || '-') + '</span>');
     parts.push('<span><b>順</b>' + escapeHtml(suggestion.suggested_order != null ? String(suggestion.suggested_order) : '-') + '</span>');
-    parts.push('<span><b>理由</b>' + escapeHtml(suggestion.reason || '-') + '</span>');
+    parts.push('<span><b>ETA</b>' + escapeHtml(suggestion.eta_minutes != null && suggestion.eta_minutes > 0 ? String(suggestion.eta_minutes) + '分' : '-') + '</span>');
+    parts.push('<span style="grid-column:1 / -1;"><b>理由</b>' + escapeHtml(suggestion.reason || '-') + '</span>');
     parts.push('</div>');
     return parts.join('');
   }
@@ -727,6 +833,68 @@
       }
     });
     setSuggestStatus((items || []).length > 0 ? ((items || []).length + '件の提案を反映しました') : '提案対象はありません', false);
+  }
+
+  async function optimizeSuggestionRoutes(suggestions) {
+    const grouped = new Map();
+    (suggestions || []).forEach(function (suggestion) {
+      const item = itemById.get(Number(suggestion.request_id || 0));
+      if (!item || !item.has_coords) {
+        return;
+      }
+      const driverId = Number(suggestion.suggested_driver_id || 0);
+      const storeId = Number(item.store_id || 0);
+      if (driverId <= 0 || storeId <= 0) {
+        return;
+      }
+      const key = String(storeId) + ':' + String(driverId);
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          store_id: storeId,
+          driver_id: driverId,
+          items: []
+        });
+      }
+      grouped.get(key).items.push({
+        id: Number(suggestion.request_id || 0),
+        pickup_lat: Number(item.pickup_lat || 0),
+        pickup_lng: Number(item.pickup_lng || 0)
+      });
+    });
+
+    for (const group of grouped.values()) {
+      if (!group.items.length) {
+        continue;
+      }
+      const payload = new URLSearchParams();
+      payload.set('csrf_token', String(pageConfig.csrfToken || ''));
+      payload.set('store_id', String(group.store_id));
+      payload.set('driver_id', String(group.driver_id));
+      payload.set('items_json', JSON.stringify(group.items));
+      const response = await fetch(optimizeRouteUrl, {
+        method: 'POST',
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
+        body: payload.toString()
+      });
+      const json = await response.json().catch(function () { return {}; });
+      if (!response.ok || !json.ok) {
+        throw new Error(json.error || 'ルート順の生成に失敗しました');
+      }
+      (json.items || []).forEach(function (routeItem) {
+        const requestId = Number(routeItem.request_id || 0);
+        const suggestion = suggestionById.get(requestId);
+        if (!suggestion) {
+          return;
+        }
+        suggestion.suggested_order = Number(routeItem.order || 0);
+        suggestion.eta_minutes = Number(routeItem.eta_minutes || 0);
+      });
+    }
   }
 
   document.addEventListener('click', function (event) {
@@ -969,7 +1137,12 @@
       if (!response.ok || !json.ok) {
         throw new Error(json.error || '自動提案の生成に失敗しました');
       }
-      applySuggestionsToUi(json.items || []);
+      suggestionById = new Map();
+      (json.items || []).forEach(function (suggestion) {
+        suggestionById.set(Number(suggestion.request_id || 0), suggestion);
+      });
+      await optimizeSuggestionRoutes(json.items || []);
+      applySuggestionsToUi(Array.from(suggestionById.values()));
     } catch (error) {
       setSuggestStatus(error.message || '自動提案の生成に失敗しました', true);
       window.alert(error.message || '自動提案の生成に失敗しました');

@@ -19,25 +19,39 @@ try {
   csrf_verify($_POST['csrf_token'] ?? null);
   $pdo = db();
   $storeId = transport_resolve_store_id($pdo, (int)($_POST['store_id'] ?? 0));
-  $requestIds = array_values(array_filter(array_map('intval', (array)($_POST['request_ids'] ?? [])), static fn(int $id): bool => $id > 0));
-  if ($requestIds === []) {
+  $requestIds = array_values(array_filter(array_map('intval', (array)($_POST['request_ids'] ?? [])), static fn(int $id): bool => $id !== 0));
+  $itemsJson = trim((string)($_POST['items_json'] ?? ''));
+  $rows = [];
+
+  if ($itemsJson !== '') {
+    $decoded = json_decode($itemsJson, true, 512, JSON_THROW_ON_ERROR);
+    if (!is_array($decoded)) {
+      throw new RuntimeException('items_json が不正です');
+    }
+    $rows = transport_route_optimizer_normalize_requests($decoded);
+  } elseif ($requestIds !== []) {
+    $ph = implode(',', array_fill(0, count($requestIds), '?'));
+    $st = $pdo->prepare("
+      SELECT id, pickup_lat, pickup_lng
+      FROM transport_assignments
+      WHERE store_id = ?
+        AND id IN ({$ph})
+        AND pickup_lat IS NOT NULL
+        AND pickup_lng IS NOT NULL
+    ");
+    $st->execute(array_merge([$storeId], $requestIds));
+    $rows = transport_route_optimizer_normalize_requests($st->fetchAll(PDO::FETCH_ASSOC) ?: []);
+  }
+
+  if ($rows === []) {
     throw new RuntimeException('対象リクエストがありません');
   }
-  $ph = implode(',', array_fill(0, count($requestIds), '?'));
-  $st = $pdo->prepare("
-    SELECT id, pickup_lat, pickup_lng
-    FROM transport_assignments
-    WHERE store_id = ?
-      AND id IN ({$ph})
-      AND pickup_lat IS NOT NULL
-      AND pickup_lng IS NOT NULL
-  ");
-  $st->execute(array_merge([$storeId], $requestIds));
-  $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
   $base = transport_map_fetch_base_context($pdo, $storeId);
   $optimized = transport_route_optimizer_nearest_neighbor($base, $rows);
   echo json_encode([
     'ok' => true,
+    'base' => $base,
     'items' => $optimized,
   ], JSON_UNESCAPED_UNICODE);
 } catch (RuntimeException $e) {
@@ -49,4 +63,3 @@ try {
   error_log('[transport_optimize_route_fatal] ' . $e->getMessage());
   echo json_encode(['ok' => false, 'error' => 'ルート最適化に失敗しました'], JSON_UNESCAPED_UNICODE);
 }
-

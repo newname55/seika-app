@@ -45,3 +45,20 @@ function transport_route_optimizer_nearest_neighbor(array $base, array $requests
   return $ordered;
 }
 
+function transport_route_optimizer_normalize_requests(array $requests): array {
+  $normalized = [];
+  foreach ($requests as $request) {
+    $requestId = (int)($request['id'] ?? $request['request_id'] ?? 0);
+    $lat = ($request['pickup_lat'] ?? null) !== null ? (float)$request['pickup_lat'] : null;
+    $lng = ($request['pickup_lng'] ?? null) !== null ? (float)$request['pickup_lng'] : null;
+    if ($requestId === 0 || $lat === null || $lng === null) {
+      continue;
+    }
+    $normalized[] = [
+      'id' => $requestId,
+      'pickup_lat' => $lat,
+      'pickup_lng' => $lng,
+    ];
+  }
+  return $normalized;
+}
