@@ -1812,7 +1812,7 @@ render_page_start('ダッシュボード');
   }
 
   .dash-section-staff .dash-grid{
-    grid-template-columns:repeat(6, minmax(0, 1fr));
+    grid-template-columns:repeat(5, minmax(0, 1fr));
   }
 }
 
