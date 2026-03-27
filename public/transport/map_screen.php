@@ -76,6 +76,7 @@ render_page_start('送迎マップ TV');
         </div>
       </div>
       <div class="transportMapScreenTopBarActions">
+        <button type="button" class="miniBtn" id="transportMapScreenMenuToggle" aria-expanded="false" aria-controls="transportMapScreenDrawer">☰ 表示設定</button>
         <a class="miniBtn" href="<?= h($selectedStoreId > 0 ? '/wbss/public/transport/map.php?store_id=' . (int)$selectedStoreId . '&business_date=' . urlencode($businessDate) : ($canViewAllStores ? '/wbss/public/transport/map.php?store_id=all&business_date=' . urlencode($businessDate) : '/wbss/public/dashboard.php')) ?>">通常表示</a>
         <?php if ($selectedStoreId > 0): ?>
           <a class="miniBtn" href="/wbss/public/transport/driver_location.php?store_id=<?= (int)$selectedStoreId ?>">現在地送信</a>
@@ -87,7 +88,7 @@ render_page_start('送迎マップ TV');
       <div class="card transportMapAlert transportMapAlertError"><?= h($err) ?></div>
     <?php endif; ?>
 
-    <section class="transportMapScreenTop transportPanel">
+    <section class="transportMapScreenTop transportPanel" id="transportMapScreenDrawer" hidden>
       <form id="transportMapFilterForm" class="transportMapScreenForm" method="get" action="/wbss/public/transport/map_screen.php">
         <label class="field">
           <span class="fieldLabel">店舗</span>
@@ -191,4 +192,22 @@ window.WBSS_TRANSPORT_MAP_CONFIG = <?= json_encode([
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
 <script src="/wbss/public/assets/js/transport-map.js?v=20260327k"></script>
+<script>
+(function () {
+  const toggle = document.getElementById('transportMapScreenMenuToggle');
+  const drawer = document.getElementById('transportMapScreenDrawer');
+  if (!toggle || !drawer) {
+    return;
+  }
+  toggle.addEventListener('click', function () {
+    const willOpen = drawer.hasAttribute('hidden');
+    if (willOpen) {
+      drawer.removeAttribute('hidden');
+    } else {
+      drawer.setAttribute('hidden', 'hidden');
+    }
+    toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  });
+})();
+</script>
 <?php render_page_end(); ?>

@@ -6,8 +6,8 @@
 
 .transportMapScreenPage{
   display:grid;
-  gap:14px;
-  padding-bottom:28px;
+  gap:10px;
+  padding-bottom:16px;
 }
 
 .transportMapScreenTopBar{
@@ -15,7 +15,7 @@
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  padding:6px 4px 0;
+  padding:4px 2px 0;
 }
 
 .transportMapScreenTopBarMain{
@@ -57,12 +57,18 @@
 }
 
 .transportMapScreenTop{
+  position:fixed;
+  top:62px;
+  right:18px;
+  z-index:40;
+  width:min(420px, calc(100vw - 36px));
   padding:8px 10px;
   display:grid;
   gap:8px;
   border-radius:12px;
-  background:linear-gradient(180deg, rgba(255,255,255,.72), rgba(248,250,252,.62));
-  box-shadow:0 4px 12px rgba(15,18,34,.04);
+  background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(248,250,252,.88));
+  box-shadow:0 18px 40px rgba(15,18,34,.14);
+  backdrop-filter:blur(12px);
 }
 
 .transportMapScreenForm{
@@ -150,13 +156,13 @@
 }
 
 .transportMapScreenCanvas{
-  padding:18px;
+  padding:12px;
   display:grid;
-  gap:12px;
+  gap:8px;
 }
 
 .transportMapCanvas--screen{
-  min-height:calc(100vh - 248px);
+  min-height:calc(100vh - 118px);
 }
 
 .transportMapDriverVisibility--screen{
@@ -224,11 +230,15 @@
 }
 
 .transportMapScreenPage .cardTitle{
-  font-size:14px;
+  font-size:13px;
 }
 
 .transportMapScreenPage .muted{
-  font-size:11px;
+  font-size:10px;
+}
+
+.transportMapScreenPage .transportMapCanvasHead{
+  align-items:center;
 }
 
 .transportPanel{
@@ -1190,6 +1200,11 @@ body[data-theme="staff"] .transportMapDriverToggle{
     flex-direction:column;
     align-items:flex-start;
   }
+
+  .transportMapScreenTop{
+    right:12px;
+    width:min(420px, calc(100vw - 24px));
+  }
 }
 
 @media (max-width: 720px){
@@ -1263,5 +1278,13 @@ body[data-theme="staff"] .transportMapDriverToggle{
 
   .transportMapCanvas--screen{
     min-height:56vh;
+  }
+
+  .transportMapScreenTop{
+    top:52px;
+    right:10px;
+    width:calc(100vw - 20px);
+    max-height:70vh;
+    overflow:auto;
   }
 }
