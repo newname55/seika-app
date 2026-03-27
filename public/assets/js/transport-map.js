@@ -117,6 +117,24 @@
     if (!params.has('unassigned_only')) {
       params.set('unassigned_only', '0');
     }
+    const rawStoreId = String(params.get('store_id') || '').trim();
+    const normalizedStoreId = rawStoreId === 'all' || rawStoreId === '*' ? rawStoreId : String(Number(rawStoreId || 0));
+    if (normalizedStoreId === '' || normalizedStoreId === '0' || normalizedStoreId === 'NaN') {
+      const fallbackStoreId = Number(pageConfig.currentStoreId || 0)
+        || Number((window.__transportBase && window.__transportBase.store_id) || 0)
+        || (Array.isArray(window.__transportBases) && window.__transportBases.length === 1
+          ? Number((window.__transportBases[0] && window.__transportBases[0].store_id) || 0)
+          : 0);
+      if (fallbackStoreId > 0) {
+        params.set('store_id', String(fallbackStoreId));
+      }
+    }
+    if (!params.has('business_date') || String(params.get('business_date') || '').trim() === '') {
+      const fallbackBusinessDate = String((pageConfig.initialFilters && pageConfig.initialFilters.business_date) || '');
+      if (fallbackBusinessDate !== '') {
+        params.set('business_date', fallbackBusinessDate);
+      }
+    }
     return params;
   }
 
