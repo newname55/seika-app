@@ -398,11 +398,18 @@ foreach ($castRows as $castRow) {
 $currentBusinessDate = function_exists('business_date_for_store')
   ? business_date_for_store($storeRow, null)
   : ymd(jst_now());
+$tomorrowBusinessDate = (new DateTime($currentBusinessDate, new DateTimeZone('Asia/Tokyo')))
+  ->modify('+1 day')
+  ->format('Y-m-d');
+$quickDates = [$currentBusinessDate, $tomorrowBusinessDate];
 $isQuickBusinessDateOpen = is_store_open_for_week_plan($pdo, $storeRow, $currentBusinessDate);
-$quickDateLabel = substr($currentBusinessDate, 5) . '（' . jp_dow_label($currentBusinessDate) . '）';
 $viewMode = ((string)($_GET['mode'] ?? '') === 'quick') ? 'quick' : 'week';
 
-if (!isset($plans[(int)($castRows[0]['id'] ?? 0)][$currentBusinessDate]) && $castRows !== []) {
+foreach ($quickDates as $quickDate) {
+  if (isset($plans[(int)($castRows[0]['id'] ?? 0)][$quickDate]) || $castRows === []) {
+    continue;
+  }
+
   $st = $pdo->prepare("
     SELECT user_id, business_date, start_time, is_off, note
     FROM cast_shift_plans
@@ -410,7 +417,7 @@ if (!isset($plans[(int)($castRows[0]['id'] ?? 0)][$currentBusinessDate]) && $cas
       AND business_date=?
       AND status='planned'
   ");
-  $st->execute([$storeId, $currentBusinessDate]);
+  $st->execute([$storeId, $quickDate]);
   foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $r) {
     $uid = (int)$r['user_id'];
     $d = (string)$r['business_date'];
@@ -474,6 +481,14 @@ function transport_needed_state(array $castRow): bool {
   return $pickupEnabled === 1 && $pickupTarget !== 'self';
 }
 
+function plan_is_working(array $plan): bool {
+  return trim((string)($plan['start'] ?? '')) !== '';
+}
+
+function quick_transport_active(array $castRow, array $plan): bool {
+  return plan_is_working($plan) && transport_needed_state($castRow);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if ((string)($_POST['action'] ?? '') === 'toggle_today_quick') {
     if (function_exists('csrf_verify')) {
@@ -488,16 +503,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($castOnly && $targetUserId !== $userId) {
       json_response(['ok' => false, 'error' => '自分以外は変更できません'], 403);
     }
-    if (!$isQuickBusinessDateOpen) {
-      json_response(['ok' => false, 'error' => '本日は店休日のため特急モードは使えません'], 400);
+    $targetBusinessDate = normalize_date((string)($_POST['target_business_date'] ?? ''), $currentBusinessDate);
+    $isTargetBusinessDateOpen = is_store_open_for_week_plan($pdo, $storeRow, $targetBusinessDate);
+    if (!$isTargetBusinessDateOpen) {
+      json_response(['ok' => false, 'error' => '対象日は店休日のため特急モードは使えません'], 400);
     }
 
     $castRow = $castRowMap[$targetUserId];
 
     try {
       if ($toggleKind === 'shift') {
-        $currentPlan = $plans[$targetUserId][$currentBusinessDate] ?? ['start'=>'','end'=>'LAST','douhan'=>false];
-        $isCurrentlyWorking = trim((string)($currentPlan['start'] ?? '')) !== '';
+        $currentPlan = $plans[$targetUserId][$targetBusinessDate] ?? ['start'=>'','end'=>'LAST','douhan'=>false];
+        $isCurrentlyWorking = plan_is_working($currentPlan);
         $nextWorking = !$isCurrentlyWorking;
         $defaultStart = trim((string)($castRow['default_start_time'] ?? ''));
         $startHm = preg_match('/^\d{2}:\d{2}/', $defaultStart)
@@ -522,7 +539,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $upPlan->execute([
           $storeId,
           $targetUserId,
-          $currentBusinessDate,
+          $targetBusinessDate,
           $startTime,
           $nextWorking ? 0 : 1,
           $note,
@@ -532,6 +549,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         json_response([
           'ok' => true,
           'kind' => 'shift',
+          'business_date' => $targetBusinessDate,
           'is_working' => $nextWorking,
           'label' => $nextWorking ? '出勤' : '休み',
           'start' => $nextWorking ? $startHm : '',
@@ -601,6 +619,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         json_response([
           'ok' => true,
           'kind' => 'transport',
+          'business_date' => $targetBusinessDate,
           'transport_needed' => $nextNeeded,
           'label' => $nextNeeded ? '送迎あり' : '送迎なし',
           'message' => $nextNeeded ? '送迎ありにしました' : '送迎なしにしました',
