@@ -75,14 +75,13 @@ if ($returnTo === 'routes' && $selectedStoreId > 0) {
     . ($returnCastId > 0 ? '&focus_cast_id=' . $returnCastId : '');
 }
 
+$dashboardUrl = transport_map_dashboard_url($selectedStoreId);
+
 $rightHtml = '';
 if ($selectedStoreId === 0 && $canViewAllStores) {
   $rightHtml .= '<a class="btn" href="/wbss/public/transport/map_screen.php?store_id=all&business_date=' . urlencode($businessDate) . '">TV表示</a> ';
 }
 if ($selectedStoreId > 0) {
-  if ($routeReturnUrl !== '') {
-    $rightHtml .= '<a class="btn btn-primary" href="' . h($routeReturnUrl) . '">ルートへ戻る</a> ';
-  }
   $rightHtml .= '<a class="btn" href="/wbss/public/transport/map_screen.php?store_id=' . (int)$selectedStoreId . '&business_date=' . urlencode($businessDate) . '">TV表示</a> ';
   $rightHtml .= '<a class="btn" href="/wbss/public/transport/driver_location.php?store_id=' . (int)$selectedStoreId . '">現在地送信</a> ';
   $rightHtml .= '<a class="btn" href="/wbss/public/store_transport_bases.php?store_id=' . (int)$selectedStoreId . '">拠点設定</a> ';
@@ -91,8 +90,8 @@ if ($selectedStoreId > 0) {
 
 render_page_start('送迎マップ');
 render_header('送迎マップ', [
-  'back_href' => $routeReturnUrl !== '' ? $routeReturnUrl : ($selectedStoreId > 0 ? '/wbss/public/transport_routes.php?store_id=' . (int)$selectedStoreId : '/wbss/public/dashboard.php'),
-  'back_label' => '← 送迎導線へ',
+  'back_href' => $dashboardUrl,
+  'back_label' => '← ダッシュボード',
   'right_html' => $rightHtml,
 ]);
 ?>
