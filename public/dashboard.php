@@ -221,10 +221,6 @@ if (!function_exists('render_dashboard_message_summary')) {
         <div class="message-summary-card__title">未読メッセージ</div>
         <div class="message-summary-card__count"><?= (int)$unreadCount ?> 件</div>
         <div class="message-summary-card__desc">自分宛の業務連絡を確認します。</div>
-        <div class="message-summary-card__links">
-          <span>一覧を見る</span>
-          <span>送信する</span>
-        </div>
       </a>
 
       <article class="message-summary-card is-thanks">
@@ -246,10 +242,6 @@ if (!function_exists('render_dashboard_message_summary')) {
         <?php else: ?>
           <div class="message-summary-card__desc">最近のありがとうはまだ届いていません。</div>
         <?php endif; ?>
-        <div class="message-summary-card__links">
-          <a class="message-summary-card__linkBtn" href="<?= h(dashboard_link('/wbss/public/thanks.php', $storeId)) ?>">一覧を見る</a>
-          <a class="message-summary-card__linkBtn" href="<?= h(dashboard_link('/wbss/public/thanks.php', $storeId)) ?>">ありがとうを送る</a>
-        </div>
       </article>
     </section>
     <?php if ($showAllStoreMapScreen): ?>
@@ -1379,19 +1371,6 @@ render_page_start('ダッシュボード');
   line-height:1.4;
 }
 
-.dashboard-side-stack .message-summary-card__links{
-  margin-top:7px;
-  font-size:9px;
-  gap:3px;
-  flex-direction:column;
-  align-items:flex-start;
-}
-
-.dashboard-side-stack .message-summary-card__links span{
-  min-height:22px;
-  padding:0 6px;
-}
-
 .dashboard-side-stack .message-summary-card__thanks-list{
   gap:3px;
   margin-top:5px;
@@ -1487,38 +1466,6 @@ render_page_start('ダッシュボード');
   font-size:10px;
   line-height:1.4;
   color:var(--muted);
-}
-
-.message-summary-card__links{
-  display:flex;
-  gap:6px;
-  flex-wrap:wrap;
-  margin-top:8px;
-  font-size:10px;
-  font-weight:900;
-}
-
-.message-summary-card__links span,
-.message-summary-card__linkBtn{
-  display:inline-flex;
-  align-items:center;
-  min-height:24px;
-  padding:0 7px;
-  border-radius:999px;
-  border:1px solid rgba(255,255,255,.10);
-  background:rgba(255,255,255,.04);
-}
-
-.message-summary-card__linkBtn{
-  display:inline-flex;
-  align-items:center;
-  min-height:28px;
-  padding:0 8px;
-  border-radius:999px;
-  border:1px solid rgba(255,255,255,.10);
-  background:rgba(255,255,255,.04);
-  color:inherit;
-  text-decoration:none;
 }
 
 .message-summary-card__thanks-list{
@@ -2201,12 +2148,6 @@ render_page_start('ダッシュボード');
     line-height:1.3;
   }
 
-  .dashboard-side-stack .message-summary-card__links{
-    margin-top:5px;
-    font-size:9px;
-    gap:3px;
-  }
-
   .push-optin-card__actions{
     width:100%;
   }
@@ -2413,12 +2354,6 @@ render_page_start('ダッシュボード');
     font-size:8px;
     line-height:1.25;
   }
-
-.dashboard-side-stack .message-summary-card__links span,
-.dashboard-side-stack .message-summary-card__linkBtn{
-  min-height:18px;
-  padding:0 4px;
-}
 
 .dashboard-side-stack .dashboard-side-feature-card{
   gap:6px;
