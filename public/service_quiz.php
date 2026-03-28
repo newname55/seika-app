@@ -241,28 +241,72 @@ render_header('接客タイプ診断', [
           <h3>スコア</h3>
           <div class="score-grid">
             <div class="score-item">
-              <div class="score-item__label">会話</div>
-              <div class="score-item__value"><?= (int)$resultView['talk_score'] ?></div>
+              <?php $talkScore = (int)$resultView['talk_score']; ?>
+              <div class="score-header">
+                <span class="score-item__label">会話</span>
+                <span class="score-item__value"><?= $talkScore ?></span>
+              </div>
+              <div class="score-direction">← 受容　　　主導 →</div>
+              <div class="score-bar">
+                <div class="score-bar-center"></div>
+                <?php if ($talkScore < 0): ?>
+                  <div class="score-bar-fill minus" style="width: <?= min(50, max(0, (abs($talkScore) / 10) * 50)) ?>%;"></div>
+                <?php elseif ($talkScore > 0): ?>
+                  <div class="score-bar-fill plus" style="width: <?= min(50, max(0, ($talkScore / 10) * 50)) ?>%;"></div>
+                <?php endif; ?>
+              </div>
               <div class="score-item__sub"><?= h($resultView['talk_label']) ?></div>
-              <div class="score-bar"><div class="score-bar__fill" style="width: <?= min(100, max(0, ($resultView['talk_score'] / 6) * 100)) ?>%;"></div></div>
             </div>
             <div class="score-item">
-              <div class="score-item__label">空気</div>
-              <div class="score-item__value"><?= (int)$resultView['mood_score'] ?></div>
+              <?php $moodScore = (int)$resultView['mood_score']; ?>
+              <div class="score-header">
+                <span class="score-item__label">空気</span>
+                <span class="score-item__value"><?= $moodScore ?></span>
+              </div>
+              <div class="score-direction">← 安心　　　盛り上げ →</div>
+              <div class="score-bar">
+                <div class="score-bar-center"></div>
+                <?php if ($moodScore < 0): ?>
+                  <div class="score-bar-fill minus" style="width: <?= min(50, max(0, (abs($moodScore) / 10) * 50)) ?>%;"></div>
+                <?php elseif ($moodScore > 0): ?>
+                  <div class="score-bar-fill plus" style="width: <?= min(50, max(0, ($moodScore / 10) * 50)) ?>%;"></div>
+                <?php endif; ?>
+              </div>
               <div class="score-item__sub"><?= h($resultView['mood_label']) ?></div>
-              <div class="score-bar"><div class="score-bar__fill" style="width: <?= min(100, max(0, ($resultView['mood_score'] / 6) * 100)) ?>%;"></div></div>
             </div>
             <div class="score-item">
-              <div class="score-item__label">反応</div>
-              <div class="score-item__value"><?= (int)$resultView['response_score'] ?></div>
+              <?php $responseScore = (int)$resultView['response_score']; ?>
+              <div class="score-header">
+                <span class="score-item__label">反応</span>
+                <span class="score-item__value"><?= $responseScore ?></span>
+              </div>
+              <div class="score-direction">← 観察　　　直感 →</div>
+              <div class="score-bar">
+                <div class="score-bar-center"></div>
+                <?php if ($responseScore < 0): ?>
+                  <div class="score-bar-fill minus" style="width: <?= min(50, max(0, (abs($responseScore) / 10) * 50)) ?>%;"></div>
+                <?php elseif ($responseScore > 0): ?>
+                  <div class="score-bar-fill plus" style="width: <?= min(50, max(0, ($responseScore / 10) * 50)) ?>%;"></div>
+                <?php endif; ?>
+              </div>
               <div class="score-item__sub"><?= h($resultView['response_label']) ?></div>
-              <div class="score-bar"><div class="score-bar__fill" style="width: <?= min(100, max(0, ($resultView['response_score'] / 6) * 100)) ?>%;"></div></div>
             </div>
             <div class="score-item">
-              <div class="score-item__label">関係性</div>
-              <div class="score-item__value"><?= (int)$resultView['relation_score'] ?></div>
+              <?php $relationScore = (int)$resultView['relation_score']; ?>
+              <div class="score-header">
+                <span class="score-item__label">関係性</span>
+                <span class="score-item__value"><?= $relationScore ?></span>
+              </div>
+              <div class="score-direction">← 信頼　　　恋愛演出 →</div>
+              <div class="score-bar">
+                <div class="score-bar-center"></div>
+                <?php if ($relationScore < 0): ?>
+                  <div class="score-bar-fill minus" style="width: <?= min(50, max(0, (abs($relationScore) / 10) * 50)) ?>%;"></div>
+                <?php elseif ($relationScore > 0): ?>
+                  <div class="score-bar-fill plus" style="width: <?= min(50, max(0, ($relationScore / 10) * 50)) ?>%;"></div>
+                <?php endif; ?>
+              </div>
               <div class="score-item__sub"><?= h($resultView['relation_label']) ?></div>
-              <div class="score-bar"><div class="score-bar__fill" style="width: <?= min(100, max(0, ($resultView['relation_score'] / 6) * 100)) ?>%;"></div></div>
             </div>
           </div>
         </section>
@@ -499,6 +543,12 @@ render_header('接客タイプ診断', [
   background:#f8fafc;
   border:1px solid #e8edf5;
 }
+.score-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
 .score-item__label{
   font-size:13px;
   color:#6b7280;
@@ -512,23 +562,51 @@ render_header('接客タイプ診断', [
   color:#111827;
   margin-bottom:8px;
 }
+.score-direction{
+  margin-bottom:12px;
+  color:#6b7280;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.02em;
+  white-space:nowrap;
+}
 .score-item__sub{
   font-size:13px;
   font-weight:700;
   color:#374151;
-  margin-bottom:14px;
+  margin-top:14px;
 }
 .score-bar{
+  position:relative;
   height:11px;
   border-radius:999px;
   background:#d7dde7;
   overflow:hidden;
 }
+.score-bar-center{
+  position:absolute;
+  left:50%;
+  top:0;
+  width:2px;
+  height:100%;
+  background:#9ca3af;
+  transform:translateX(-50%);
+  z-index:2;
+}
 .score-bar__fill{
+  position:absolute;
+  top:0;
   height:100%;
   border-radius:999px;
-  background:var(--result-bar-fill, linear-gradient(90deg, #f59e0b 0%, #f97316 50%, #ef4444 100%));
   box-shadow:0 0 0 1px rgba(255,255,255,.22) inset;
+}
+.score-bar__fill.minus{
+  right:50%;
+  background:linear-gradient(90deg, #93c5fd 0%, #60a5fa 100%);
+}
+.score-bar__fill.plus{
+  left:50%;
+  background:var(--result-bar-fill, linear-gradient(90deg, #f59e0b 0%, #f97316 50%, #ef4444 100%));
 }
 .result-grid{
   display:grid;
@@ -604,6 +682,7 @@ body[data-theme="dark"] .type-subtitle,
 body[data-theme="dark"] .type-description,
 body[data-theme="dark"] .saved-at,
 body[data-theme="dark"] .score-item__label,
+body[data-theme="dark"] .score-direction,
 body[data-theme="dark"] .score-item__sub,
 body[data-theme="dark"] .result-list li{
   color:rgba(230,223,240,.82);
@@ -620,6 +699,7 @@ body[data-theme="dark"] .today-tip{
 }
 body[data-theme="dark"] .serviceQuizChoice__key{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14)}
 body[data-theme="dark"] .score-bar{background:rgba(255,255,255,.14)}
+body[data-theme="dark"] .score-bar-center{background:rgba(255,255,255,.36)}
 @media (max-width: 960px){
   .result-hero{grid-template-columns:1fr}
   .score-grid{grid-template-columns:repeat(2, 1fr)}
