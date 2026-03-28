@@ -199,14 +199,17 @@ render_header('接客タイプ診断', [
         $imagePath = '/wbss/public/images/cast_type_images/' . rawurlencode($resultView['type']) . '.png';
       ?>
       <div class="cast-type-result-page">
-        <div class="cast-type-result-header">
-          <a href="/wbss/public/dashboard_cast.php" class="back-button">← ダッシュボード</a>
-          <h1>接客タイプ診断</h1>
-        </div>
-
         <?php if ($saveNotice !== ''): ?>
           <div class="result-notice"><?= h($saveNotice) ?></div>
         <?php endif; ?>
+
+        <div class="cast-type-result-header">
+          <div>
+            <h1>接客タイプ診断</h1>
+            <p class="cast-type-result-sub">今の接客スタイルを、カードで見返しやすくまとめています。</p>
+          </div>
+          <a href="/wbss/public/service_quiz.php?start=1" class="btn btn-secondary result-retry-top">もう一度診断する</a>
+        </div>
 
         <section class="result-hero">
           <div class="result-hero__card">
@@ -292,7 +295,6 @@ render_header('接客タイプ診断', [
 
         <div class="result-actions">
           <a href="/wbss/public/service_quiz.php?start=1" class="btn btn-secondary">もう一度診断する</a>
-          <a href="/wbss/public/dashboard_cast.php" class="btn btn-primary">ダッシュボードへ戻る</a>
         </div>
       </div>
 
@@ -366,12 +368,13 @@ render_header('接客タイプ診断', [
 .cast-type-result-page{
   max-width:1120px;
   margin:0 auto;
-  padding:24px 16px 48px;
+  padding:8px 16px 48px;
   color:#1f2937;
 }
 .cast-type-result-header{
   display:flex;
-  align-items:center;
+  align-items:flex-start;
+  justify-content:space-between;
   gap:16px;
   margin-bottom:20px;
 }
@@ -381,19 +384,11 @@ render_header('接客タイプ診断', [
   font-weight:800;
   letter-spacing:.02em;
 }
-.back-button{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-height:44px;
-  padding:0 16px;
-  border-radius:999px;
-  background:#ffffff;
-  border:1px solid #e5e7eb;
-  text-decoration:none;
-  color:#111827;
-  font-weight:700;
-  box-shadow:0 8px 24px rgba(15,23,42,.06);
+.cast-type-result-sub{
+  margin:8px 0 0;
+  color:#6b7280;
+  font-size:14px;
+  line-height:1.7;
 }
 .result-notice{
   margin-bottom:20px;
@@ -417,6 +412,8 @@ render_header('接客タイプ診断', [
   padding:18px;
   box-shadow:0 18px 48px rgba(15,23,42,.08);
   border:1px solid #edf0f5;
+  position:sticky;
+  top:16px;
 }
 .result-card-image{
   display:block;
@@ -478,6 +475,8 @@ render_header('接客タイプ診断', [
   color:#6b7280;
   font-size:13px;
   font-weight:600;
+  padding-top:14px;
+  border-top:1px solid #eef2f7;
 }
 .score-section{
   margin-bottom:24px;
@@ -557,6 +556,9 @@ render_header('接客タイプ診断', [
   gap:14px;
   flex-wrap:wrap;
 }
+.result-retry-top{
+  flex:0 0 auto;
+}
 .serviceQuizIntro__chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
 .serviceQuizIntro__chips span,.serviceQuizLatest{
   border:1px solid var(--line);background:rgba(255,255,255,.68);border-radius:16px
@@ -571,8 +573,7 @@ body[data-theme="dark"] .serviceQuizResultHero,
 body[data-theme="dark"] .serviceQuizIntro,
 body[data-theme="dark"] .card-panel,
 body[data-theme="dark"] .result-hero__card,
-body[data-theme="dark"] .result-notice,
-body[data-theme="dark"] .back-button{
+body[data-theme="dark"] .result-notice{
   background:
     radial-gradient(circle at top right, rgba(255,146,194,.2), transparent 38%),
     radial-gradient(circle at bottom left, rgba(164,140,255,.16), transparent 34%),
@@ -599,6 +600,7 @@ body[data-theme="dark"] .serviceQuizProgressMeta,
 body[data-theme="dark"] .serviceQuizResultHero__summary,
 body[data-theme="dark"] .serviceQuizIntro__lead,
 body[data-theme="dark"] .serviceQuizLatest__summary,
+body[data-theme="dark"] .cast-type-result-sub,
 body[data-theme="dark"] .type-subtitle,
 body[data-theme="dark"] .type-description,
 body[data-theme="dark"] .saved-at,
@@ -614,7 +616,6 @@ body[data-theme="dark"] .cast-type-result-header h1,
 body[data-theme="dark"] .type-title,
 body[data-theme="dark"] .type-copy,
 body[data-theme="dark"] .score-item__value,
-body[data-theme="dark"] .back-button,
 body[data-theme="dark"] .today-tip{
   color:#fff8fc;
 }
@@ -629,7 +630,6 @@ body[data-theme="dark"] .score-bar{background:rgba(255,255,255,.14)}
 @media (max-width: 640px){
   .cast-type-result-page{padding:16px 12px 32px}
   .cast-type-result-header{
-    align-items:flex-start;
     flex-direction:column;
     gap:12px;
   }
@@ -640,6 +640,7 @@ body[data-theme="dark"] .score-bar{background:rgba(255,255,255,.14)}
   .result-hero{grid-template-columns:1fr}
   .score-grid{grid-template-columns:1fr}
   .result-grid{grid-template-columns:1fr}
+  .result-hero__card{position:static}
   .card-panel,
   .result-hero__card{
     border-radius:20px;
