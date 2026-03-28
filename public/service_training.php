@@ -708,7 +708,7 @@ render_header('接客マナートレーニング', [
 .trainingChoice__text{font-size:15px;line-height:1.65;font-weight:800}
 .trainingFeedback{
   margin-top:12px;padding:14px 16px;border-radius:16px;background:#111827;color:#fff;
-  opacity:0;transform:translateY(4px)
+  opacity:0;transform:translateY(4px);position:relative;z-index:20
 }
 .trainingFeedback.show{opacity:1;transform:translateY(0);transition:opacity .2s ease,transform .2s ease}
 .trainingFeedback.hidden{display:none}
@@ -785,6 +785,18 @@ body[data-theme="dark"] .trainingFeedback{background:#f8fafc;color:#111827}
   .trainingQuestionBody{font-size:16px}
   .trainingActions{flex-direction:column}
   .trainingActions .btn{width:100%}
+  .trainingFeedback{
+    position:fixed;
+    left:50%;
+    top:50%;
+    width:min(calc(100vw - 32px), 360px);
+    margin:0;
+    transform:translate(-50%, calc(-50% + 8px));
+    box-shadow:0 20px 48px rgba(15,23,42,.26);
+  }
+  .trainingFeedback.show{
+    transform:translate(-50%, -50%);
+  }
 }
 @keyframes trainingChoiceTap{
   0%{transform:scale(.98)}
