@@ -6,6 +6,7 @@ require_once __DIR__ . '/../app/db.php';
 require_once __DIR__ . '/../app/layout.php';
 require_once __DIR__ . '/../app/service_quiz.php';
 require_once __DIR__ . '/../app/service_training.php';
+require_once __DIR__ . '/../app/service_training_mission_logic.php';
 
 const SERVICE_TRAINING_SESSION_KEY = '__service_training_run';
 const SERVICE_TRAINING_RESULT_KEY = '__service_training_result';
@@ -385,6 +386,10 @@ if ($typeKey === '') {
 $typeName = (string)(($latestQuizResult['result_type'] ?? [])['name'] ?? 'バランス型');
 $growthTheme = (array)($growthMap[$typeKey] ?? $growthMap['all_rounder'] ?? []);
 $recommendedCategories = array_values(array_intersect(array_keys($categoryMeta), (array)($growthTheme['recommended_categories'] ?? [])));
+$weakSkillTagsForMission = $trainingHistoryReady
+  ? service_training_fetch_recent_weak_tags($pdo, $storeId, $userId, 10, 5)
+  : service_training_recent_weak_tags(5);
+$todayMission = service_training_resolve_today_mission($typeKey, $weakSkillTagsForMission, $growthTheme);
 
 if ($isQuestionMode && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
   service_training_start_run($questionsPool, $recommendedCategories, 8);
@@ -506,6 +511,14 @@ render_header('接客マナートレーニング', [
         </div>
       </div>
     </section>
+    <?php if ($todayMission): ?>
+      <section class="card trainingMissionCard">
+        <div class="trainingMissionCard__label">今日のミッション</div>
+        <h2 class="trainingMissionCard__title"><?= h((string)($todayMission['title'] ?? '')) ?></h2>
+        <p class="trainingMissionCard__action"><?= h((string)($todayMission['action_text'] ?? '')) ?></p>
+        <div class="trainingMissionCard__hint">今日のコツ: <?= h((string)($todayMission['success_hint'] ?? '')) ?></div>
+      </section>
+    <?php endif; ?>
 
     <section class="card trainingProgressCard">
       <div class="trainingProgressCard__top">
@@ -583,6 +596,14 @@ render_header('接客マナートレーニング', [
           </div>
         </div>
       </section>
+      <?php if ($todayMission): ?>
+        <section class="card trainingMissionCard">
+          <div class="trainingMissionCard__label">今日のミッション</div>
+          <h2 class="trainingMissionCard__title"><?= h((string)($todayMission['title'] ?? '')) ?></h2>
+          <p class="trainingMissionCard__action"><?= h((string)($todayMission['action_text'] ?? '')) ?></p>
+          <div class="trainingMissionCard__hint">今日のコツ: <?= h((string)($todayMission['success_hint'] ?? '')) ?></div>
+        </section>
+      <?php endif; ?>
 
       <section class="trainingResultGrid">
         <div class="card trainingResultCard trainingResultCard--strong">
@@ -661,6 +682,14 @@ render_header('接客マナートレーニング', [
           <div class="trainingTypeChip__value"><?= h($typeName) ?></div>
         </div>
       </div>
+      <?php if ($todayMission): ?>
+        <section class="card trainingMissionCard">
+          <div class="trainingMissionCard__label">今日のミッション</div>
+          <h2 class="trainingMissionCard__title"><?= h((string)($todayMission['title'] ?? '')) ?></h2>
+          <p class="trainingMissionCard__action"><?= h((string)($todayMission['action_text'] ?? '')) ?></p>
+          <div class="trainingMissionCard__hint">今日のコツ: <?= h((string)($todayMission['success_hint'] ?? '')) ?></div>
+        </section>
+      <?php endif; ?>
       <div class="trainingActions trainingActions--intro">
         <a href="/wbss/public/service_training.php?start=1" class="btn btn-primary">トレーニングを始める</a>
         <a href="/wbss/public/service_quiz.php" class="btn">接客タイプ診断を見る</a>
@@ -677,7 +706,18 @@ render_header('接客マナートレーニング', [
   border-color:#e6e7ee;
   box-shadow:0 18px 40px rgba(26,32,44,.06);
 }
+.trainingMissionCard{
+  margin-top:18px;
+  padding:22px;
+  background:linear-gradient(180deg, #fff4e8 0%, #fffaf4 100%);
+  border-color:#f3d1b0;
+  box-shadow:0 18px 40px rgba(251,146,60,.10);
+}
 .trainingEyebrow{display:inline-flex;padding:7px 11px;border-radius:999px;border:1px solid color-mix(in srgb, var(--accent) 24%, var(--line));font-size:11px;font-weight:1000;letter-spacing:.08em;color:var(--muted);background:rgba(255,255,255,.56)}
+.trainingMissionCard__label{font-size:12px;font-weight:1000;letter-spacing:.08em;color:#9a3412}
+.trainingMissionCard__title{margin:10px 0 0;font-size:24px;line-height:1.35;font-weight:1000;color:#7c2d12}
+.trainingMissionCard__action{margin:12px 0 0;font-size:15px;line-height:1.85;font-weight:800;color:#7c2d12}
+.trainingMissionCard__hint{margin-top:12px;font-size:13px;line-height:1.7;font-weight:700;color:#9a3412}
 .trainingTitle{margin:12px 0 0;font-size:28px;line-height:1.25;font-weight:1000}
 .trainingLead{margin:12px 0 0;color:var(--muted);font-size:14px;line-height:1.85}
 .trainingThemeCard__grid{display:grid;grid-template-columns:1fr 240px;gap:16px;align-items:start}
@@ -755,7 +795,8 @@ render_header('接客マナートレーニング', [
 body[data-theme="dark"] .trainingThemeCard,
 body[data-theme="dark"] .trainingProgressCard,
 body[data-theme="dark"] .trainingQuestionCard,
-body[data-theme="dark"] .trainingResultCard{
+body[data-theme="dark"] .trainingResultCard,
+body[data-theme="dark"] .trainingMissionCard{
   background:
     radial-gradient(circle at top right, rgba(255,146,194,.2), transparent 38%),
     radial-gradient(circle at bottom left, rgba(164,140,255,.16), transparent 34%),
@@ -771,6 +812,8 @@ body[data-theme="dark"] .trainingTags--weak span{
   border-color:rgba(248,113,113,.24);
 }
 body[data-theme="dark"] .trainingLead,
+body[data-theme="dark"] .trainingMissionCard__label,
+body[data-theme="dark"] .trainingMissionCard__hint,
 body[data-theme="dark"] .trainingQuestionLabel,
 body[data-theme="dark"] .trainingQuestionMeta,
 body[data-theme="dark"] .trainingCount,
@@ -780,6 +823,8 @@ body[data-theme="dark"] .trainingResultMeta{
   color:rgba(230,223,240,.82);
 }
 body[data-theme="dark"] .trainingTitle,
+body[data-theme="dark"] .trainingMissionCard__title,
+body[data-theme="dark"] .trainingMissionCard__action,
 body[data-theme="dark"] .trainingTypeChip__value,
 body[data-theme="dark"] .trainingScene,
 body[data-theme="dark"] .trainingQuestionBody,
