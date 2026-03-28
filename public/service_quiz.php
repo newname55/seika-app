@@ -103,10 +103,6 @@ render_header('接客タイプ診断', [
 ]);
 ?>
 <div class="page">
-  <div class="serviceQuiz">
-    <?php if ($saveNotice !== ''): ?>
-      <div class="card serviceQuizNotice serviceQuizNotice--ok"><?= h($saveNotice) ?></div>
-    <?php endif; ?>
     <?php if ($error !== ''): ?>
       <div class="card serviceQuizNotice serviceQuizNotice--error"><?= h($error) ?></div>
     <?php endif; ?>
