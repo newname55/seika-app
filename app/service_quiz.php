@@ -5,6 +5,8 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/service_quiz_questions.php';
 require_once __DIR__ . '/store.php';
 
+const SERVICE_QUIZ_SESSION_KEY = '__service_quiz_run';
+
 function service_quiz_results_table_ready(PDO $pdo): bool {
   static $ready = null;
   if ($ready !== null) {
@@ -69,6 +71,18 @@ function service_quiz_question_map(): array {
   return $map;
 }
 
+function service_quiz_questions_by_ids(array $questionIds): array {
+  $map = service_quiz_question_map();
+  $rows = [];
+  foreach ($questionIds as $questionId) {
+    $questionId = (int)$questionId;
+    if ($questionId > 0 && isset($map[$questionId])) {
+      $rows[] = $map[$questionId];
+    }
+  }
+  return $rows;
+}
+
 function service_quiz_choice_map(array $question): array {
   $map = [];
   foreach ((array)($question['choices'] ?? []) as $choice) {
@@ -99,9 +113,152 @@ function service_quiz_normalize_answers(array $rawAnswers): array {
   return $normalized;
 }
 
-function service_quiz_calculate(array $rawAnswers): array {
+function service_quiz_question_ids_by_category(): array {
+  $grouped = [];
+  foreach (service_quiz_questions() as $question) {
+    $category = (string)($question['category'] ?? 'misc');
+    $grouped[$category] ??= [];
+    $grouped[$category][] = (int)$question['id'];
+  }
+  return $grouped;
+}
+
+function service_quiz_generate_question_ids(?int $targetCount = null): array {
+  $specs = service_quiz_category_specs();
+  $grouped = service_quiz_question_ids_by_category();
+  $targetCount = $targetCount ?? random_int(12, 16);
+  $targetCount = max(12, min(16, $targetCount));
+
+  $selected = [];
+  $counts = [];
+
+  foreach ($specs as $category => $spec) {
+    $pool = $grouped[$category] ?? [];
+    if (!$pool) {
+      continue;
+    }
+    shuffle($pool);
+    $take = array_shift($pool);
+    if ($take === null) {
+      continue;
+    }
+    $selected[] = (int)$take;
+    $counts[$category] = 1;
+    $grouped[$category] = $pool;
+  }
+
+  $categoryOrder = array_keys($specs);
+  shuffle($categoryOrder);
+  while (count($selected) < $targetCount) {
+    $picked = false;
+    foreach ($categoryOrder as $category) {
+      $pool = $grouped[$category] ?? [];
+      $softMax = (int)($specs[$category]['soft_max'] ?? 2);
+      $current = (int)($counts[$category] ?? 0);
+      if (!$pool || $current >= $softMax) {
+        continue;
+      }
+      $questionId = array_shift($pool);
+      if ($questionId === null) {
+        continue;
+      }
+      $selected[] = (int)$questionId;
+      $counts[$category] = $current + 1;
+      $grouped[$category] = $pool;
+      $picked = true;
+      if (count($selected) >= $targetCount) {
+        break;
+      }
+    }
+    if ($picked) {
+      continue;
+    }
+
+    $remaining = [];
+    foreach ($grouped as $pool) {
+      foreach ($pool as $questionId) {
+        $remaining[] = (int)$questionId;
+      }
+    }
+    if (!$remaining) {
+      break;
+    }
+    shuffle($remaining);
+    foreach ($remaining as $questionId) {
+      if (!in_array($questionId, $selected, true)) {
+        $selected[] = $questionId;
+        break;
+      }
+    }
+    if (count(array_unique($selected)) !== count($selected)) {
+      $selected = array_values(array_unique($selected));
+    }
+  }
+
+  shuffle($selected);
+  return array_values($selected);
+}
+
+function service_quiz_category_counts(array $questionIds): array {
+  $counts = [];
+  $map = service_quiz_question_map();
+  foreach ($questionIds as $questionId) {
+    $questionId = (int)$questionId;
+    if (!isset($map[$questionId])) {
+      continue;
+    }
+    $category = (string)($map[$questionId]['category'] ?? 'misc');
+    $counts[$category] = (int)($counts[$category] ?? 0) + 1;
+  }
+  ksort($counts);
+  return $counts;
+}
+
+function service_quiz_start_run(?int $targetCount = null): array {
+  if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+  }
+
+  $questionIds = service_quiz_generate_question_ids($targetCount);
+  $run = [
+    'token' => bin2hex(random_bytes(16)),
+    'question_ids' => $questionIds,
+    'question_count' => count($questionIds),
+    'category_counts' => service_quiz_category_counts($questionIds),
+    'started_at' => date('Y-m-d H:i:s'),
+  ];
+  $_SESSION[SERVICE_QUIZ_SESSION_KEY] = $run;
+  return $run;
+}
+
+function service_quiz_get_active_run(): ?array {
+  if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+  }
+  $run = $_SESSION[SERVICE_QUIZ_SESSION_KEY] ?? null;
+  return is_array($run) ? $run : null;
+}
+
+function service_quiz_clear_run(): void {
+  if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+  }
+  unset($_SESSION[SERVICE_QUIZ_SESSION_KEY]);
+}
+
+function service_quiz_calculate(array $rawAnswers, ?array $questionIds = null): array {
   $answers = service_quiz_normalize_answers($rawAnswers);
   $questions = service_quiz_question_map();
+  if (is_array($questionIds)) {
+    $allowed = array_fill_keys(array_map('intval', $questionIds), true);
+    $answers = array_filter(
+      $answers,
+      static fn(int $questionId): bool => isset($allowed[$questionId]),
+      ARRAY_FILTER_USE_KEY
+    );
+  } else {
+    $questionIds = array_map('intval', array_keys($answers));
+  }
   $scores = [
     'talk_axis' => 0,
     'mood_axis' => 0,
@@ -142,7 +299,9 @@ function service_quiz_calculate(array $rawAnswers): array {
     'axis_labels' => service_quiz_axis_labels($scores),
     'result_type_key' => $resultType['key'],
     'result_type' => $resultType,
-    'question_count' => count(service_quiz_questions()),
+    'question_ids' => array_values(array_map('intval', $questionIds)),
+    'question_count' => count($answers),
+    'question_category_counts' => service_quiz_category_counts(array_keys($answers)),
   ];
 }
 
@@ -242,13 +401,37 @@ function service_quiz_axis_bucket(int $value, string $positive, string $neutral,
   return $neutral;
 }
 
-function service_quiz_save_result(PDO $pdo, int $storeId, int $castId, array $rawAnswers, string $quizVersion = 'v0.1'): int {
-  $result = service_quiz_calculate($rawAnswers);
+function service_quiz_history_tables_ready(PDO $pdo): bool {
+  static $ready = null;
+  if ($ready !== null) {
+    return $ready;
+  }
+
+  try {
+    $st = $pdo->query("
+      SELECT TABLE_NAME
+      FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME IN ('cast_service_quiz_sessions', 'cast_service_quiz_answers')
+    ");
+    $names = $st->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $ready = in_array('cast_service_quiz_sessions', $names, true) && in_array('cast_service_quiz_answers', $names, true);
+  } catch (Throwable $e) {
+    $ready = false;
+  }
+  return $ready;
+}
+
+function service_quiz_save_result(PDO $pdo, int $storeId, int $castId, array $rawAnswers, ?array $questionIds = null, string $quizVersion = 'v0.2'): int {
+  $result = service_quiz_calculate($rawAnswers, $questionIds);
   $answersJson = json_encode($result['answers'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   $scoresJson = json_encode($result['scores'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   $resultJson = json_encode([
     'axis_labels' => $result['axis_labels'],
     'result_type' => $result['result_type'],
+    'question_ids' => $result['question_ids'],
+    'question_category_counts' => $result['question_category_counts'],
+    'answered_choices' => $result['answered_choices'],
   ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
   if (!is_string($answersJson) || !is_string($scoresJson) || !is_string($resultJson)) {
@@ -299,7 +482,141 @@ function service_quiz_save_result(PDO $pdo, int $storeId, int $castId, array $ra
     ':result_json' => $resultJson,
   ]);
 
-  return (int)$pdo->lastInsertId();
+  $resultId = (int)$pdo->lastInsertId();
+
+  if (service_quiz_history_tables_ready($pdo)) {
+    service_quiz_save_history($pdo, $resultId, $storeId, $castId, $quizVersion, $result);
+  }
+
+  return $resultId;
+}
+
+function service_quiz_save_history(PDO $pdo, int $resultId, int $storeId, int $castId, string $quizVersion, array $result): void {
+  $questionIdsJson = json_encode((array)($result['question_ids'] ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  $categoryCountsJson = json_encode((array)($result['question_category_counts'] ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  if (!is_string($questionIdsJson) || !is_string($categoryCountsJson)) {
+    return;
+  }
+
+  $stSession = $pdo->prepare("
+    INSERT INTO cast_service_quiz_sessions (
+      result_id, store_id, cast_id, quiz_version, question_count, answered_count, question_ids_json, category_counts_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  ");
+  $stSession->execute([
+    $resultId,
+    $storeId,
+    $castId,
+    $quizVersion,
+    (int)($result['question_count'] ?? 0),
+    count((array)($result['answers'] ?? [])),
+    $questionIdsJson,
+    $categoryCountsJson,
+  ]);
+  $sessionId = (int)$pdo->lastInsertId();
+
+  $questionMap = service_quiz_question_map();
+  $stAnswer = $pdo->prepare("
+    INSERT INTO cast_service_quiz_answers (
+      session_id, result_id, store_id, cast_id, question_id, question_category, choice_key, answer_scores_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  ");
+
+  foreach ((array)($result['answers'] ?? []) as $questionId => $choiceKey) {
+    $questionId = (int)$questionId;
+    $choiceKey = (string)$choiceKey;
+    if (!isset($questionMap[$questionId])) {
+      continue;
+    }
+    $choice = service_quiz_choice_map($questionMap[$questionId])[$choiceKey] ?? null;
+    if (!is_array($choice)) {
+      continue;
+    }
+    $answerScoresJson = json_encode((array)($choice['scores'] ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($answerScoresJson)) {
+      continue;
+    }
+    $stAnswer->execute([
+      $sessionId,
+      $resultId,
+      $storeId,
+      $castId,
+      $questionId,
+      (string)($questionMap[$questionId]['category'] ?? 'misc'),
+      $choiceKey,
+      $answerScoresJson,
+    ]);
+  }
+}
+
+function service_quiz_fetch_cumulative_summary(PDO $pdo, int $storeId, int $castId, int $limit = 20): array {
+  $summary = [
+    'session_count' => 0,
+    'average_scores' => [
+      'talk_axis' => 0.0,
+      'mood_axis' => 0.0,
+      'response_axis' => 0.0,
+      'relation_axis' => 0.0,
+    ],
+    'category_counts' => [],
+  ];
+
+  if (!service_quiz_history_tables_ready($pdo) || $storeId <= 0 || $castId <= 0) {
+    return $summary;
+  }
+
+  $stSessions = $pdo->prepare("
+    SELECT result_id
+    FROM cast_service_quiz_sessions
+    WHERE store_id = ?
+      AND cast_id = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  ");
+  $stSessions->bindValue(1, $storeId, PDO::PARAM_INT);
+  $stSessions->bindValue(2, $castId, PDO::PARAM_INT);
+  $stSessions->bindValue(3, max(1, $limit), PDO::PARAM_INT);
+  $stSessions->execute();
+  $resultIds = array_values(array_filter(array_map('intval', $stSessions->fetchAll(PDO::FETCH_COLUMN) ?: [])));
+  if (!$resultIds) {
+    return $summary;
+  }
+
+  $summary['session_count'] = count($resultIds);
+  $ph = implode(',', array_fill(0, count($resultIds), '?'));
+  $stResults = $pdo->prepare("
+    SELECT talk_axis_score, mood_axis_score, response_axis_score, relation_axis_score
+    FROM cast_service_quiz_results
+    WHERE id IN ($ph)
+  ");
+  $stResults->execute($resultIds);
+  $rows = $stResults->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  if ($rows) {
+    foreach ($rows as $row) {
+      $summary['average_scores']['talk_axis'] += (int)($row['talk_axis_score'] ?? 0);
+      $summary['average_scores']['mood_axis'] += (int)($row['mood_axis_score'] ?? 0);
+      $summary['average_scores']['response_axis'] += (int)($row['response_axis_score'] ?? 0);
+      $summary['average_scores']['relation_axis'] += (int)($row['relation_axis_score'] ?? 0);
+    }
+    foreach ($summary['average_scores'] as $axis => $value) {
+      $summary['average_scores'][$axis] = round($value / count($rows), 2);
+    }
+  }
+
+  $stCategories = $pdo->prepare("
+    SELECT question_category, COUNT(*) AS c
+    FROM cast_service_quiz_answers
+    WHERE store_id = ?
+      AND cast_id = ?
+    GROUP BY question_category
+    ORDER BY question_category ASC
+  ");
+  $stCategories->execute([$storeId, $castId]);
+  foreach (($stCategories->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+    $summary['category_counts'][(string)($row['question_category'] ?? 'misc')] = (int)($row['c'] ?? 0);
+  }
+
+  return $summary;
 }
 
 function service_quiz_fetch_latest_result(PDO $pdo, int $storeId, int $castId): ?array {

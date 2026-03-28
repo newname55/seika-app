@@ -18,7 +18,6 @@ if ($storeId <= 0) {
   exit('店舗が未設定です。管理者に所属店舗を設定してもらってください。');
 }
 
-$questions = service_quiz_questions();
 $questionMap = service_quiz_question_map();
 $tableReady = service_quiz_results_table_ready($pdo);
 $error = '';
@@ -28,20 +27,40 @@ $displayResult = null;
 $resultId = (int)($_GET['result_id'] ?? 0);
 $isQuestionMode = ((string)($_GET['start'] ?? '') === '1');
 $currentAnswers = [];
+$activeRun = null;
+
+if ($isQuestionMode && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+  $activeRun = service_quiz_start_run();
+} else {
+  $activeRun = service_quiz_get_active_run();
+}
+
+$selectedQuestionIds = is_array($activeRun['question_ids'] ?? null) ? array_map('intval', $activeRun['question_ids']) : [];
+$questions = service_quiz_questions_by_ids($selectedQuestionIds);
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   csrf_verify((string)($_POST['csrf_token'] ?? ''));
 
   if ((string)($_POST['action'] ?? '') === 'restart') {
+    service_quiz_clear_run();
     header('Location: /wbss/public/service_quiz.php?start=1');
     exit;
+  }
+
+  $activeRun = service_quiz_get_active_run();
+  $selectedQuestionIds = is_array($activeRun['question_ids'] ?? null) ? array_map('intval', $activeRun['question_ids']) : [];
+  $questions = service_quiz_questions_by_ids($selectedQuestionIds);
+  if (!$selectedQuestionIds) {
+    $activeRun = service_quiz_start_run();
+    $selectedQuestionIds = array_map('intval', (array)($activeRun['question_ids'] ?? []));
+    $questions = service_quiz_questions_by_ids($selectedQuestionIds);
   }
 
   $currentAnswers = service_quiz_normalize_answers((array)($_POST['answers'] ?? []));
   $questionId = (int)($_POST['question_id'] ?? 0);
   $choice = strtoupper(trim((string)($_POST['choice'] ?? '')));
 
-  if (!isset($questionMap[$questionId])) {
+  if (!isset($questionMap[$questionId]) || !in_array($questionId, $selectedQuestionIds, true)) {
     $error = '診断データの読み込みに失敗しました。最初からやり直してください。';
     $isQuestionMode = true;
   } else {
@@ -54,11 +73,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
       ksort($currentAnswers);
 
       if (count($currentAnswers) >= count($questions)) {
-        $displayResult = service_quiz_calculate($currentAnswers);
+        $displayResult = service_quiz_calculate($currentAnswers, $selectedQuestionIds);
 
         if ($tableReady) {
           try {
-            $newId = service_quiz_save_result($pdo, $storeId, $userId, $currentAnswers);
+            $newId = service_quiz_save_result($pdo, $storeId, $userId, $currentAnswers, $selectedQuestionIds);
+            service_quiz_clear_run();
             header('Location: /wbss/public/service_quiz.php?result_id=' . $newId . '&saved=1');
             exit;
           } catch (Throwable $e) {
@@ -93,6 +113,7 @@ if ((string)($_GET['saved'] ?? '') === '1') {
 $nextIndex = count($currentAnswers);
 $currentQuestion = $isQuestionMode ? ($questions[$nextIndex] ?? null) : null;
 $progressCurrent = min($nextIndex + 1, count($questions));
+$categoryLabels = service_quiz_category_specs();
 
 render_page_start('接客タイプ診断');
 render_header('接客タイプ診断', [
@@ -116,7 +137,10 @@ render_header('接客タイプ診断', [
         <div class="serviceQuizHero__top">
           <div>
             <div class="serviceQuizEyebrow">WBSS 接客タイプ診断</div>
-            <h1 class="serviceQuizTitle"><?= h((string)$currentQuestion['title']) ?> / <?= $progressCurrent ?>問目</h1>
+            <h1 class="serviceQuizTitle">Q<?= $progressCurrent ?> / <?= count($questions) ?></h1>
+            <div class="serviceQuizQuestionMeta">
+              <?= h((string)($categoryLabels[(string)($currentQuestion['category'] ?? '')]['label'] ?? '接客シーン')) ?>
+            </div>
           </div>
           <div class="serviceQuizCount"><?= count($currentAnswers) ?>/<?= count($questions) ?> 回答済み</div>
         </div>
@@ -373,12 +397,13 @@ render_header('接客タイプ診断', [
       <section class="card serviceQuizCard serviceQuizIntro">
         <div class="serviceQuizEyebrow">WBSS 接客タイプ診断</div>
         <h1 class="serviceQuizTitle">接客実務向けの自己診断</h1>
-        <p class="serviceQuizIntro__lead">MBTI風ですが、性格診断ではなく「接客で自然に出やすい反応傾向」を見る12問の4択診断です。1問ずつ答えるだけで、4軸スコアから8タイプに分類します。</p>
+        <p class="serviceQuizIntro__lead">固定12問ではなく、カテゴリごとにバランスを取った質問プールから毎回12〜16問を出題します。接客で自然に出やすい反応傾向を、4軸スコアから見ていく診断です。</p>
         <div class="serviceQuizIntro__chips">
-          <span>12問</span>
+          <span>12〜16問</span>
+          <span>カテゴリ抽選</span>
           <span>4軸スコア</span>
           <span>8タイプ判定</span>
-          <span>最新結果を保存</span>
+          <span>履歴保存対応</span>
         </div>
         <?php if (is_array($latestResult)): ?>
           <div class="serviceQuizLatest">
@@ -410,6 +435,7 @@ render_header('接客タイプ診断', [
 }
 .serviceQuizEyebrow{display:inline-flex;padding:7px 11px;border-radius:999px;border:1px solid color-mix(in srgb, var(--accent) 24%, var(--line));font-size:11px;font-weight:1000;letter-spacing:.08em;color:var(--muted);background:rgba(255,255,255,.56)}
 .serviceQuizTitle{margin:12px 0 0;font-size:28px;line-height:1.2;font-weight:1000}
+.serviceQuizQuestionMeta{margin-top:6px;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.04em}
 .serviceQuizHero__top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
 .serviceQuizCount,.serviceQuizResultHero__meta{color:var(--muted);font-size:12px;font-weight:800}
 .serviceQuizProgress{height:10px;border-radius:999px;background:rgba(255,255,255,.62);margin-top:14px;overflow:hidden}
@@ -723,6 +749,7 @@ body[data-theme="dark"] .serviceQuizQuestion__label,
 body[data-theme="dark"] .serviceQuizQuestion__prompt,
 body[data-theme="dark"] .serviceQuizCount,
 body[data-theme="dark"] .serviceQuizProgressMeta,
+body[data-theme="dark"] .serviceQuizQuestionMeta,
 body[data-theme="dark"] .serviceQuizResultHero__summary,
 body[data-theme="dark"] .serviceQuizIntro__lead,
 body[data-theme="dark"] .serviceQuizLatest__summary,
