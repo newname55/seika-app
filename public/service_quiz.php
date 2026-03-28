@@ -169,7 +169,7 @@ render_header('接客タイプ診断', [
           <?= h((string)$currentQuestion['question']) ?>
         </div>
         <div class="serviceQuizQuestion__prompt">
-          <?= h((string)($currentQuestion['prompt'] ?? 'あなたが自然に返しやすいのは？')) ?>
+          <?= h((string)($currentQuestion['prompt'] ?? 'この場面で、一番“あなたらしい”のはどれ？')) ?>
         </div>
 
         <form method="post" class="serviceQuizChoices">
@@ -244,6 +244,23 @@ render_header('接客タイプ診断', [
           'response_axis' => ['title' => '反応', 'left' => '観察', 'right' => '直感', 'positive' => '直感強め', 'neutral' => '中間', 'negative' => '観察強め'],
           'relation_axis' => ['title' => '関係性', 'left' => '信頼', 'right' => '恋愛演出', 'positive' => '恋愛演出強め', 'neutral' => '中間', 'negative' => '信頼蓄積強め'],
         ];
+        $cumulativeHeadline = '最近の接客傾向は、全体としてバランスよく出ています。';
+        if ($averageScores) {
+          $dominantAxisKey = null;
+          $dominantAxisValue = 0.0;
+          foreach ($cumulativeAxes as $axisKey => $axisMeta) {
+            $axisValue = (float)($averageScores[$axisKey] ?? 0.0);
+            if (abs($axisValue) > abs($dominantAxisValue)) {
+              $dominantAxisKey = $axisKey;
+              $dominantAxisValue = $axisValue;
+            }
+          }
+          if ($dominantAxisKey !== null && abs($dominantAxisValue) >= 1.0) {
+            $dominantMeta = $cumulativeAxes[$dominantAxisKey];
+            $dominantSide = $dominantAxisValue < 0 ? $dominantMeta['left'] : $dominantMeta['right'];
+            $cumulativeHeadline = 'あなたは最近さらに' . $dominantSide . '寄りです。';
+          }
+        }
       ?>
       <div class="cast-type-result-page" style="--result-tip-bg: <?= h($theme['tip_bg']) ?>; --result-tip-border: <?= h($theme['tip_border']) ?>;">
         <?php if ($saveNotice !== ''): ?>
@@ -409,6 +426,7 @@ render_header('接客タイプ診断', [
                 <div class="cumulative-panel__badge">累積傾向</div>
                 <h3>最近の接客スタイルの積み上がり</h3>
                 <p class="cumulative-panel__lead">直近 <?= (int)$cumulativeSummary['session_count'] ?> 回分の平均から、今の安定した傾向をまとめています。</p>
+                <p class="cumulative-panel__headline"><?= h($cumulativeHeadline) ?></p>
               </div>
             </div>
 
@@ -516,9 +534,27 @@ render_header('接客タイプ診断', [
 .serviceQuizProgress{height:10px;border-radius:999px;background:rgba(255,255,255,.62);margin-top:14px;overflow:hidden}
 .serviceQuizProgress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg, #ff7aad, #ffb6d8)}
 .serviceQuizProgressMeta{margin-top:8px;color:var(--muted);font-size:12px}
-.serviceQuizQuestion__label{font-size:12px;font-weight:1000;color:var(--muted);letter-spacing:.04em}
-.serviceQuizQuestion__body{margin-top:10px;font-size:24px;line-height:1.45;font-weight:1000}
-.serviceQuizQuestion__prompt{margin-top:16px;color:var(--muted);font-size:13px}
+.serviceQuizQuestion__label{
+  font-size:12px;
+  font-weight:1000;
+  color:var(--muted);
+  letter-spacing:.08em;
+  text-transform:none;
+}
+.serviceQuizQuestion__body{
+  margin-top:12px;
+  font-size:26px;
+  line-height:1.65;
+  font-weight:1000;
+  letter-spacing:.01em;
+}
+.serviceQuizQuestion__prompt{
+  margin-top:18px;
+  color:var(--txt);
+  font-size:16px;
+  line-height:1.8;
+  font-weight:800;
+}
 .serviceQuizChoices{display:grid;gap:10px;margin-top:18px}
 .serviceQuizChoice{
   display:flex;align-items:flex-start;gap:12px;width:100%;padding:16px;border-radius:18px;
@@ -820,6 +856,13 @@ render_header('接客タイプ診断', [
   font-size:14px;
   line-height:1.8;
 }
+.cumulative-panel__headline{
+  margin:10px 0 0;
+  color:#111827;
+  font-size:15px;
+  line-height:1.8;
+  font-weight:800;
+}
 .cumulative-grid{
   display:grid;
   grid-template-columns:repeat(2, 1fr);
@@ -980,6 +1023,9 @@ body[data-theme="dark"] .cumulative-panel__empty,
 body[data-theme="dark"] .cumulative-tags span{
   color:rgba(230,223,240,.82);
 }
+body[data-theme="dark"] .cumulative-panel__headline{
+  color:#fff8fc;
+}
 body[data-theme="dark"] .serviceQuizChoice__key{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14)}
 body[data-theme="dark"] .score-bar{background:rgba(255,255,255,.14)}
 body[data-theme="dark"] .score-bar-center{background:rgba(255,255,255,.36)}
@@ -1002,7 +1048,15 @@ body[data-theme="dark"] .cumulative-panel__categories{border-top-color:rgba(255,
   .cast-type-result-sub{font-size:13px}
   .serviceQuizCard{padding:16px}
   .serviceQuizTitle{font-size:24px}
-  .serviceQuizQuestion__body{font-size:21px}
+  .serviceQuizQuestion__body{
+    font-size:22px;
+    line-height:1.7;
+  }
+  .serviceQuizQuestion__prompt{
+    margin-top:16px;
+    font-size:15px;
+    line-height:1.8;
+  }
   .result-hero{grid-template-columns:1fr}
   .score-grid{grid-template-columns:1fr}
   .result-grid{grid-template-columns:1fr}
