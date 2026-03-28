@@ -1865,6 +1865,182 @@ render_page_start('ダッシュボード');
 
 }
 
+@media (max-width: 1200px){
+  .dashboard-shell{
+    max-width:1180px;
+    padding-bottom:20px;
+  }
+
+  .dashboard-topbar{
+    gap:10px;
+    margin-top:8px;
+    margin-bottom:10px;
+  }
+
+  .dashboard-hero-main,
+  .dash-section,
+  .dashboard-focus{
+    border-radius:18px;
+  }
+
+  .dashboard-hero-main{
+    padding:16px 18px;
+    min-height:132px;
+  }
+
+  .dashboard-hero-grid{
+    gap:12px;
+    grid-template-columns:minmax(0, 1.6fr) minmax(200px, .56fr);
+  }
+
+  .hero-store-name{
+    font-size:30px;
+  }
+
+  .hero-store-meta{
+    margin-top:4px;
+    margin-bottom:8px;
+    font-size:11px;
+  }
+
+  .hero-badge{
+    padding:5px 9px;
+    font-size:11px;
+  }
+
+  .dashboard-hero-main h1{
+    margin:8px 0 6px;
+    font-size:22px;
+    line-height:1.16;
+  }
+
+  .dashboard-hero-main p{
+    font-size:12px;
+    line-height:1.42;
+  }
+
+  .dashboard-side-stack{
+    gap:8px;
+  }
+
+  .dashboard-message-strip{
+    margin-bottom:8px;
+  }
+
+  .dashboard-focus{
+    margin-bottom:8px;
+    padding:12px 14px 13px;
+  }
+
+  .dashboard-focus__head h2{
+    font-size:16px;
+  }
+
+  .dashboard-focus__head p{
+    margin-top:3px;
+    font-size:11px;
+  }
+
+  .dashboard-focus__grid{
+    gap:8px;
+    margin-top:10px;
+  }
+
+  .focus-card{
+    gap:10px;
+    padding:11px 12px;
+    border-radius:15px;
+  }
+
+  .focus-card__icon{
+    font-size:22px;
+  }
+
+  .focus-card__title{
+    font-size:14px;
+  }
+
+  .focus-card__desc{
+    font-size:11px;
+    line-height:1.35;
+  }
+
+  .dash-wrap{
+    gap:8px;
+  }
+
+  .dash-tabs{
+    gap:6px;
+    padding:3px;
+    border-radius:16px;
+  }
+
+  .dash-tab{
+    min-height:48px;
+    padding:10px 14px;
+    border-radius:12px;
+    font-size:14px;
+  }
+
+  .dash-section{
+    padding:13px 14px 14px;
+  }
+
+  .dash-section-head{
+    margin-bottom:8px;
+  }
+
+  .dash-section-head h2{
+    font-size:16px;
+  }
+
+  .dash-section-head p{
+    margin-top:3px;
+    font-size:11px;
+  }
+
+  .dash-subsections{
+    gap:10px;
+  }
+
+  .dash-subsection{
+    gap:6px;
+  }
+
+  .dash-grid{
+    gap:8px;
+  }
+
+  .dash-card{
+    padding:10px 11px;
+    border-radius:13px;
+  }
+
+  .dash-card-top{
+    margin-bottom:6px;
+  }
+
+  .dash-icon{
+    font-size:20px;
+  }
+
+  .dash-tag{
+    padding:3px 6px;
+    font-size:9px;
+  }
+
+  .dash-title{
+    font-size:13px;
+    line-height:1.25;
+  }
+
+  .dash-desc{
+    margin-top:3px;
+    font-size:10px;
+    line-height:1.32;
+  }
+}
+
 @media (max-width: 820px){
   .dashboard-topbar{
     grid-template-columns:1fr;
