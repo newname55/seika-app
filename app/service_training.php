@@ -137,3 +137,138 @@ function service_training_fetch_recent_weak_tags(PDO $pdo, int $storeId, int $ca
   arsort($tagCounts);
   return array_slice($tagCounts, 0, max(1, $tagLimit), true);
 }
+
+function service_training_mission_logs_table_ready(PDO $pdo): bool {
+  static $ready = null;
+  if ($ready !== null) {
+    return $ready;
+  }
+
+  try {
+    $st = $pdo->prepare("
+      SELECT COUNT(*)
+      FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'cast_service_training_mission_logs'
+    ");
+    $st->execute();
+    $ready = ((int)$st->fetchColumn() > 0);
+  } catch (Throwable $e) {
+    $ready = false;
+  }
+
+  return $ready;
+}
+
+function service_training_save_mission_log(
+  PDO $pdo,
+  int $storeId,
+  int $castId,
+  string $missionId,
+  string $title,
+  string $category,
+  string $skillTag,
+  string $status,
+  ?string $logDate = null
+): void {
+  if (!service_training_mission_logs_table_ready($pdo) || $storeId <= 0 || $castId <= 0 || $missionId === '') {
+    return;
+  }
+
+  $logDate = $logDate ?: date('Y-m-d');
+  $allowed = ['done', 'pending', 'skipped'];
+  if (!in_array($status, $allowed, true)) {
+    return;
+  }
+
+  $st = $pdo->prepare("
+    INSERT INTO cast_service_training_mission_logs (
+      store_id, cast_id, log_date, mission_id, mission_title, mission_category, skill_tag, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      mission_id = VALUES(mission_id),
+      mission_title = VALUES(mission_title),
+      mission_category = VALUES(mission_category),
+      skill_tag = VALUES(skill_tag),
+      status = VALUES(status),
+      updated_at = CURRENT_TIMESTAMP
+  ");
+  $st->execute([$storeId, $castId, $logDate, $missionId, $title, $category, $skillTag, $status]);
+}
+
+function service_training_get_today_mission_log(PDO $pdo, int $storeId, int $castId, ?string $logDate = null): ?array {
+  if (!service_training_mission_logs_table_ready($pdo) || $storeId <= 0 || $castId <= 0) {
+    return null;
+  }
+  $logDate = $logDate ?: date('Y-m-d');
+  $st = $pdo->prepare("
+    SELECT *
+    FROM cast_service_training_mission_logs
+    WHERE store_id = ?
+      AND cast_id = ?
+      AND log_date = ?
+    LIMIT 1
+  ");
+  $st->execute([$storeId, $castId, $logDate]);
+  $row = $st->fetch(PDO::FETCH_ASSOC);
+  return is_array($row) ? $row : null;
+}
+
+function service_training_done_streak(PDO $pdo, int $storeId, int $castId): int {
+  if (!service_training_mission_logs_table_ready($pdo) || $storeId <= 0 || $castId <= 0) {
+    return 0;
+  }
+
+  $st = $pdo->prepare("
+    SELECT log_date
+    FROM cast_service_training_mission_logs
+    WHERE store_id = ?
+      AND cast_id = ?
+      AND status = 'done'
+    ORDER BY log_date DESC
+    LIMIT 30
+  ");
+  $st->execute([$storeId, $castId]);
+  $dates = [];
+  foreach (($st->fetchAll(PDO::FETCH_COLUMN) ?: []) as $logDate) {
+    $key = trim((string)$logDate);
+    if ($key !== '') {
+      $dates[$key] = true;
+    }
+  }
+  if (!$dates) {
+    return 0;
+  }
+
+  $streak = 0;
+  $cursor = new DateTimeImmutable('today');
+  while (true) {
+    $key = $cursor->format('Y-m-d');
+    if (!isset($dates[$key])) {
+      break;
+    }
+    $streak++;
+    $cursor = $cursor->modify('-1 day');
+  }
+  return $streak;
+}
+
+function service_training_mission_category_done_counts(PDO $pdo, int $storeId, int $castId): array {
+  if (!service_training_mission_logs_table_ready($pdo) || $storeId <= 0 || $castId <= 0) {
+    return [];
+  }
+  $st = $pdo->prepare("
+    SELECT mission_category, COUNT(*) AS c
+    FROM cast_service_training_mission_logs
+    WHERE store_id = ?
+      AND cast_id = ?
+      AND status = 'done'
+    GROUP BY mission_category
+  ");
+  $st->execute([$storeId, $castId]);
+  $counts = [];
+  foreach (($st->fetchAll(PDO::FETCH_ASSOC) ?: []) as $row) {
+    $counts[(string)($row['mission_category'] ?? '')] = (int)($row['c'] ?? 0);
+  }
+  return $counts;
+}

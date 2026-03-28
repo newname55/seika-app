@@ -6,6 +6,8 @@ require_once __DIR__ . '/../app/db.php';
 require_once __DIR__ . '/../app/layout.php';
 require_once __DIR__ . '/../app/service_quiz.php';
 require_once __DIR__ . '/../app/service_training.php';
+require_once __DIR__ . '/../app/service_training_mission_logic.php';
+require_once __DIR__ . '/../app/service_training_badge_logic.php';
 
 const SERVICE_TRAINING_SESSION_KEY = '__service_training_run';
 const SERVICE_TRAINING_RESULT_KEY = '__service_training_result';
@@ -355,6 +357,68 @@ function service_training_calculate_result(array $questions, array $answers, arr
   ];
 }
 
+function service_training_render_mission_card(array $mission, string $typeName, array $growthTheme, int $streak, ?string $todayStatus, string $returnTo): void {
+  $missionId = (string)($mission['id'] ?? $mission['mission_id'] ?? '');
+  if ($missionId === '') {
+    return;
+  }
+  $reasonText = service_training_mission_reason($mission);
+  $skillTag = (string)($mission['skill_tag'] ?? '接客力');
+  $statusMeta = service_training_mission_status_meta($todayStatus ?? 'pending');
+  ?>
+  <section class="card trainingMissionCard">
+    <div class="trainingMissionCard__label">今日のミッション</div>
+    <div class="trainingMissionCard__typeLink">
+      あなたは「<?= h($typeName) ?>」
+      <span>だから今日はこれ</span>
+    </div>
+    <h2 class="trainingMissionCard__title"><?= h((string)($mission['action_text'] ?? '')) ?></h2>
+    <div class="trainingMissionCard__reason">
+      <strong>理由:</strong>
+      <span><?= h($reasonText) ?></span>
+    </div>
+    <div class="trainingMissionCard__hint">今日のコツ: <?= h((string)($mission['success_hint'] ?? (string)($growthTheme['daily_tip'] ?? '1回だけ意識できれば十分です。'))) ?></div>
+    <div class="trainingMissionCard__streak">🔥 連続達成: <?= (int)$streak ?>日</div>
+
+    <form method="post" class="trainingMissionActions">
+      <input type="hidden" name="csrf_token" value="<?= h(csrf_token()) ?>">
+      <input type="hidden" name="action" value="mission_status">
+      <input type="hidden" name="mission_id" value="<?= h($missionId) ?>">
+      <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
+      <?php foreach (['done', 'pending', 'skipped'] as $status): ?>
+        <?php $meta = service_training_mission_status_meta($status); ?>
+        <?php
+          $feedbackBody = (string)$meta['feedback_body'];
+          if ($status === 'done') {
+            $feedbackBody = $skillTag . 'が伸びています。';
+          } elseif ($status === 'skipped') {
+            $feedbackBody = '明日は“1回だけ”意識してみよう。';
+          }
+        ?>
+        <button
+          type="submit"
+          name="mission_status"
+          value="<?= h($status) ?>"
+          class="trainingMissionAction <?= $todayStatus === $status ? 'is-current ' . h($meta['class']) : '' ?>"
+          data-feedback-title="<?= h((string)$meta['feedback_title']) ?>"
+          data-feedback-body="<?= h($feedbackBody) ?>"
+        >
+          <?= h((string)$meta['button']) ?>
+        </button>
+      <?php endforeach; ?>
+    </form>
+
+    <div class="trainingMissionStatus <?= h($statusMeta['class']) ?>">
+      今日の状態: <?= h((string)$statusMeta['label']) ?>
+    </div>
+    <div id="mission-feedback" class="trainingMissionFeedback hidden" aria-live="polite">
+      <div class="trainingMissionFeedback__title"></div>
+      <div class="trainingMissionFeedback__body"></div>
+    </div>
+  </section>
+  <?php
+}
+
 require_login();
 require_role(['cast']);
 
@@ -371,6 +435,7 @@ $questionsPool = require __DIR__ . '/../app/service_training_questions.php';
 $growthMap = require __DIR__ . '/../app/service_training_growth_map.php';
 $categoryMeta = service_training_category_meta();
 $trainingHistoryReady = service_training_history_tables_ready($pdo);
+$missionLogsReady = service_training_mission_logs_table_ready($pdo);
 
 $error = '';
 $displayResult = null;
@@ -385,6 +450,19 @@ if ($typeKey === '') {
 $typeName = (string)(($latestQuizResult['result_type'] ?? [])['name'] ?? 'バランス型');
 $growthTheme = (array)($growthMap[$typeKey] ?? $growthMap['all_rounder'] ?? []);
 $recommendedCategories = array_values(array_intersect(array_keys($categoryMeta), (array)($growthTheme['recommended_categories'] ?? [])));
+$weakSkillTagsForMission = $trainingHistoryReady
+  ? service_training_fetch_recent_weak_tags($pdo, $storeId, $userId, 10, 5)
+  : service_training_recent_weak_tags(5);
+$todayMission = service_training_resolve_today_mission($typeKey, $weakSkillTagsForMission, $growthTheme);
+$todayMissionId = (string)($todayMission['id'] ?? $todayMission['mission_id'] ?? '');
+$todayMissionLog = $missionLogsReady ? service_training_get_today_mission_log($pdo, $storeId, $userId) : null;
+$todayMissionStatus = $missionLogsReady
+  ? (string)($todayMissionLog['status'] ?? '')
+  : ($todayMissionId !== '' ? service_training_get_today_mission_status($todayMissionId) : null);
+$missionStreak = $missionLogsReady ? service_training_done_streak($pdo, $storeId, $userId) : service_training_mission_streak();
+$currentPagePath = '/wbss/public/service_training.php' . (($_SERVER['QUERY_STRING'] ?? '') !== '' ? '?' . (string)$_SERVER['QUERY_STRING'] : '');
+$badgeState = service_training_user_badges($pdo, $storeId, $userId, $latestQuizResult);
+$newBadgeKeys = service_training_newly_earned_badge_keys((array)($badgeState['earned'] ?? []));
 
 if ($isQuestionMode && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
   service_training_start_run($questionsPool, $recommendedCategories, 8);
@@ -396,6 +474,33 @@ $questions = service_training_questions_by_ids($questionsPool, $selectedQuestion
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   csrf_verify((string)($_POST['csrf_token'] ?? ''));
+
+  if ((string)($_POST['action'] ?? '') === 'mission_status') {
+    $missionId = trim((string)($_POST['mission_id'] ?? ''));
+    $missionStatus = trim((string)($_POST['mission_status'] ?? ''));
+    if ($missionId !== '' && $todayMissionId !== '' && $missionId === $todayMissionId) {
+      if ($missionLogsReady) {
+        service_training_save_mission_log(
+          $pdo,
+          $storeId,
+          $userId,
+          $missionId,
+          (string)($todayMission['title'] ?? ''),
+          (string)($todayMission['category'] ?? ''),
+          (string)($todayMission['skill_tag'] ?? ''),
+          $missionStatus
+        );
+      } else {
+        service_training_save_mission_status($missionId, $missionStatus);
+      }
+    }
+    $returnTo = trim((string)($_POST['return_to'] ?? '/wbss/public/service_training.php'));
+    if ($returnTo === '' || str_starts_with($returnTo, 'http')) {
+      $returnTo = '/wbss/public/service_training.php';
+    }
+    header('Location: ' . $returnTo);
+    exit;
+  }
 
   if ((string)($_POST['action'] ?? '') === 'restart') {
     service_training_clear_run();
@@ -506,6 +611,9 @@ render_header('接客マナートレーニング', [
         </div>
       </div>
     </section>
+    <?php if ($todayMission): ?>
+      <?php service_training_render_mission_card($todayMission, $typeName, $growthTheme, $missionStreak, $todayMissionStatus, $currentPagePath); ?>
+    <?php endif; ?>
 
     <section class="card trainingProgressCard">
       <div class="trainingProgressCard__top">
@@ -583,6 +691,9 @@ render_header('接客マナートレーニング', [
           </div>
         </div>
       </section>
+      <?php if ($todayMission): ?>
+        <?php service_training_render_mission_card($todayMission, $typeName, $growthTheme, $missionStreak, $todayMissionStatus, $currentPagePath); ?>
+      <?php endif; ?>
 
       <section class="trainingResultGrid">
         <div class="card trainingResultCard trainingResultCard--strong">
@@ -636,6 +747,37 @@ render_header('接客マナートレーニング', [
           <h2>今日の一言</h2>
           <p class="trainingTip"><?= nl2br(h((string)($displayResult['today_tip'] ?? '今日は一つだけ丁寧さを足す意識で十分です。'))) ?></p>
         </div>
+
+        <div class="card trainingResultCard trainingResultCard--badges">
+          <div class="trainingResultCard__head">
+            <h2>バッジ</h2>
+            <div class="trainingResultCard__headActions">
+              <button type="button" class="trainingSoundToggle" data-badge-sound-toggle aria-pressed="false">効果音 OFF</button>
+              <a href="/wbss/public/service_badges.php" class="trainingResultLink">図鑑を見る</a>
+            </div>
+          </div>
+          <?php if (!empty($badgeState['earned'])): ?>
+            <div class="trainingBadgeList">
+              <?php foreach ((array)$badgeState['earned'] as $badge): ?>
+                <?php $isNewBadge = in_array((string)($badge['key'] ?? ''), $newBadgeKeys, true); ?>
+                <span class="trainingBadgeTag <?= $isNewBadge ? 'is-new' : 'is-earned' ?>"><?= h((string)($badge['name'] ?? '')) ?></span>
+              <?php endforeach; ?>
+            </div>
+          <?php else: ?>
+            <div class="trainingResultMeta">まだ獲得したバッジはありません。</div>
+          <?php endif; ?>
+
+          <?php if (!empty($badgeState['locked'])): ?>
+            <div class="trainingBadgeLockedList">
+              <?php foreach (array_slice((array)$badgeState['locked'], 0, 4) as $badge): ?>
+                <div class="trainingBadgeLockedItem">
+                  <span><?= h((string)($badge['name'] ?? '')) ?></span>
+                  <small><?= h((string)($badge['progress_text'] ?? '')) ?></small>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+        </div>
       </section>
 
       <div class="trainingActions">
@@ -643,6 +785,28 @@ render_header('接客マナートレーニング', [
         <a href="/wbss/public/dashboard_cast.php" class="btn btn-primary">ダッシュボードへ戻る</a>
       </div>
     </div>
+    <?php if (!empty($newBadgeKeys)): ?>
+      <?php
+        $newBadgeNames = [];
+        foreach ((array)($badgeState['earned'] ?? []) as $badge) {
+          $badgeKey = (string)($badge['key'] ?? '');
+          if (in_array($badgeKey, $newBadgeKeys, true)) {
+            $newBadgeNames[] = (string)($badge['name'] ?? '');
+          }
+        }
+      ?>
+      <div
+        class="badgeToast"
+        id="badge-toast"
+        aria-live="polite"
+        data-badge-names="<?= h(json_encode(array_values($newBadgeNames), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]') ?>"
+      >
+        <span class="badgeToast__spark badgeToast__spark--one" aria-hidden="true"></span>
+        <span class="badgeToast__spark badgeToast__spark--two" aria-hidden="true"></span>
+        <div class="badgeToast__eyebrow">✨ NEW BADGE ✨</div>
+        <div class="badgeToast__name"></div>
+      </div>
+    <?php endif; ?>
   <?php else: ?>
     <section class="card trainingThemeCard">
       <div class="trainingEyebrow">WBSS 接客マナートレーニング</div>
@@ -661,6 +825,9 @@ render_header('接客マナートレーニング', [
           <div class="trainingTypeChip__value"><?= h($typeName) ?></div>
         </div>
       </div>
+      <?php if ($todayMission): ?>
+        <?php service_training_render_mission_card($todayMission, $typeName, $growthTheme, $missionStreak, $todayMissionStatus, $currentPagePath); ?>
+      <?php endif; ?>
       <div class="trainingActions trainingActions--intro">
         <a href="/wbss/public/service_training.php?start=1" class="btn btn-primary">トレーニングを始める</a>
         <a href="/wbss/public/service_quiz.php" class="btn">接客タイプ診断を見る</a>
@@ -677,7 +844,43 @@ render_header('接客マナートレーニング', [
   border-color:#e6e7ee;
   box-shadow:0 18px 40px rgba(26,32,44,.06);
 }
+.trainingMissionCard{
+  margin-top:18px;
+  padding:22px;
+  background:linear-gradient(180deg, #fff4e8 0%, #fffaf4 100%);
+  border-color:#f3d1b0;
+  box-shadow:0 18px 40px rgba(251,146,60,.10);
+}
 .trainingEyebrow{display:inline-flex;padding:7px 11px;border-radius:999px;border:1px solid color-mix(in srgb, var(--accent) 24%, var(--line));font-size:11px;font-weight:1000;letter-spacing:.08em;color:var(--muted);background:rgba(255,255,255,.56)}
+.trainingMissionCard__label{font-size:12px;font-weight:1000;letter-spacing:.08em;color:#9a3412}
+.trainingMissionCard__typeLink{margin-top:12px;font-size:14px;line-height:1.7;font-weight:800;color:#9a3412}
+.trainingMissionCard__typeLink span{display:block;font-size:12px;font-weight:700;color:#b45309}
+.trainingMissionCard__title{margin:10px 0 0;font-size:24px;line-height:1.35;font-weight:1000;color:#7c2d12}
+.trainingMissionCard__action{margin:12px 0 0;font-size:15px;line-height:1.85;font-weight:800;color:#7c2d12}
+.trainingMissionCard__reason{margin-top:12px;display:grid;gap:4px;font-size:13px;line-height:1.7;color:#9a3412}
+.trainingMissionCard__hint{margin-top:12px;font-size:13px;line-height:1.7;font-weight:700;color:#9a3412}
+.trainingMissionCard__streak{margin-top:12px;font-size:14px;font-weight:900;color:#b45309}
+.trainingMissionActions{display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:10px;margin-top:16px}
+.trainingMissionAction{
+  min-height:46px;padding:0 12px;border-radius:14px;border:1px solid #f0cfb3;background:#fffaf5;
+  color:#7c2d12;font:inherit;font-weight:900;cursor:pointer;transition:all .15s ease
+}
+.trainingMissionAction:hover{transform:translateY(-1px);box-shadow:0 12px 24px rgba(251,146,60,.12)}
+.trainingMissionAction.is-current.is-done{background:#ecfdf5;border-color:#bbf7d0;color:#166534}
+.trainingMissionAction.is-current.is-pending{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+.trainingMissionAction.is-current.is-skipped{background:#fff1f2;border-color:#fecdd3;color:#be123c}
+.trainingMissionStatus{margin-top:12px;font-size:13px;font-weight:800}
+.trainingMissionStatus.is-done{color:#166534}
+.trainingMissionStatus.is-pending{color:#1d4ed8}
+.trainingMissionStatus.is-skipped{color:#be123c}
+.trainingMissionFeedback{
+  margin-top:12px;padding:12px 14px;border-radius:14px;background:#111827;color:#fff;
+  opacity:0;transform:translateY(4px)
+}
+.trainingMissionFeedback.show{opacity:1;transform:translateY(0);transition:opacity .2s ease,transform .2s ease}
+.trainingMissionFeedback.hidden{display:none}
+.trainingMissionFeedback__title{font-size:14px;font-weight:900}
+.trainingMissionFeedback__body{margin-top:6px;font-size:13px;line-height:1.7;font-weight:700}
 .trainingTitle{margin:12px 0 0;font-size:28px;line-height:1.25;font-weight:1000}
 .trainingLead{margin:12px 0 0;color:var(--muted);font-size:14px;line-height:1.85}
 .trainingThemeCard__grid{display:grid;grid-template-columns:1fr 240px;gap:16px;align-items:start}
@@ -744,18 +947,74 @@ render_header('接客マナートレーニング', [
 .trainingResultGrid{display:grid;grid-template-columns:repeat(2, 1fr);gap:18px}
 .trainingResultCard{padding:22px}
 .trainingResultCard h2{margin:0 0 14px;font-size:22px;font-weight:900}
+.trainingResultCard__head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.trainingResultCard__headActions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.trainingResultLink{font-size:12px;font-weight:900;color:#b45309;text-decoration:none}
+.trainingSoundToggle{
+  min-height:32px;padding:0 12px;border-radius:999px;border:1px solid #f0cfb3;background:#fffaf5;
+  color:#9a3412;font:inherit;font-size:12px;font-weight:900;cursor:pointer;transition:all .15s ease
+}
+.trainingSoundToggle:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(251,146,60,.12)}
+.trainingSoundToggle.is-on{background:#fff1dc;border-color:#fdba74;color:#7c2d12}
 .trainingResultCard--strong{border-color:#dbeafe;background:linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)}
+.trainingResultCard--badges{border-color:#f5d8a8;background:linear-gradient(180deg, #fffaf0 0%, #ffffff 100%)}
 .trainingResultCard--tip{border-color:#f6d0ad;background:linear-gradient(180deg, #fff4e8 0%, #ffffff 100%)}
 .trainingResultList{margin:0;padding-left:1.2em}
 .trainingResultList li{margin-bottom:12px;line-height:1.8;color:#374151}
 .trainingResultMeta{margin-top:14px;color:#6b7280;font-size:13px;font-weight:700}
 .trainingTip{margin:0;line-height:2;font-size:16px;font-weight:800;color:#7c2d12}
+.trainingBadgeList{display:flex;flex-wrap:wrap;gap:10px}
+.trainingBadgeTag{
+  display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border-radius:999px;
+  font-size:12px;font-weight:1000;border:1px solid #e5d7b0;background:#fff7e6;color:#8a4b12
+}
+.trainingBadgeTag.is-earned{background:#fff7e6}
+.trainingBadgeTag.is-new{background:#ffedd5;border-color:#fdba74;color:#9a3412;animation:badgeFadeIn .45s ease}
+.badgeToast{
+  position:fixed;
+  left:50%;
+  top:50%;
+  z-index:70;
+  width:min(calc(100vw - 32px), 320px);
+  padding:18px 18px 16px;
+  border-radius:22px;
+  border:1px solid rgba(253,186,116,.8);
+  background:linear-gradient(180deg, rgba(255,250,240,.98), rgba(255,244,232,.98));
+  box-shadow:0 22px 56px rgba(15,23,42,.18);
+  text-align:center;
+  pointer-events:none;
+  opacity:0;
+  transform:translate(-50%, calc(-50% + 16px)) scale(.96);
+}
+.badgeToast.is-show{
+  animation:badgeToastIn .24s ease forwards, badgeToastOut .28s ease 1.02s forwards;
+}
+.badgeToast__eyebrow{font-size:12px;font-weight:1000;letter-spacing:.12em;color:#b45309}
+.badgeToast__name{margin-top:10px;font-size:24px;line-height:1.35;font-weight:1000;color:#7c2d12}
+.badgeToast__spark{
+  position:absolute;
+  width:12px;
+  height:12px;
+  border-radius:999px;
+  background:radial-gradient(circle, rgba(255,255,255,.95) 0%, rgba(255,204,128,.9) 45%, rgba(255,204,128,0) 72%);
+  opacity:.9;
+}
+.badgeToast__spark--one{top:14px;left:18px;animation:badgeSpark 1s ease-in-out infinite alternate}
+.badgeToast__spark--two{right:20px;bottom:18px;animation:badgeSpark 1.2s ease-in-out .1s infinite alternate}
+.trainingBadgeLockedList{display:grid;gap:10px;margin-top:14px}
+.trainingBadgeLockedItem{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 13px;border-radius:14px;background:#f8fafc;border:1px solid #e5e7eb;
+  font-size:13px;font-weight:800;color:#374151
+}
+.trainingBadgeLockedItem small{font-size:12px;color:#6b7280;font-weight:800}
 .trainingActions{display:flex;gap:14px;flex-wrap:wrap;margin-top:18px}
 .trainingActions--intro{margin-top:20px}
 body[data-theme="dark"] .trainingThemeCard,
 body[data-theme="dark"] .trainingProgressCard,
 body[data-theme="dark"] .trainingQuestionCard,
-body[data-theme="dark"] .trainingResultCard{
+body[data-theme="dark"] .trainingResultCard,
+body[data-theme="dark"] .trainingMissionCard{
   background:
     radial-gradient(circle at top right, rgba(255,146,194,.2), transparent 38%),
     radial-gradient(circle at bottom left, rgba(164,140,255,.16), transparent 34%),
@@ -766,20 +1025,44 @@ body[data-theme="dark"] .trainingTags span{
   background:rgba(255,255,255,.08);
   border-color:rgba(255,255,255,.12);
 }
+body[data-theme="dark"] .trainingBadgeLockedItem,
+body[data-theme="dark"] .trainingBadgeTag{
+  background:rgba(255,255,255,.08);
+  border-color:rgba(255,255,255,.12);
+}
+body[data-theme="dark"] .trainingSoundToggle{
+  background:rgba(255,255,255,.08);
+  border-color:rgba(255,255,255,.12);
+  color:#fff8fc;
+}
+body[data-theme="dark"] .trainingSoundToggle.is-on{
+  background:rgba(251,191,36,.18);
+  border-color:rgba(251,191,36,.34);
+}
 body[data-theme="dark"] .trainingTags--weak span{
   background:rgba(248,113,113,.14);
   border-color:rgba(248,113,113,.24);
 }
 body[data-theme="dark"] .trainingLead,
+body[data-theme="dark"] .trainingMissionCard__label,
+body[data-theme="dark"] .trainingMissionCard__typeLink,
+body[data-theme="dark"] .trainingMissionCard__typeLink span,
+body[data-theme="dark"] .trainingMissionCard__reason,
+body[data-theme="dark"] .trainingMissionCard__hint,
 body[data-theme="dark"] .trainingQuestionLabel,
 body[data-theme="dark"] .trainingQuestionMeta,
 body[data-theme="dark"] .trainingCount,
 body[data-theme="dark"] .trainingProgressMeta,
 body[data-theme="dark"] .trainingResultList li,
-body[data-theme="dark"] .trainingResultMeta{
+body[data-theme="dark"] .trainingResultMeta,
+body[data-theme="dark"] .trainingBadgeLockedItem,
+body[data-theme="dark"] .trainingBadgeLockedItem small,
+body[data-theme="dark"] .trainingResultLink{
   color:rgba(230,223,240,.82);
 }
 body[data-theme="dark"] .trainingTitle,
+body[data-theme="dark"] .trainingMissionCard__title,
+body[data-theme="dark"] .trainingMissionCard__action,
 body[data-theme="dark"] .trainingTypeChip__value,
 body[data-theme="dark"] .trainingScene,
 body[data-theme="dark"] .trainingQuestionBody,
@@ -791,6 +1074,20 @@ body[data-theme="dark"] .trainingChoice__key{background:rgba(255,255,255,.1);bor
 body[data-theme="dark"] .trainingChoice.is-active,
 body[data-theme="dark"] .quiz-option.active{background:rgba(251,146,60,.18);border-color:rgba(251,146,60,.34)}
 body[data-theme="dark"] .trainingFeedback{background:#f8fafc;color:#111827}
+body[data-theme="dark"] .trainingMissionAction{
+  background:rgba(255,255,255,.08);
+  border-color:rgba(255,255,255,.12);
+  color:#fff8fc;
+}
+body[data-theme="dark"] .trainingMissionFeedback{background:#f8fafc;color:#111827}
+body[data-theme="dark"] .badgeToast{
+  background:
+    radial-gradient(circle at top right, rgba(255,191,105,.22), transparent 36%),
+    linear-gradient(180deg, rgba(38,43,61,.98), rgba(44,50,71,.96));
+  border-color:rgba(251,191,36,.34);
+}
+body[data-theme="dark"] .badgeToast__eyebrow{color:#fbbf24}
+body[data-theme="dark"] .badgeToast__name{color:#fff8fc}
 @media (max-width: 960px){
   .trainingThemeCard__grid,
   .trainingResultGrid{grid-template-columns:1fr}
@@ -801,6 +1098,9 @@ body[data-theme="dark"] .trainingFeedback{background:#f8fafc;color:#111827}
   .trainingQuestionBody{font-size:16px}
   .trainingActions{flex-direction:column}
   .trainingActions .btn{width:100%}
+  .trainingMissionActions{grid-template-columns:1fr}
+  .trainingResultCard__head{align-items:flex-start}
+  .trainingResultCard__headActions{justify-content:flex-start}
   .trainingFeedback{
     position:fixed;
     left:50%;
@@ -813,10 +1113,31 @@ body[data-theme="dark"] .trainingFeedback{background:#f8fafc;color:#111827}
   .trainingFeedback.show{
     transform:translate(-50%, -50%);
   }
+  .badgeToast{
+    top:48%;
+    padding:16px 16px 14px;
+  }
+  .badgeToast__name{font-size:21px}
 }
 @keyframes trainingChoiceTap{
   0%{transform:scale(.98)}
   100%{transform:scale(1)}
+}
+@keyframes badgeFadeIn{
+  0%{opacity:0;transform:translateY(6px)}
+  100%{opacity:1;transform:translateY(0)}
+}
+@keyframes badgeToastIn{
+  0%{opacity:0;transform:translate(-50%, calc(-50% + 16px)) scale(.96)}
+  100%{opacity:1;transform:translate(-50%, -50%) scale(1)}
+}
+@keyframes badgeToastOut{
+  0%{opacity:1;transform:translate(-50%, -50%) scale(1)}
+  100%{opacity:0;transform:translate(-50%, calc(-50% - 8px)) scale(1.02)}
+}
+@keyframes badgeSpark{
+  0%{transform:scale(.85);opacity:.4}
+  100%{transform:scale(1.15);opacity:1}
 }
 </style>
 <script>
@@ -860,6 +1181,132 @@ body[data-theme="dark"] .trainingFeedback{background:#f8fafc;color:#111827}
       }, 1500);
     });
   });
+})();
+
+(() => {
+  const missionFeedback = document.getElementById('mission-feedback');
+  const missionButtons = document.querySelectorAll('.trainingMissionAction');
+  if (!missionFeedback || !missionButtons.length) {
+    return;
+  }
+
+  const titleEl = missionFeedback.querySelector('.trainingMissionFeedback__title');
+  const bodyEl = missionFeedback.querySelector('.trainingMissionFeedback__body');
+
+  missionButtons.forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      const form = button.closest('form');
+      if (!form || !titleEl || !bodyEl) {
+        return;
+      }
+
+      titleEl.textContent = button.dataset.feedbackTitle || 'いいね 👍';
+      bodyEl.textContent = button.dataset.feedbackBody || '今日は1回できれば十分です。';
+      missionFeedback.classList.remove('hidden');
+      missionFeedback.classList.add('show');
+
+      window.setTimeout(() => {
+        form.submit();
+      }, 700);
+    });
+  });
+})();
+
+(() => {
+  const toast = document.getElementById('badge-toast');
+  const toggle = document.querySelector('[data-badge-sound-toggle]');
+  const storageKey = 'wbss_badge_sound_enabled';
+
+  const updateToggle = (enabled) => {
+    if (!toggle) return;
+    toggle.classList.toggle('is-on', enabled);
+    toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    toggle.textContent = enabled ? '効果音 ON' : '効果音 OFF';
+  };
+
+  let soundEnabled = false;
+  try {
+    soundEnabled = window.localStorage.getItem(storageKey) === '1';
+  } catch (error) {
+    soundEnabled = false;
+  }
+  updateToggle(soundEnabled);
+
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      try {
+        window.localStorage.setItem(storageKey, soundEnabled ? '1' : '0');
+      } catch (error) {
+      }
+      updateToggle(soundEnabled);
+    });
+  }
+
+  if (!toast) {
+    return;
+  }
+
+  let badgeNames = [];
+  try {
+    badgeNames = JSON.parse(toast.dataset.badgeNames || '[]');
+  } catch (error) {
+    badgeNames = [];
+  }
+  if (!Array.isArray(badgeNames) || !badgeNames.length) {
+    return;
+  }
+
+  const nameEl = toast.querySelector('.badgeToast__name');
+  if (!nameEl) {
+    return;
+  }
+
+  const playSound = () => {
+    if (!soundEnabled || typeof window.AudioContext === 'undefined') {
+      return;
+    }
+    try {
+      const context = new window.AudioContext();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(740, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(980, context.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.045, context.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.26);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.26);
+      oscillator.onended = () => context.close().catch(() => {});
+    } catch (error) {
+    }
+  };
+
+  const queue = badgeNames.slice(0, 3);
+  const showToast = (index) => {
+    if (!queue[index]) {
+      return;
+    }
+    nameEl.textContent = queue[index];
+    toast.classList.remove('is-show');
+    window.requestAnimationFrame(() => {
+      toast.classList.add('is-show');
+      playSound();
+    });
+
+    window.setTimeout(() => {
+      toast.classList.remove('is-show');
+      if (queue[index + 1]) {
+        window.setTimeout(() => showToast(index + 1), 220);
+      }
+    }, 1320);
+  };
+
+  showToast(0);
 })();
 </script>
 <?php render_page_end(); ?>
