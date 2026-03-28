@@ -208,7 +208,6 @@ render_header('接客タイプ診断', [
             <h1>接客タイプ診断</h1>
             <p class="cast-type-result-sub">今の接客スタイルを、カードで見返しやすくまとめています。</p>
           </div>
-          <a href="/wbss/public/service_quiz.php?start=1" class="btn btn-secondary result-retry-top">もう一度診断する</a>
         </div>
 
         <section class="result-hero">
@@ -223,8 +222,8 @@ render_header('接客タイプ診断', [
           <div class="result-hero__summary card-panel">
             <div class="type-badge">あなたの接客タイプ</div>
             <h2 class="type-title"><?= h($resultView['type_label']) ?></h2>
-            <p class="type-subtitle"><?= h($resultView['type_en']) ?></p>
             <p class="type-copy"><?= h($resultView['copy']) ?></p>
+            <p class="type-subtitle"><?= h($resultView['type_en']) ?></p>
             <p class="type-description"><?= nl2br(h($resultView['summary'])) ?></p>
             <?php if ($resultView['saved_at'] !== ''): ?>
               <div class="saved-at">保存日時: <?= h($resultView['saved_at']) ?></div>
@@ -294,6 +293,7 @@ render_header('接客タイプ診断', [
         </section>
 
         <div class="result-actions">
+          <a href="/wbss/public/dashboard_cast.php" class="btn btn-primary">ダッシュボードへ戻る</a>
           <a href="/wbss/public/service_quiz.php?start=1" class="btn btn-secondary">もう一度診断する</a>
         </div>
       </div>
@@ -368,15 +368,14 @@ render_header('接客タイプ診断', [
 .cast-type-result-page{
   max-width:1120px;
   margin:0 auto;
-  padding:8px 16px 48px;
+  padding:0 16px 48px;
   color:#1f2937;
 }
 .cast-type-result-header{
   display:flex;
   align-items:flex-start;
-  justify-content:space-between;
   gap:16px;
-  margin-bottom:20px;
+  margin-bottom:14px;
 }
 .cast-type-result-header h1{
   margin:0;
@@ -431,6 +430,7 @@ render_header('接客タイプ診断', [
 .card-panel--highlight{
   background:linear-gradient(180deg, #fff7fb 0%, #ffffff 100%);
   border:1px solid #f4d9e7;
+  box-shadow:0 20px 52px rgba(201,70,120,.12);
 }
 .type-badge{
   display:inline-flex;
@@ -445,20 +445,22 @@ render_header('接客タイプ診断', [
   margin-bottom:14px;
 }
 .type-title{
-  margin:0 0 8px;
+  margin:0 0 10px;
   font-size:40px;
   line-height:1.15;
   font-weight:900;
   letter-spacing:.01em;
 }
 .type-subtitle{
-  margin:0 0 10px;
+  margin:0 0 12px;
   color:#6b7280;
-  font-size:18px;
+  font-size:15px;
   font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
 }
 .type-copy{
-  margin:0 0 14px;
+  margin:0 0 10px;
   font-size:22px;
   line-height:1.5;
   font-weight:800;
@@ -472,9 +474,9 @@ render_header('接客タイプ診断', [
 }
 .saved-at{
   margin-top:18px;
-  color:#6b7280;
-  font-size:13px;
-  font-weight:600;
+  color:#9ca3af;
+  font-size:12px;
+  font-weight:500;
   padding-top:14px;
   border-top:1px solid #eef2f7;
 }
@@ -493,7 +495,7 @@ render_header('接客タイプ診断', [
   gap:16px;
 }
 .score-item{
-  padding:16px;
+  padding:18px 16px 16px;
   border-radius:18px;
   background:#f8fafc;
   border:1px solid #e8edf5;
@@ -502,31 +504,32 @@ render_header('接客タイプ診断', [
   font-size:13px;
   color:#6b7280;
   font-weight:700;
-  margin-bottom:8px;
+  margin-bottom:10px;
 }
 .score-item__value{
   font-size:34px;
   line-height:1;
   font-weight:900;
   color:#111827;
-  margin-bottom:6px;
+  margin-bottom:8px;
 }
 .score-item__sub{
   font-size:13px;
   font-weight:700;
   color:#374151;
-  margin-bottom:12px;
+  margin-bottom:14px;
 }
 .score-bar{
-  height:10px;
+  height:11px;
   border-radius:999px;
-  background:#e5e7eb;
+  background:#d7dde7;
   overflow:hidden;
 }
 .score-bar__fill{
   height:100%;
   border-radius:999px;
-  background:linear-gradient(90deg, #f59e0b 0%, #ef4444 100%);
+  background:linear-gradient(90deg, #f59e0b 0%, #f97316 50%, #ef4444 100%);
+  box-shadow:0 0 0 1px rgba(255,255,255,.22) inset;
 }
 .result-grid{
   display:grid;
@@ -555,9 +558,6 @@ render_header('接客タイプ診断', [
   justify-content:flex-start;
   gap:14px;
   flex-wrap:wrap;
-}
-.result-retry-top{
-  flex:0 0 auto;
 }
 .serviceQuizIntro__chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
 .serviceQuizIntro__chips span,.serviceQuizLatest{
@@ -631,9 +631,11 @@ body[data-theme="dark"] .score-bar{background:rgba(255,255,255,.14)}
   .cast-type-result-page{padding:16px 12px 32px}
   .cast-type-result-header{
     flex-direction:column;
-    gap:12px;
+    gap:8px;
+    margin-bottom:10px;
   }
   .cast-type-result-header h1{font-size:26px}
+  .cast-type-result-sub{font-size:13px}
   .serviceQuizCard{padding:16px}
   .serviceQuizTitle{font-size:24px}
   .serviceQuizQuestion__body{font-size:21px}
@@ -650,7 +652,10 @@ body[data-theme="dark"] .score-bar{background:rgba(255,255,255,.14)}
   .type-copy{font-size:18px}
   .serviceQuizActions{display:grid}
   .serviceQuizActions .btn{width:100%;text-align:center}
-  .result-actions{flex-direction:column}
+  .result-actions{
+    flex-direction:column;
+    gap:12px;
+  }
   .btn{width:100%}
 }
 </style>
