@@ -86,12 +86,8 @@ render_page_start('送迎マップ TV');
         </div>
       </div>
       <div class="transportMapScreenTopBarActions">
-        <a class="miniBtn" href="<?= h($dashboardUrl) ?>">ダッシュボード</a>
-        <a class="miniBtn" href="<?= h($normalMapUrl) ?>">通常表示</a>
+        <button type="button" class="miniBtn transportMapScreenMenuBtn" id="transportMapScreenMenuToggle" aria-expanded="false" aria-controls="transportMapScreenDrawer">☰ メニュー</button>
         <button type="button" class="miniBtn" id="transportMapAutoRefreshToggle">自動更新ON</button>
-        <?php if ($selectedStoreId > 0): ?>
-          <a class="miniBtn" href="/wbss/public/transport/driver_location.php?store_id=<?= (int)$selectedStoreId ?>">現在地送信</a>
-        <?php endif; ?>
       </div>
     </section>
 
@@ -99,7 +95,14 @@ render_page_start('送迎マップ TV');
       <div class="card transportMapAlert transportMapAlertError"><?= h($err) ?></div>
     <?php endif; ?>
 
-    <section class="transportMapScreenTop transportPanel">
+    <section class="transportMapScreenTop transportPanel" id="transportMapScreenDrawer" hidden>
+      <div class="transportMapScreenQuickActions">
+        <a class="miniBtn" href="<?= h($dashboardUrl) ?>">ダッシュボード</a>
+        <a class="miniBtn" href="<?= h($normalMapUrl) ?>">通常表示</a>
+        <?php if ($selectedStoreId > 0): ?>
+          <a class="miniBtn" href="/wbss/public/transport/driver_location.php?store_id=<?= (int)$selectedStoreId ?>">現在地送信</a>
+        <?php endif; ?>
+      </div>
       <form id="transportMapFilterForm" class="transportMapScreenForm" method="get" action="/wbss/public/transport/map_screen.php">
         <label class="field transportMapScreenInlineField">
           <span class="fieldLabel">店舗</span>
@@ -207,4 +210,23 @@ window.WBSS_TRANSPORT_MAP_CONFIG = <?= json_encode([
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
 <script src="/wbss/public/assets/js/transport-map.js?v=20260328ab"></script>
+<script>
+(function () {
+  const toggle = document.getElementById('transportMapScreenMenuToggle');
+  const drawer = document.getElementById('transportMapScreenDrawer');
+  if (!toggle || !drawer) {
+    return;
+  }
+
+  toggle.addEventListener('click', function () {
+    const shouldOpen = drawer.hasAttribute('hidden');
+    if (shouldOpen) {
+      drawer.removeAttribute('hidden');
+    } else {
+      drawer.setAttribute('hidden', 'hidden');
+    }
+    toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+  });
+})();
+</script>
 <?php render_page_end(); ?>

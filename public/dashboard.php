@@ -813,7 +813,7 @@ render_page_start('ダッシュボード');
                   <?php endforeach; ?>
                 </select>
                 </div>
-                <div class="store-switch-help">この店舗が、在庫や顧客など他の画面でも使われます。</div>
+               
               </div>
             </form>
             <?php endif; ?>
