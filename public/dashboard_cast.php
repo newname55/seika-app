@@ -326,6 +326,12 @@ render_header('WBSS', [
         <span>12問で自分の傾向をチェック</span>
       </a>
 
+      <a class="card big cast-navCard cast-navCard--training" href="/wbss/public/service_training.php">
+        <div class="cast-navCard__icon">🎓</div>
+        <b>接客マナートレーニング</b>
+        <span>タイプに合わせて接客の土台を育てる</span>
+      </a>
+
       <a class="card big cast-navCard cast-navCard--schedule" href="/wbss/public/cast_week.php">
         <div class="cast-navCard__icon">📅</div>
         <b>出勤予定</b>
@@ -492,6 +498,7 @@ render_header('WBSS', [
 .cast-navCard b{font-size:25px;font-size:clamp(19px, 3.6vw, 24px);line-height:1.25}
 .cast-navCard span{color:var(--muted);font-size:12px;line-height:1.5}
 .cast-navCard--diagnosis{border-color:rgba(255,190,212,.56)}
+.cast-navCard--training{border-color:rgba(186,232,211,.56)}
 .cast-navCard--schedule{border-color:rgba(186,209,255,.5)}
 .cast-navCard--customer{border-color:rgba(255,214,165,.5)}
 .cast-navCard--profile{border-color:rgba(185,232,206,.5)}

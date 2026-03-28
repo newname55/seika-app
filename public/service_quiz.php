@@ -18,30 +18,50 @@ if ($storeId <= 0) {
   exit('店舗が未設定です。管理者に所属店舗を設定してもらってください。');
 }
 
-$questions = service_quiz_questions();
 $questionMap = service_quiz_question_map();
 $tableReady = service_quiz_results_table_ready($pdo);
 $error = '';
 $saveNotice = '';
 $latestResult = null;
 $displayResult = null;
+$cumulativeSummary = null;
 $resultId = (int)($_GET['result_id'] ?? 0);
 $isQuestionMode = ((string)($_GET['start'] ?? '') === '1');
 $currentAnswers = [];
+$activeRun = null;
+
+if ($isQuestionMode && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+  $activeRun = service_quiz_start_run();
+} else {
+  $activeRun = service_quiz_get_active_run();
+}
+
+$selectedQuestionIds = is_array($activeRun['question_ids'] ?? null) ? array_map('intval', $activeRun['question_ids']) : [];
+$questions = service_quiz_questions_by_ids($selectedQuestionIds);
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
   csrf_verify((string)($_POST['csrf_token'] ?? ''));
 
   if ((string)($_POST['action'] ?? '') === 'restart') {
+    service_quiz_clear_run();
     header('Location: /wbss/public/service_quiz.php?start=1');
     exit;
+  }
+
+  $activeRun = service_quiz_get_active_run();
+  $selectedQuestionIds = is_array($activeRun['question_ids'] ?? null) ? array_map('intval', $activeRun['question_ids']) : [];
+  $questions = service_quiz_questions_by_ids($selectedQuestionIds);
+  if (!$selectedQuestionIds) {
+    $activeRun = service_quiz_start_run();
+    $selectedQuestionIds = array_map('intval', (array)($activeRun['question_ids'] ?? []));
+    $questions = service_quiz_questions_by_ids($selectedQuestionIds);
   }
 
   $currentAnswers = service_quiz_normalize_answers((array)($_POST['answers'] ?? []));
   $questionId = (int)($_POST['question_id'] ?? 0);
   $choice = strtoupper(trim((string)($_POST['choice'] ?? '')));
 
-  if (!isset($questionMap[$questionId])) {
+  if (!isset($questionMap[$questionId]) || !in_array($questionId, $selectedQuestionIds, true)) {
     $error = '診断データの読み込みに失敗しました。最初からやり直してください。';
     $isQuestionMode = true;
   } else {
@@ -54,11 +74,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
       ksort($currentAnswers);
 
       if (count($currentAnswers) >= count($questions)) {
-        $displayResult = service_quiz_calculate($currentAnswers);
+        $displayResult = service_quiz_calculate($currentAnswers, $selectedQuestionIds);
 
         if ($tableReady) {
           try {
-            $newId = service_quiz_save_result($pdo, $storeId, $userId, $currentAnswers);
+            $newId = service_quiz_save_result($pdo, $storeId, $userId, $currentAnswers, $selectedQuestionIds);
+            service_quiz_clear_run();
             header('Location: /wbss/public/service_quiz.php?result_id=' . $newId . '&saved=1');
             exit;
           } catch (Throwable $e) {
@@ -86,6 +107,10 @@ if ($displayResult === null && $tableReady) {
   $latestResult = null;
 }
 
+if (is_array($displayResult) && service_quiz_history_tables_ready($pdo)) {
+  $cumulativeSummary = service_quiz_fetch_cumulative_summary($pdo, $storeId, $userId, 20);
+}
+
 if ((string)($_GET['saved'] ?? '') === '1') {
   $saveNotice = '診断結果を保存しました。';
 }
@@ -93,6 +118,7 @@ if ((string)($_GET['saved'] ?? '') === '1') {
 $nextIndex = count($currentAnswers);
 $currentQuestion = $isQuestionMode ? ($questions[$nextIndex] ?? null) : null;
 $progressCurrent = min($nextIndex + 1, count($questions));
+$categoryLabels = service_quiz_category_specs();
 
 render_page_start('接客タイプ診断');
 render_header('接客タイプ診断', [
@@ -116,7 +142,10 @@ render_header('接客タイプ診断', [
         <div class="serviceQuizHero__top">
           <div>
             <div class="serviceQuizEyebrow">WBSS 接客タイプ診断</div>
-            <h1 class="serviceQuizTitle"><?= h((string)$currentQuestion['title']) ?> / <?= $progressCurrent ?>問目</h1>
+            <h1 class="serviceQuizTitle">Q<?= $progressCurrent ?> / <?= count($questions) ?></h1>
+            <div class="serviceQuizQuestionMeta">
+              <?= h((string)($categoryLabels[(string)($currentQuestion['category'] ?? '')]['label'] ?? '接客シーン')) ?>
+            </div>
           </div>
           <div class="serviceQuizCount"><?= count($currentAnswers) ?>/<?= count($questions) ?> 回答済み</div>
         </div>
@@ -140,23 +169,35 @@ render_header('接客タイプ診断', [
           <?= h((string)$currentQuestion['question']) ?>
         </div>
         <div class="serviceQuizQuestion__prompt">
-          <?= h((string)($currentQuestion['prompt'] ?? 'あなたが自然に返しやすいのは？')) ?>
+          <?= h((string)($currentQuestion['prompt'] ?? 'この場面で、一番“あなたらしい”のはどれ？')) ?>
         </div>
 
         <form method="post" class="serviceQuizChoices">
           <input type="hidden" name="csrf_token" value="<?= h(csrf_token()) ?>">
           <input type="hidden" name="question_id" value="<?= (int)$currentQuestion['id'] ?>">
+          <input type="hidden" name="choice" value="" class="serviceQuizChoiceValue">
           <?php foreach ($currentAnswers as $answeredQuestionId => $answeredChoice): ?>
             <input type="hidden" name="answers[<?= (int)$answeredQuestionId ?>]" value="<?= h($answeredChoice) ?>">
           <?php endforeach; ?>
 
           <?php foreach ((array)$currentQuestion['choices'] as $choice): ?>
-            <button class="serviceQuizChoice" type="submit" name="choice" value="<?= h((string)$choice['key']) ?>">
+            <?php $choiceScores = (array)($choice['scores'] ?? []); ?>
+            <button
+              class="serviceQuizChoice quiz-option"
+              type="submit"
+              name="choice"
+              value="<?= h((string)$choice['key']) ?>"
+              data-score-talk="<?= (int)($choiceScores['talk_axis'] ?? 0) ?>"
+              data-score-mood="<?= (int)($choiceScores['mood_axis'] ?? 0) ?>"
+              data-score-response="<?= (int)($choiceScores['response_axis'] ?? 0) ?>"
+              data-score-relation="<?= (int)($choiceScores['relation_axis'] ?? 0) ?>"
+            >
               <span class="serviceQuizChoice__key"><?= h((string)$choice['key']) ?></span>
               <span class="serviceQuizChoice__text"><?= h((string)$choice['text']) ?></span>
             </button>
           <?php endforeach; ?>
         </form>
+        <div id="quiz-feedback" class="quiz-feedback hidden" aria-live="polite"></div>
       </section>
 
       <form method="post" class="serviceQuizRestart">
@@ -205,6 +246,33 @@ render_header('接客タイプ診断', [
         $theme = $typeThemes[$resultView['type']] ?? $typeThemes['all_rounder'];
         $minusBar = 'linear-gradient(90deg, #93c5fd 0%, #60a5fa 100%)';
         $imagePath = '/wbss/public/images/cast_type_images/' . rawurlencode($resultView['type']) . '.png';
+        $averageScores = is_array($cumulativeSummary['average_scores'] ?? null) ? $cumulativeSummary['average_scores'] : [];
+        $categoryCounts = is_array($cumulativeSummary['category_counts'] ?? null) ? $cumulativeSummary['category_counts'] : [];
+        arsort($categoryCounts);
+        $topCategories = array_slice($categoryCounts, 0, 3, true);
+        $cumulativeAxes = [
+          'talk_axis' => ['title' => '会話', 'left' => '受容', 'right' => '主導', 'positive' => '主導強め', 'neutral' => '中間', 'negative' => '受容強め'],
+          'mood_axis' => ['title' => '空気', 'left' => '安心', 'right' => '盛り上げ', 'positive' => '盛り上げ強め', 'neutral' => '中間', 'negative' => '安心強め'],
+          'response_axis' => ['title' => '反応', 'left' => '観察', 'right' => '直感', 'positive' => '直感強め', 'neutral' => '中間', 'negative' => '観察強め'],
+          'relation_axis' => ['title' => '関係性', 'left' => '信頼', 'right' => '恋愛演出', 'positive' => '恋愛演出強め', 'neutral' => '中間', 'negative' => '信頼蓄積強め'],
+        ];
+        $cumulativeHeadline = '最近の接客傾向は、全体としてバランスよく出ています。';
+        if ($averageScores) {
+          $dominantAxisKey = null;
+          $dominantAxisValue = 0.0;
+          foreach ($cumulativeAxes as $axisKey => $axisMeta) {
+            $axisValue = (float)($averageScores[$axisKey] ?? 0.0);
+            if (abs($axisValue) > abs($dominantAxisValue)) {
+              $dominantAxisKey = $axisKey;
+              $dominantAxisValue = $axisValue;
+            }
+          }
+          if ($dominantAxisKey !== null && abs($dominantAxisValue) >= 1.0) {
+            $dominantMeta = $cumulativeAxes[$dominantAxisKey];
+            $dominantSide = $dominantAxisValue < 0 ? $dominantMeta['left'] : $dominantMeta['right'];
+            $cumulativeHeadline = 'あなたは最近さらに' . $dominantSide . '寄りです。';
+          }
+        }
       ?>
       <div class="cast-type-result-page" style="--result-tip-bg: <?= h($theme['tip_bg']) ?>; --result-tip-border: <?= h($theme['tip_border']) ?>;">
         <?php if ($saveNotice !== ''): ?>
@@ -363,9 +431,70 @@ render_header('接客タイプ診断', [
           </div>
         </section>
 
+        <?php if (is_array($cumulativeSummary) && (int)($cumulativeSummary['session_count'] ?? 0) > 0): ?>
+          <section class="card-panel cumulative-panel">
+            <div class="cumulative-panel__head">
+              <div>
+                <div class="cumulative-panel__badge">累積傾向</div>
+                <h3>最近の接客スタイルの積み上がり</h3>
+                <p class="cumulative-panel__lead">直近 <?= (int)$cumulativeSummary['session_count'] ?> 回分の平均から、今の安定した傾向をまとめています。</p>
+                <p class="cumulative-panel__headline"><?= h($cumulativeHeadline) ?></p>
+              </div>
+            </div>
+
+            <div class="cumulative-grid">
+              <?php foreach ($cumulativeAxes as $axisKey => $axisMeta): ?>
+                <?php
+                  $averageValue = (float)($averageScores[$axisKey] ?? 0.0);
+                  $roundedAverage = (int)round($averageValue);
+                  $directionLabel = $roundedAverage < 0
+                    ? $axisMeta['left'] . '寄り'
+                    : ($roundedAverage > 0 ? $axisMeta['right'] . '寄り' : '中間');
+                  $bucketLabel = service_quiz_axis_bucket($roundedAverage, $axisMeta['positive'], $axisMeta['neutral'], $axisMeta['negative']);
+                  $fillWidth = min(50.0, max(0.0, (abs($averageValue) / 10) * 50));
+                  $formattedAverage = number_format(abs($averageValue), 1);
+                ?>
+                <div class="cumulative-item">
+                  <div class="cumulative-item__top">
+                    <span class="cumulative-item__title"><?= h($axisMeta['title']) ?></span>
+                    <span class="cumulative-item__value"><?= h($formattedAverage) ?></span>
+                  </div>
+                  <div class="score-direction cumulative-item__direction"><span>← <?= h($axisMeta['left']) ?></span><span><?= h($axisMeta['right']) ?> →</span></div>
+                  <div class="score-bar cumulative-item__bar">
+                    <div class="score-bar-center"></div>
+                    <?php if ($averageValue < 0): ?>
+                      <div class="score-bar__fill minus" style="width: <?= $fillWidth ?>%; background-image: <?= h($minusBar) ?>;"></div>
+                    <?php elseif ($averageValue > 0): ?>
+                      <div class="score-bar__fill plus" style="width: <?= $fillWidth ?>%; background-image: <?= h($theme['bar']) ?>;"></div>
+                    <?php endif; ?>
+                  </div>
+                  <div class="cumulative-item__meta">
+                    <span><?= h($directionLabel) ?></span>
+                    <span><?= h($bucketLabel) ?></span>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+
+            <div class="cumulative-panel__categories">
+              <h4>よく出ている接客シーン</h4>
+              <?php if ($topCategories): ?>
+                <div class="cumulative-tags">
+                  <?php foreach ($topCategories as $categoryKey => $count): ?>
+                    <span><?= h((string)($categoryLabels[$categoryKey]['label'] ?? $categoryKey)) ?> × <?= (int)$count ?></span>
+                  <?php endforeach; ?>
+                </div>
+              <?php else: ?>
+                <p class="cumulative-panel__empty">履歴がたまると、接客シーンごとの偏りもここに表示されます。</p>
+              <?php endif; ?>
+            </div>
+          </section>
+        <?php endif; ?>
+
         <div class="result-actions">
-          <a href="/wbss/public/dashboard_cast.php" class="btn btn-primary">ダッシュボードへ戻る</a>
           <a href="/wbss/public/service_quiz.php?start=1" class="btn btn-secondary">もう一度診断する</a>
+          <a href="/wbss/public/dashboard_cast.php" class="btn btn-primary">ダッシュボードへ戻る</a>
+
         </div>
       </div>
 
@@ -373,12 +502,13 @@ render_header('接客タイプ診断', [
       <section class="card serviceQuizCard serviceQuizIntro">
         <div class="serviceQuizEyebrow">WBSS 接客タイプ診断</div>
         <h1 class="serviceQuizTitle">接客実務向けの自己診断</h1>
-        <p class="serviceQuizIntro__lead">MBTI風ですが、性格診断ではなく「接客で自然に出やすい反応傾向」を見る12問の4択診断です。1問ずつ答えるだけで、4軸スコアから8タイプに分類します。</p>
+        <p class="serviceQuizIntro__lead">固定12問ではなく、カテゴリごとにバランスを取った質問プールから毎回12〜16問を出題します。接客で自然に出やすい反応傾向を、4軸スコアから見ていく診断です。</p>
         <div class="serviceQuizIntro__chips">
-          <span>12問</span>
+          <span>12〜16問</span>
+          <span>カテゴリ抽選</span>
           <span>4軸スコア</span>
           <span>8タイプ判定</span>
-          <span>最新結果を保存</span>
+          <span>履歴保存対応</span>
         </div>
         <?php if (is_array($latestResult)): ?>
           <div class="serviceQuizLatest">
@@ -410,27 +540,84 @@ render_header('接客タイプ診断', [
 }
 .serviceQuizEyebrow{display:inline-flex;padding:7px 11px;border-radius:999px;border:1px solid color-mix(in srgb, var(--accent) 24%, var(--line));font-size:11px;font-weight:1000;letter-spacing:.08em;color:var(--muted);background:rgba(255,255,255,.56)}
 .serviceQuizTitle{margin:12px 0 0;font-size:28px;line-height:1.2;font-weight:1000}
+.serviceQuizQuestionMeta{margin-top:6px;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.04em}
 .serviceQuizHero__top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
 .serviceQuizCount,.serviceQuizResultHero__meta{color:var(--muted);font-size:12px;font-weight:800}
 .serviceQuizProgress{height:10px;border-radius:999px;background:rgba(255,255,255,.62);margin-top:14px;overflow:hidden}
 .serviceQuizProgress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg, #ff7aad, #ffb6d8)}
 .serviceQuizProgressMeta{margin-top:8px;color:var(--muted);font-size:12px}
-.serviceQuizQuestion__label{font-size:12px;font-weight:1000;color:var(--muted);letter-spacing:.04em}
-.serviceQuizQuestion__body{margin-top:10px;font-size:24px;line-height:1.45;font-weight:1000}
-.serviceQuizQuestion__prompt{margin-top:16px;color:var(--muted);font-size:13px}
+.serviceQuizQuestion__label{
+  font-size:12px;
+  font-weight:1000;
+  color:var(--muted);
+  letter-spacing:.08em;
+  text-transform:none;
+}
+.serviceQuizQuestion__body{
+  margin-top:12px;
+  font-size:26px;
+  line-height:1.65;
+  font-weight:1000;
+  letter-spacing:.01em;
+}
+.serviceQuizQuestion__prompt{
+  margin-top:18px;
+  color:var(--txt);
+  font-size:16px;
+  line-height:1.8;
+  font-weight:800;
+}
 .serviceQuizChoices{display:grid;gap:10px;margin-top:18px}
 .serviceQuizChoice{
   display:flex;align-items:flex-start;gap:12px;width:100%;padding:16px;border-radius:18px;
   border:1px solid color-mix(in srgb, var(--accent) 18%, var(--line));background:rgba(255,255,255,.78);
-  color:var(--txt);font:inherit;text-align:left;cursor:pointer;transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease
+  color:var(--txt);font:inherit;text-align:left;cursor:pointer;transition:all .15s ease
 }
-.serviceQuizChoice:hover{transform:translateY(-1px);border-color:rgba(255,145,194,.56);box-shadow:0 16px 30px rgba(255,165,206,.12)}
+.serviceQuizChoice:hover,
+.quiz-option:hover{
+  transform:translateY(-1px);
+  background:#f9fafb;
+  border-color:rgba(255,145,194,.56);
+  box-shadow:0 16px 30px rgba(255,165,206,.12);
+}
+.serviceQuizChoice:active,
+.quiz-option:active{
+  transform:scale(.97);
+}
+.serviceQuizChoice.is-active,
+.quiz-option.active{
+  animation:quizChoiceTap .1s ease;
+  background:#fef3f2;
+  border-color:rgba(251,146,60,.38);
+  box-shadow:0 14px 28px rgba(251,146,60,.14);
+}
 .serviceQuizChoice__key{
   width:38px;height:38px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
   border-radius:14px;background:linear-gradient(180deg, rgba(255,245,250,.98), rgba(255,231,241,.92));
   border:1px solid rgba(255,182,211,.42);font-size:15px;font-weight:1000
 }
 .serviceQuizChoice__text{font-size:15px;line-height:1.65;font-weight:800}
+.quiz-feedback{
+  margin-top:12px;
+  padding:12px 14px;
+  border-radius:14px;
+  background:#111827;
+  color:#fff;
+  text-align:center;
+  font-size:14px;
+  line-height:1.6;
+  font-weight:800;
+  opacity:0;
+  transform:translateY(4px);
+}
+.quiz-feedback.show{
+  opacity:1;
+  transform:translateY(0);
+  transition:opacity .2s ease, transform .2s ease;
+}
+.quiz-feedback.hidden{
+  display:none;
+}
 .serviceQuizRestart{display:flex;justify-content:center}
 .serviceQuizNotice{padding:14px 16px;font-weight:800}
 .serviceQuizNotice--ok{border-color:rgba(111,224,176,.42);background:rgba(236,255,246,.8)}
@@ -685,6 +872,125 @@ render_header('接客タイプ診断', [
   gap:14px;
   flex-wrap:wrap;
 }
+.cumulative-panel{
+  margin-bottom:28px;
+}
+.cumulative-panel__head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:18px;
+}
+.cumulative-panel__badge{
+  display:inline-flex;
+  align-items:center;
+  min-height:30px;
+  padding:0 10px;
+  border-radius:999px;
+  background:rgba(17,24,39,.04);
+  border:1px solid #e2e8f0;
+  color:#596275;
+  font-size:12px;
+  font-weight:800;
+  margin-bottom:10px;
+}
+.cumulative-panel h3{
+  margin:0;
+  font-size:22px;
+  font-weight:800;
+}
+.cumulative-panel__lead{
+  margin:8px 0 0;
+  color:#6b7280;
+  font-size:14px;
+  line-height:1.8;
+}
+.cumulative-panel__headline{
+  margin:10px 0 0;
+  color:#111827;
+  font-size:15px;
+  line-height:1.8;
+  font-weight:800;
+}
+.cumulative-grid{
+  display:grid;
+  grid-template-columns:repeat(2, 1fr);
+  gap:16px;
+}
+.cumulative-item{
+  padding:18px 16px;
+  border-radius:20px;
+  background:#f8fafc;
+  border:1px solid #e8edf5;
+}
+.cumulative-item__top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.cumulative-item__title{
+  font-size:14px;
+  font-weight:800;
+  color:#374151;
+}
+.cumulative-item__value{
+  font-size:24px;
+  line-height:1;
+  font-weight:900;
+  color:#111827;
+}
+.cumulative-item__direction{
+  margin-bottom:10px;
+}
+.cumulative-item__bar{
+  margin-bottom:12px;
+}
+.cumulative-item__meta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  color:#4b5563;
+  font-size:13px;
+  font-weight:700;
+}
+.cumulative-panel__categories{
+  margin-top:20px;
+  padding-top:20px;
+  border-top:1px solid #edf2f7;
+}
+.cumulative-panel__categories h4{
+  margin:0 0 12px;
+  font-size:16px;
+  font-weight:800;
+  color:#1f2937;
+}
+.cumulative-tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.cumulative-tags span{
+  display:inline-flex;
+  align-items:center;
+  min-height:34px;
+  padding:0 12px;
+  border-radius:999px;
+  background:#f4f7fb;
+  border:1px solid #dfe7f1;
+  color:#374151;
+  font-size:13px;
+  font-weight:800;
+}
+.cumulative-panel__empty{
+  margin:0;
+  color:#6b7280;
+  font-size:14px;
+  line-height:1.7;
+}
 .serviceQuizIntro__chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
 .serviceQuizIntro__chips span,.serviceQuizLatest{
   border:1px solid var(--line);background:rgba(255,255,255,.68);border-radius:16px
@@ -709,6 +1015,12 @@ body[data-theme="dark"] .score-item{
   background:rgba(255,255,255,.08);
   border-color:rgba(255,255,255,.12);
 }
+body[data-theme="dark"] .cumulative-item,
+body[data-theme="dark"] .cumulative-tags span,
+body[data-theme="dark"] .cumulative-panel__badge{
+  background:rgba(255,255,255,.08);
+  border-color:rgba(255,255,255,.12);
+}
 body[data-theme="dark"] .serviceQuizEyebrow,
 body[data-theme="dark"] .serviceQuizChoice,
 body[data-theme="dark"] .serviceQuizIntro__chips span,
@@ -723,6 +1035,7 @@ body[data-theme="dark"] .serviceQuizQuestion__label,
 body[data-theme="dark"] .serviceQuizQuestion__prompt,
 body[data-theme="dark"] .serviceQuizCount,
 body[data-theme="dark"] .serviceQuizProgressMeta,
+body[data-theme="dark"] .serviceQuizQuestionMeta,
 body[data-theme="dark"] .serviceQuizResultHero__summary,
 body[data-theme="dark"] .serviceQuizIntro__lead,
 body[data-theme="dark"] .serviceQuizLatest__summary,
@@ -747,16 +1060,40 @@ body[data-theme="dark"] .cast-type-result-header h1,
 body[data-theme="dark"] .type-title,
 body[data-theme="dark"] .type-copy,
 body[data-theme="dark"] .score-item__value,
+body[data-theme="dark"] .cumulative-panel h3,
+body[data-theme="dark"] .cumulative-panel__categories h4,
+body[data-theme="dark"] .cumulative-item__title,
+body[data-theme="dark"] .cumulative-item__value,
 body[data-theme="dark"] .today-tip{
   color:#fff8fc;
 }
+body[data-theme="dark"] .cumulative-item__meta,
+body[data-theme="dark"] .cumulative-panel__lead,
+body[data-theme="dark"] .cumulative-panel__empty,
+body[data-theme="dark"] .cumulative-tags span{
+  color:rgba(230,223,240,.82);
+}
+body[data-theme="dark"] .cumulative-panel__headline{
+  color:#fff8fc;
+}
 body[data-theme="dark"] .serviceQuizChoice__key{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14)}
+body[data-theme="dark"] .serviceQuizChoice.is-active,
+body[data-theme="dark"] .quiz-option.active{
+  background:rgba(251,146,60,.18);
+  border-color:rgba(251,146,60,.34);
+}
 body[data-theme="dark"] .score-bar{background:rgba(255,255,255,.14)}
 body[data-theme="dark"] .score-bar-center{background:rgba(255,255,255,.36)}
+body[data-theme="dark"] .cumulative-panel__categories{border-top-color:rgba(255,255,255,.10)}
+body[data-theme="dark"] .quiz-feedback{
+  background:#f8fafc;
+  color:#111827;
+}
 @media (max-width: 960px){
   .result-hero{grid-template-columns:1fr}
   .score-grid{grid-template-columns:repeat(2, 1fr)}
   .result-grid{grid-template-columns:1fr}
+  .cumulative-grid{grid-template-columns:1fr}
   .type-title{font-size:34px}
 }
 @media (max-width: 640px){
@@ -770,7 +1107,15 @@ body[data-theme="dark"] .score-bar-center{background:rgba(255,255,255,.36)}
   .cast-type-result-sub{font-size:13px}
   .serviceQuizCard{padding:16px}
   .serviceQuizTitle{font-size:24px}
-  .serviceQuizQuestion__body{font-size:21px}
+  .serviceQuizQuestion__body{
+    font-size:22px;
+    line-height:1.7;
+  }
+  .serviceQuizQuestion__prompt{
+    margin-top:16px;
+    font-size:15px;
+    line-height:1.8;
+  }
   .result-hero{grid-template-columns:1fr}
   .score-grid{grid-template-columns:1fr}
   .result-grid{grid-template-columns:1fr}
@@ -790,5 +1135,65 @@ body[data-theme="dark"] .score-bar-center{background:rgba(255,255,255,.36)}
   }
   .btn{width:100%}
 }
+@keyframes quizChoiceTap{
+  0%{transform:scale(.98)}
+  100%{transform:scale(1)}
+}
 </style>
+<script>
+(() => {
+  const feedbackEl = document.getElementById('quiz-feedback');
+  const choiceButtons = document.querySelectorAll('.serviceQuizChoice');
+  if (!feedbackEl || !choiceButtons.length) {
+    return;
+  }
+
+  const generateFeedback = (scores) => {
+    if (scores.mood <= -2) return '安心感が強い選択です';
+    if (scores.mood >= 2) return '盛り上げ力が出ています';
+    if (scores.response <= -2) return '観察力が出ています';
+    if (scores.response >= 2) return '直感タイプの動きです';
+    if (scores.relation >= 2) return '恋愛演出寄りです';
+    if (scores.relation <= -2) return '信頼構築寄りです';
+    if (scores.talk >= 2) return '主導力が自然に出ています';
+    if (scores.talk <= -2) return '受け止める力が出ています';
+    return 'バランスの良い選択です';
+  };
+
+  choiceButtons.forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+
+      const form = button.closest('form');
+      const choiceInput = form ? form.querySelector('.serviceQuizChoiceValue') : null;
+      if (!form || !choiceInput) {
+        return;
+      }
+
+      choiceButtons.forEach((item) => {
+        item.disabled = true;
+        item.classList.remove('is-active', 'active');
+      });
+
+      button.classList.add('is-active', 'active');
+      choiceInput.value = button.value;
+
+      const scores = {
+        talk: Number(button.dataset.scoreTalk || 0),
+        mood: Number(button.dataset.scoreMood || 0),
+        response: Number(button.dataset.scoreResponse || 0),
+        relation: Number(button.dataset.scoreRelation || 0),
+      };
+
+      feedbackEl.textContent = generateFeedback(scores);
+      feedbackEl.classList.remove('hidden');
+      feedbackEl.classList.add('show');
+
+      window.setTimeout(() => {
+        form.submit();
+      }, 1000);
+    });
+  });
+})();
+</script>
 <?php render_page_end(); ?>
