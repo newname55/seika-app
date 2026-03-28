@@ -38,6 +38,13 @@ function transport_map_can_view_all_stores(): bool {
   return function_exists('can_view_all_store_shift') && can_view_all_store_shift();
 }
 
+function transport_map_dashboard_url(int $storeId = 0): string {
+  if ($storeId > 0) {
+    return '/wbss/public/dashboard.php?store_id=' . $storeId;
+  }
+  return '/wbss/public/dashboard.php';
+}
+
 function transport_map_table_exists(PDO $pdo, string $tableName): bool {
   try {
     $st = $pdo->prepare("

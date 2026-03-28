@@ -95,14 +95,47 @@
   display:flex;
   gap:8px;
   align-items:center;
+  justify-content:flex-end;
 }
 
 .transportMapScreenActions .btn{
-  min-width:88px;
+  min-width:74px;
   justify-content:center;
-  min-height:36px;
+  min-height:34px;
   font-size:12px;
   border-radius:10px;
+}
+
+.transportMapScreenCompactTools{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:6px 8px;
+  border:1px solid rgba(15,23,42,.06);
+  border-radius:10px;
+  background:rgba(255,255,255,.54);
+}
+
+.transportMapScreenCompactLabel{
+  color:#64748b;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.02em;
+  white-space:nowrap;
+}
+
+.transportMapScreenCompactActions{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  gap:6px;
+}
+
+.transportMapPage .miniBtn.miniBtn-primary{
+  border-color:rgba(37,99,235,.22);
+  background:#2563eb;
+  color:#fff;
 }
 
 .transportMapScreenSummaryLine{
@@ -1447,6 +1480,15 @@ body[data-theme="staff"] .transportMapDriverToggle{
   }
 
   .transportMapScreenActions{
+    justify-content:flex-start;
+  }
+
+  .transportMapScreenCompactTools{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .transportMapScreenCompactActions{
     justify-content:flex-start;
   }
 

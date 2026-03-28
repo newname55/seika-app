@@ -270,7 +270,7 @@ $commonTodayItems = [
     'icon' => '📋',
     'title' => '今日の出勤と予定',
     'desc' => '遅刻・欠勤連絡や今日の配置を最初に確認します。',
-    'href' => '/wbss/public/manager_today_schedule.php',
+    'href' => dashboard_link('/wbss/public/manager_today_schedule.php', $storeId),
     'tag'  => '最初に見る',
     'tone' => 'primary',
   ],

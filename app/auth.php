@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/store.php';
 
 const ROLE_ALL_STORE_SHIFT_VIEW = 'all_store_shift_view';
 
@@ -45,6 +46,39 @@ function can_view_all_store_shift(): bool {
 }
 function can_do_stock_ops(): bool {
   return is_role('super_user') || is_role('admin') || is_role('manager') || is_role('staff');
+}
+
+function restore_store_context_after_login(array $roles, array $storeIds): void {
+  ensure_session();
+
+  if (get_current_store_id() > 0) {
+    return;
+  }
+
+  $userId = (int)($_SESSION['user_id'] ?? 0);
+  if ($userId <= 0) {
+    return;
+  }
+
+  $normalizedStoreIds = [];
+  foreach ($storeIds as $storeId) {
+    $normalizedStoreId = (int)$storeId;
+    if ($normalizedStoreId > 0) {
+      $normalizedStoreIds[$normalizedStoreId] = true;
+    }
+  }
+
+  $canViewAllStores = in_array('super_user', $roles, true) || in_array('admin', $roles, true);
+  $allowedStoreIds = $canViewAllStores ? store_fetch_active_store_ids() : array_keys($normalizedStoreIds);
+
+  $restoredStoreId = store_restore_remembered_store_id_for_user($userId, $allowedStoreIds);
+  if ($restoredStoreId > 0) {
+    return;
+  }
+
+  if (count($allowedStoreIds) === 1) {
+    set_current_store_id((int)$allowedStoreIds[0]);
+  }
 }
 
 function is_super_user(): bool {
@@ -134,6 +168,7 @@ function login_user(string $login_id, string $password): array {
   $_SESSION["display_name"] = (string)$u["display_name"];
   $_SESSION["roles"] = $roles;
   $_SESSION["store_ids"] = $storeIds;
+  restore_store_context_after_login($roles, $storeIds);
 
   // ✅ PWログインの最終ログイン時刻（users.last_login_at）
   try {
@@ -276,6 +311,7 @@ if (!function_exists('login_user_by_id')) {
     $_SESSION['display_name'] = (string)$u['display_name'];
     $_SESSION['roles'] = array_values(array_unique($roles));
     $_SESSION['store_ids'] = array_values(array_unique($storeIds));
+    restore_store_context_after_login($_SESSION['roles'], $_SESSION['store_ids']);
 
     // users.last_login_at があるなら更新（無くてもOK）
     try {

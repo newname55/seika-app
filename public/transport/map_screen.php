@@ -60,6 +60,13 @@ $pageConfig = [
   'currentStoreId' => $selectedStoreId,
 ];
 
+$dashboardUrl = transport_map_dashboard_url($selectedStoreId);
+$normalMapUrl = $selectedStoreId > 0
+  ? '/wbss/public/transport/map.php?store_id=' . (int)$selectedStoreId . '&business_date=' . urlencode($businessDate)
+  : ($canViewAllStores
+      ? '/wbss/public/transport/map.php?store_id=all&business_date=' . urlencode($businessDate)
+      : $dashboardUrl);
+
 render_page_start('送迎マップ TV');
 ?>
 <link rel="stylesheet" href="/wbss/public/assets/css/transport-map.css?v=20260327ah">
@@ -79,9 +86,9 @@ render_page_start('送迎マップ TV');
         </div>
       </div>
       <div class="transportMapScreenTopBarActions">
-        <button type="button" class="miniBtn" id="transportMapScreenMenuToggle" aria-expanded="false" aria-controls="transportMapScreenDrawer">☰ 表示設定</button>
+        <a class="miniBtn" href="<?= h($dashboardUrl) ?>">ダッシュボード</a>
+        <a class="miniBtn" href="<?= h($normalMapUrl) ?>">通常表示</a>
         <button type="button" class="miniBtn" id="transportMapAutoRefreshToggle">自動更新ON</button>
-        <a class="miniBtn" href="<?= h($selectedStoreId > 0 ? '/wbss/public/transport/map.php?store_id=' . (int)$selectedStoreId . '&business_date=' . urlencode($businessDate) : ($canViewAllStores ? '/wbss/public/transport/map.php?store_id=all&business_date=' . urlencode($businessDate) : '/wbss/public/dashboard.php')) ?>">通常表示</a>
         <?php if ($selectedStoreId > 0): ?>
           <a class="miniBtn" href="/wbss/public/transport/driver_location.php?store_id=<?= (int)$selectedStoreId ?>">現在地送信</a>
         <?php endif; ?>
@@ -92,7 +99,7 @@ render_page_start('送迎マップ TV');
       <div class="card transportMapAlert transportMapAlertError"><?= h($err) ?></div>
     <?php endif; ?>
 
-    <section class="transportMapScreenTop transportPanel" id="transportMapScreenDrawer" hidden>
+    <section class="transportMapScreenTop transportPanel">
       <form id="transportMapFilterForm" class="transportMapScreenForm" method="get" action="/wbss/public/transport/map_screen.php">
         <label class="field">
           <span class="fieldLabel">店舗</span>
@@ -122,13 +129,18 @@ render_page_start('送迎マップ TV');
         <input type="hidden" name="unassigned_only" value="<?= h((string)($initialFilters['unassigned_only'] ?? '0')) ?>">
 
         <div class="transportMapScreenActions">
-          <button type="button" class="btn" id="transportMapAutoAssign">自動提案</button>
-          <button type="button" class="btn" id="transportMapResetSuggestions">リセット</button>
-          <button type="button" class="btn btn-primary" id="transportMapConfirmSuggestions">提案を確定</button>
           <button type="submit" class="btn">条件反映</button>
           <button type="button" class="btn btn-primary" id="transportMapReload">再読込</button>
         </div>
       </form>
+      <div class="transportMapScreenCompactTools">
+        <div class="transportMapScreenCompactLabel">TV自動提案</div>
+        <div class="transportMapScreenCompactActions">
+          <button type="button" class="miniBtn" id="transportMapAutoAssign">自動提案</button>
+          <button type="button" class="miniBtn" id="transportMapResetSuggestions">リセット</button>
+          <button type="button" class="miniBtn miniBtn-primary" id="transportMapConfirmSuggestions">確定</button>
+        </div>
+      </div>
       <div class="transportMapSuggestStatus" id="transportMapSuggestStatus">未割当へ提案を出せます</div>
       <div class="transportMapSuggestRoutePanel" data-suggest-route-summary hidden>
         <div class="transportMapDriverVisibilityHead">
@@ -195,22 +207,4 @@ window.WBSS_TRANSPORT_MAP_CONFIG = <?= json_encode([
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
 <script src="/wbss/public/assets/js/transport-map.js?v=20260327an"></script>
-<script>
-(function () {
-  const toggle = document.getElementById('transportMapScreenMenuToggle');
-  const drawer = document.getElementById('transportMapScreenDrawer');
-  if (!toggle || !drawer) {
-    return;
-  }
-  toggle.addEventListener('click', function () {
-    const willOpen = drawer.hasAttribute('hidden');
-    if (willOpen) {
-      drawer.removeAttribute('hidden');
-    } else {
-      drawer.setAttribute('hidden', 'hidden');
-    }
-    toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-  });
-})();
-</script>
 <?php render_page_end(); ?>
