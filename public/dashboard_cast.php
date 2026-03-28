@@ -430,7 +430,7 @@ render_header('WBSS', [
 .cast-diagnosis__summaryRow::-webkit-details-marker{display:none}
 .cast-diagnosis__head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
 .cast-diagnosis__headSide{display:flex;align-items:flex-end;gap:8px;flex-direction:column}
-.cast-diagnosis__peek{font-size:13px;font-weight:1000;color:color-mix(in srgb, var(--txt) 86%, var(--accent))}
+.cast-diagnosis__peek{font-size:0px;font-weight:1000;color:color-mix(in srgb, var(--txt) 86%, var(--accent))}
 .cast-diagnosis__toggleHint{display:none;font-size:11px;font-weight:900;color:var(--muted)}
 .cast-diagnosis__body{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(250px,.8fr);gap:14px;align-items:start}
 .cast-diagnosis__type{font-size:24px;font-weight:1000;line-height:1.2}
@@ -750,7 +750,7 @@ body[data-theme="staff"] .cast-hero{background:
   .cast-diagnosis__summaryRow{margin:-14px;padding:14px}
   .cast-diagnosis__head{align-items:center}
   .cast-diagnosis__headSide{align-items:flex-end}
-  .cast-diagnosis__peek{font-size:12px}
+  .cast-diagnosis__peek{font-size:0px}
   .cast-diagnosis__toggleHint{display:block}
   .cast-diagnosis__body{grid-template-columns:1fr;gap:10px}
   .cast-diagnosis__type{font-size:18px}
