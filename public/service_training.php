@@ -5,6 +5,7 @@ require_once __DIR__ . '/../app/auth.php';
 require_once __DIR__ . '/../app/db.php';
 require_once __DIR__ . '/../app/layout.php';
 require_once __DIR__ . '/../app/service_quiz.php';
+require_once __DIR__ . '/../app/service_training.php';
 
 const SERVICE_TRAINING_SESSION_KEY = '__service_training_run';
 const SERVICE_TRAINING_RESULT_KEY = '__service_training_result';
@@ -369,6 +370,7 @@ if ($storeId <= 0) {
 $questionsPool = require __DIR__ . '/../app/service_training_questions.php';
 $growthMap = require __DIR__ . '/../app/service_training_growth_map.php';
 $categoryMeta = service_training_category_meta();
+$trainingHistoryReady = service_training_history_tables_ready($pdo);
 
 $error = '';
 $displayResult = null;
@@ -380,6 +382,7 @@ $typeKey = trim((string)($latestQuizResult['result_type_key'] ?? ''));
 if ($typeKey === '') {
   $typeKey = 'all_rounder';
 }
+$typeName = (string)(($latestQuizResult['result_type'] ?? [])['name'] ?? 'バランス型');
 $growthTheme = (array)($growthMap[$typeKey] ?? $growthMap['all_rounder'] ?? []);
 $recommendedCategories = array_values(array_intersect(array_keys($categoryMeta), (array)($growthTheme['recommended_categories'] ?? [])));
 
@@ -431,7 +434,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
       if (count($currentAnswers) >= count($questions)) {
         $displayResult = service_training_calculate_result($questionsPool, $currentAnswers, $growthTheme, $categoryMeta);
         service_training_store_result($displayResult);
-        service_training_push_history($displayResult);
+        if ($trainingHistoryReady) {
+          service_training_save_history(
+            $pdo,
+            $storeId,
+            $userId,
+            $typeKey,
+            $typeName,
+            $displayResult,
+            $selectedQuestionIds
+          );
+        } else {
+          service_training_push_history($displayResult);
+        }
         service_training_clear_run();
         header('Location: /wbss/public/service_training.php?done=1');
         exit;
@@ -453,7 +468,6 @@ $nextIndex = count($currentAnswers);
 $currentQuestion = $isQuestionMode ? ($questions[$nextIndex] ?? null) : null;
 $progressCurrent = min($nextIndex + 1, count($questions));
 $questionRankMeta = service_training_rank_meta('ok');
-$typeName = (string)(($latestQuizResult['result_type'] ?? [])['name'] ?? 'バランス型');
 
 render_page_start('接客マナートレーニング');
 render_header('接客マナートレーニング', [
@@ -551,7 +565,9 @@ render_header('接客マナートレーニング', [
     <?php
       $bestCategoryKey = (string)($displayResult['best_category'] ?? '');
       $weakCategoryKey = (string)($displayResult['weak_category'] ?? '');
-      $recentWeakTags = service_training_recent_weak_tags(3);
+      $recentWeakTags = $trainingHistoryReady
+        ? service_training_fetch_recent_weak_tags($pdo, $storeId, $userId, 10, 3)
+        : service_training_recent_weak_tags(3);
     ?>
     <div class="trainingResultPage">
       <section class="card trainingThemeCard">
