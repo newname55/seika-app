@@ -101,7 +101,7 @@ render_page_start('送迎マップ TV');
 
     <section class="transportMapScreenTop transportPanel">
       <form id="transportMapFilterForm" class="transportMapScreenForm" method="get" action="/wbss/public/transport/map_screen.php">
-        <label class="field">
+        <label class="field transportMapScreenInlineField">
           <span class="fieldLabel">店舗</span>
           <select class="sel" name="store_id" id="transportMapStore">
             <?php if ($canViewAllStores): ?>
@@ -116,8 +116,8 @@ render_page_start('送迎マップ TV');
           </select>
         </label>
 
-        <label class="field">
-          <span class="fieldLabel">業務日</span>
+        <label class="field transportMapScreenInlineField transportMapScreenInlineField-date">
+          <span class="fieldLabel">営業日</span>
           <input class="sel" type="date" name="business_date" value="<?= h($businessDate) ?>">
         </label>
 
