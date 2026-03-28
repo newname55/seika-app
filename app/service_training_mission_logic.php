@@ -10,6 +10,30 @@ function service_training_mission_pool(): array {
   return is_array($rows) ? $rows : [];
 }
 
+function service_training_mission_map(): array {
+  $map = [];
+  foreach (service_training_mission_pool() as $mission) {
+    if (!is_array($mission)) {
+      continue;
+    }
+    $id = trim((string)($mission['id'] ?? $mission['mission_id'] ?? ''));
+    if ($id === '') {
+      continue;
+    }
+    $map[$id] = $mission;
+  }
+  return $map;
+}
+
+function service_training_find_mission(string $missionId): array {
+  if ($missionId === '') {
+    return [];
+  }
+  $map = service_training_mission_map();
+  $mission = $map[$missionId] ?? [];
+  return is_array($mission) ? $mission : [];
+}
+
 function service_training_recent_mission_ids(int $limit = 5): array {
   if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
@@ -201,6 +225,13 @@ function service_training_mission_reason(array $mission): string {
 
 function service_training_mission_status_meta(string $status): array {
   $map = [
+    'none' => [
+      'label' => '未選択',
+      'button' => '未選択',
+      'feedback_title' => '',
+      'feedback_body' => '',
+      'class' => 'is-none',
+    ],
     'done' => [
       'label' => 'やった',
       'button' => '✅ やった',
@@ -223,7 +254,7 @@ function service_training_mission_status_meta(string $status): array {
       'class' => 'is-skipped',
     ],
   ];
-  return $map[$status] ?? $map['pending'];
+  return $map[$status] ?? $map['none'];
 }
 
 function service_training_save_mission_status(string $missionId, string $status, ?string $dateKey = null): void {

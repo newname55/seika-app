@@ -357,28 +357,35 @@ function service_training_calculate_result(array $questions, array $answers, arr
   ];
 }
 
-function service_training_render_mission_card(array $mission, string $typeName, array $growthTheme, int $streak, ?string $todayStatus, string $returnTo): void {
+function service_training_render_mission_card(array $mission, string $typeName, array $growthTheme, int $streak, ?string $todayStatus, string $returnTo, bool $compact = false): void {
   $missionId = (string)($mission['id'] ?? $mission['mission_id'] ?? '');
   if ($missionId === '') {
     return;
   }
   $reasonText = service_training_mission_reason($mission);
   $skillTag = (string)($mission['skill_tag'] ?? '接客力');
-  $statusMeta = service_training_mission_status_meta($todayStatus ?? 'pending');
+  $statusMeta = service_training_mission_status_meta($todayStatus ?? 'none');
   ?>
-  <section class="card trainingMissionCard">
+  <section class="card trainingMissionCard <?= $compact ? 'trainingMissionCard--compact' : '' ?>">
     <div class="trainingMissionCard__label">今日のミッション</div>
     <div class="trainingMissionCard__typeLink">
       あなたは「<?= h($typeName) ?>」
       <span>だから今日はこれ</span>
     </div>
     <h2 class="trainingMissionCard__title"><?= h((string)($mission['action_text'] ?? '')) ?></h2>
-    <div class="trainingMissionCard__reason">
-      <strong>理由:</strong>
-      <span><?= h($reasonText) ?></span>
-    </div>
-    <div class="trainingMissionCard__hint">今日のコツ: <?= h((string)($mission['success_hint'] ?? (string)($growthTheme['daily_tip'] ?? '1回だけ意識できれば十分です。'))) ?></div>
-    <div class="trainingMissionCard__streak">🔥 連続達成: <?= (int)$streak ?>日</div>
+    <?php if (!$compact): ?>
+      <div class="trainingMissionCard__reason">
+        <strong>理由:</strong>
+        <span><?= h($reasonText) ?></span>
+      </div>
+      <div class="trainingMissionCard__hint">今日のコツ: <?= h((string)($mission['success_hint'] ?? (string)($growthTheme['daily_tip'] ?? '1回だけ意識できれば十分です。'))) ?></div>
+      <div class="trainingMissionCard__streak">🔥 連続達成: <?= (int)$streak ?>日</div>
+    <?php else: ?>
+      <div class="trainingMissionCard__compactMeta">
+        <span>理由: <?= h($reasonText) ?></span>
+        <span>🔥 <?= (int)$streak ?>日</span>
+      </div>
+    <?php endif; ?>
 
     <form method="post" class="trainingMissionActions">
       <input type="hidden" name="csrf_token" value="<?= h(csrf_token()) ?>">
@@ -453,11 +460,17 @@ $recommendedCategories = array_values(array_intersect(array_keys($categoryMeta),
 $weakSkillTagsForMission = $trainingHistoryReady
   ? service_training_fetch_recent_weak_tags($pdo, $storeId, $userId, 10, 5)
   : service_training_recent_weak_tags(5);
-$todayMission = service_training_resolve_today_mission($typeKey, $weakSkillTagsForMission, $growthTheme);
-$todayMissionId = (string)($todayMission['id'] ?? $todayMission['mission_id'] ?? '');
 $todayMissionLog = $missionLogsReady ? service_training_get_today_mission_log($pdo, $storeId, $userId) : null;
+$todayMission = [];
+if ($missionLogsReady && is_array($todayMissionLog) && trim((string)($todayMissionLog['mission_id'] ?? '')) !== '') {
+  $todayMission = service_training_find_mission((string)$todayMissionLog['mission_id']);
+}
+if (!$todayMission) {
+  $todayMission = service_training_resolve_today_mission($typeKey, $weakSkillTagsForMission, $growthTheme);
+}
+$todayMissionId = (string)($todayMission['id'] ?? $todayMission['mission_id'] ?? '');
 $todayMissionStatus = $missionLogsReady
-  ? (string)($todayMissionLog['status'] ?? '')
+  ? (is_array($todayMissionLog) ? (string)($todayMissionLog['status'] ?? '') : null)
   : ($todayMissionId !== '' ? service_training_get_today_mission_status($todayMissionId) : null);
 $missionStreak = $missionLogsReady ? service_training_done_streak($pdo, $storeId, $userId) : service_training_mission_streak();
 $currentPagePath = '/wbss/public/service_training.php' . (($_SERVER['QUERY_STRING'] ?? '') !== '' ? '?' . (string)$_SERVER['QUERY_STRING'] : '');
@@ -593,26 +606,26 @@ render_header('接客マナートレーニング', [
       $currentCategoryKey = (string)($currentQuestion['category'] ?? 'basic_manners');
       $currentCategoryLabel = (string)($categoryMeta[$currentCategoryKey]['label'] ?? ($currentQuestion['category_label'] ?? '育成テーマ'));
     ?>
-    <section class="card trainingThemeCard">
+    <section class="card trainingThemeCard trainingThemeCard--compact">
       <div class="trainingEyebrow">WBSS 接客マナートレーニング</div>
-      <div class="trainingThemeCard__grid">
+      <div class="trainingThemeCard__grid trainingThemeCard__grid--compact">
         <div>
-          <h1 class="trainingTitle">今日の育成テーマ</h1>
-          <p class="trainingLead"><?= h((string)($growthTheme['growth_message'] ?? '気づいたら身についている接客マナーを、1問ずつ整えていきます。')) ?></p>
+          <h1 class="trainingTitle trainingTitle--compact">今日の育成テーマ</h1>
+          <p class="trainingLead trainingLead--compact"><?= h((string)($growthTheme['growth_message'] ?? '今日の接客で伸ばしたいポイントです。')) ?></p>
           <div class="trainingTags">
-            <?php foreach ((array)($growthTheme['focus_skills'] ?? []) as $skill): ?>
+            <?php foreach (array_slice((array)($growthTheme['focus_skills'] ?? []), 0, 2) as $skill): ?>
               <span><?= h((string)$skill) ?></span>
             <?php endforeach; ?>
           </div>
         </div>
-        <div class="trainingTypeChip">
+        <div class="trainingTypeChip trainingTypeChip--compact">
           <div class="trainingTypeChip__label">接客タイプ連動</div>
           <div class="trainingTypeChip__value"><?= h($typeName) ?></div>
         </div>
       </div>
     </section>
     <?php if ($todayMission): ?>
-      <?php service_training_render_mission_card($todayMission, $typeName, $growthTheme, $missionStreak, $todayMissionStatus, $currentPagePath); ?>
+      <?php service_training_render_mission_card($todayMission, $typeName, $growthTheme, $missionStreak, $todayMissionStatus, $currentPagePath, true); ?>
     <?php endif; ?>
 
     <section class="card trainingProgressCard">
@@ -851,25 +864,46 @@ render_header('接客マナートレーニング', [
   border-color:#f3d1b0;
   box-shadow:0 18px 40px rgba(251,146,60,.10);
 }
+.trainingMissionCard--compact{
+  padding:16px 16px 14px;
+  margin-top:12px;
+}
 .trainingEyebrow{display:inline-flex;padding:7px 11px;border-radius:999px;border:1px solid color-mix(in srgb, var(--accent) 24%, var(--line));font-size:11px;font-weight:1000;letter-spacing:.08em;color:var(--muted);background:rgba(255,255,255,.56)}
 .trainingMissionCard__label{font-size:12px;font-weight:1000;letter-spacing:.08em;color:#9a3412}
 .trainingMissionCard__typeLink{margin-top:12px;font-size:14px;line-height:1.7;font-weight:800;color:#9a3412}
 .trainingMissionCard__typeLink span{display:block;font-size:12px;font-weight:700;color:#b45309}
 .trainingMissionCard__title{margin:10px 0 0;font-size:24px;line-height:1.35;font-weight:1000;color:#7c2d12}
+.trainingMissionCard--compact .trainingMissionCard__typeLink{margin-top:8px;font-size:12px;line-height:1.5}
+.trainingMissionCard--compact .trainingMissionCard__typeLink span{display:inline;margin-left:6px}
+.trainingMissionCard--compact .trainingMissionCard__title{margin-top:8px;font-size:20px;line-height:1.45}
 .trainingMissionCard__action{margin:12px 0 0;font-size:15px;line-height:1.85;font-weight:800;color:#7c2d12}
 .trainingMissionCard__reason{margin-top:12px;display:grid;gap:4px;font-size:13px;line-height:1.7;color:#9a3412}
 .trainingMissionCard__hint{margin-top:12px;font-size:13px;line-height:1.7;font-weight:700;color:#9a3412}
 .trainingMissionCard__streak{margin-top:12px;font-size:14px;font-weight:900;color:#b45309}
+.trainingMissionCard__compactMeta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:8px;
+  color:#b45309;
+  font-size:11px;
+  font-weight:800;
+}
 .trainingMissionActions{display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:10px;margin-top:16px}
 .trainingMissionAction{
   min-height:46px;padding:0 12px;border-radius:14px;border:1px solid #f0cfb3;background:#fffaf5;
   color:#7c2d12;font:inherit;font-weight:900;cursor:pointer;transition:all .15s ease
 }
+.trainingMissionCard--compact .trainingMissionActions{margin-top:12px;gap:8px}
+.trainingMissionCard--compact .trainingMissionAction{min-height:42px;padding:0 10px;font-size:13px}
+.trainingMissionAction.is-current.is-none{background:#f8fafc;border-color:#e5e7eb;color:#6b7280}
 .trainingMissionAction:hover{transform:translateY(-1px);box-shadow:0 12px 24px rgba(251,146,60,.12)}
 .trainingMissionAction.is-current.is-done{background:#ecfdf5;border-color:#bbf7d0;color:#166534}
 .trainingMissionAction.is-current.is-pending{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
 .trainingMissionAction.is-current.is-skipped{background:#fff1f2;border-color:#fecdd3;color:#be123c}
 .trainingMissionStatus{margin-top:12px;font-size:13px;font-weight:800}
+.trainingMissionStatus.is-none{color:#6b7280}
 .trainingMissionStatus.is-done{color:#166534}
 .trainingMissionStatus.is-pending{color:#1d4ed8}
 .trainingMissionStatus.is-skipped{color:#be123c}
@@ -884,25 +918,31 @@ render_header('接客マナートレーニング', [
 .trainingTitle{margin:12px 0 0;font-size:28px;line-height:1.25;font-weight:1000}
 .trainingLead{margin:12px 0 0;color:var(--muted);font-size:14px;line-height:1.85}
 .trainingThemeCard__grid{display:grid;grid-template-columns:1fr 240px;gap:16px;align-items:start}
+.trainingThemeCard--compact{padding:16px}
+.trainingThemeCard__grid--compact{grid-template-columns:1fr 170px;gap:12px}
+.trainingTitle--compact{margin-top:8px;font-size:22px}
+.trainingLead--compact{margin-top:8px;font-size:12px;line-height:1.6}
 .trainingTypeChip{padding:18px;border-radius:20px;background:#f8fafc;border:1px solid #e8edf5}
+.trainingTypeChip--compact{padding:14px}
 .trainingTypeChip__label{font-size:12px;font-weight:800;color:#6b7280}
 .trainingTypeChip__value{margin-top:8px;font-size:20px;font-weight:1000;color:#111827}
+.trainingThemeCard--compact .trainingTags{margin-top:10px}
 .trainingTags{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
 .trainingTags span{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border-radius:999px;background:#f5f7fb;border:1px solid #dde5ef;font-size:12px;font-weight:900;color:#334155}
 .trainingTags--weak span{background:#fff4f4;border-color:#f3d0d0;color:#8b3a3a}
-.trainingProgressCard{margin-top:18px;padding:22px}
+.trainingProgressCard{margin-top:12px;padding:14px 16px}
 .trainingProgressCard__top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
 .trainingQuestionMeta,.trainingCount,.trainingProgressMeta{color:var(--muted);font-size:12px;font-weight:800}
 .trainingProgress{height:10px;border-radius:999px;background:rgba(255,255,255,.62);margin-top:14px;overflow:hidden}
 .trainingProgress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg, #ff7aad, #ffb6d8)}
-.trainingQuestionCard{margin-top:18px;padding:22px}
+.trainingQuestionCard{margin-top:12px;padding:16px}
 .trainingQuestionLabel{font-size:12px;font-weight:1000;color:var(--muted);letter-spacing:.08em}
-.trainingQuestionLabel--prompt{margin-top:18px}
-.trainingScene{margin-top:10px;font-size:22px;line-height:1.7;font-weight:900;color:var(--txt)}
-.trainingQuestionBody{margin-top:10px;font-size:18px;line-height:1.8;font-weight:800;color:var(--txt)}
-.trainingChoices{display:grid;gap:10px;margin-top:18px}
+.trainingQuestionLabel--prompt{margin-top:14px}
+.trainingScene{margin-top:8px;font-size:18px;line-height:1.6;font-weight:900;color:var(--txt)}
+.trainingQuestionBody{margin-top:8px;font-size:16px;line-height:1.7;font-weight:800;color:var(--txt)}
+.trainingChoices{display:grid;gap:8px;margin-top:14px}
 .trainingChoice{
-  display:flex;align-items:flex-start;gap:12px;width:100%;padding:16px;border-radius:18px;
+  display:flex;align-items:center;gap:12px;width:100%;padding:14px 14px;border-radius:16px;
   border:1px solid color-mix(in srgb, var(--accent) 18%, var(--line));background:rgba(255,255,255,.78);
   color:var(--txt);font:inherit;text-align:left;cursor:pointer;transition:all .15s ease
 }
@@ -920,11 +960,11 @@ render_header('接客マナートレーニング', [
   box-shadow:0 14px 28px rgba(251,146,60,.14);
 }
 .trainingChoice__key{
-  width:38px;height:38px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-  border-radius:14px;background:linear-gradient(180deg, rgba(255,245,250,.98), rgba(255,231,241,.92));
+  width:36px;height:36px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  border-radius:12px;background:linear-gradient(180deg, rgba(255,245,250,.98), rgba(255,231,241,.92));
   border:1px solid rgba(255,182,211,.42);font-size:15px;font-weight:1000
 }
-.trainingChoice__text{font-size:15px;line-height:1.65;font-weight:800}
+.trainingChoice__text{font-size:14px;line-height:1.55;font-weight:800}
 .trainingFeedback{
   margin-top:12px;padding:14px 16px;border-radius:16px;background:#111827;color:#fff;
   opacity:0;transform:translateY(4px);position:relative;z-index:20
@@ -1079,6 +1119,7 @@ body[data-theme="dark"] .trainingMissionAction{
   border-color:rgba(255,255,255,.12);
   color:#fff8fc;
 }
+body[data-theme="dark"] .trainingMissionAction.is-current.is-none{color:rgba(230,223,240,.72)}
 body[data-theme="dark"] .trainingMissionFeedback{background:#f8fafc;color:#111827}
 body[data-theme="dark"] .badgeToast{
   background:
@@ -1094,11 +1135,24 @@ body[data-theme="dark"] .badgeToast__name{color:#fff8fc}
 }
 @media (max-width: 640px){
   .trainingTitle{font-size:24px}
-  .trainingScene{font-size:20px}
-  .trainingQuestionBody{font-size:16px}
+  .trainingThemeCard--compact{padding:14px}
+  .trainingThemeCard__grid--compact{grid-template-columns:1fr}
+  .trainingTypeChip--compact{padding:12px}
+  .trainingTypeChip__value{font-size:18px}
+  .trainingScene{font-size:16px}
+  .trainingQuestionBody{font-size:15px}
+  .trainingTags span{min-height:30px;padding:0 10px;font-size:11px}
   .trainingActions{flex-direction:column}
   .trainingActions .btn{width:100%}
   .trainingMissionActions{grid-template-columns:1fr}
+  .trainingMissionCard--compact .trainingMissionActions{grid-template-columns:repeat(3, minmax(0, 1fr))}
+  .trainingMissionCard--compact .trainingMissionAction{min-height:40px;font-size:12px}
+  .trainingMissionCard__compactMeta{font-size:10px}
+  .trainingProgressCard{padding:12px 14px}
+  .trainingQuestionCard{padding:14px}
+  .trainingChoice{padding:13px 12px}
+  .trainingChoice__key{width:34px;height:34px}
+  .trainingChoice__text{font-size:14px}
   .trainingResultCard__head{align-items:flex-start}
   .trainingResultCard__headActions{justify-content:flex-start}
   .trainingFeedback{
