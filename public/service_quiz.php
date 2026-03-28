@@ -203,9 +203,10 @@ render_header('接客タイプ診断', [
           'all_rounder' => ['bar' => 'linear-gradient(90deg, #94a3b8 0%, #64748b 100%)', 'tip_bg' => 'linear-gradient(180deg, #f4f6f8 0%, #fbfcfd 100%)', 'tip_border' => '#d7dee7'],
         ];
         $theme = $typeThemes[$resultView['type']] ?? $typeThemes['all_rounder'];
+        $minusBar = 'linear-gradient(90deg, #93c5fd 0%, #60a5fa 100%)';
         $imagePath = '/wbss/public/images/cast_type_images/' . rawurlencode($resultView['type']) . '.png';
       ?>
-      <div class="cast-type-result-page" style="--result-bar-fill: <?= h($theme['bar']) ?>; --result-tip-bg: <?= h($theme['tip_bg']) ?>; --result-tip-border: <?= h($theme['tip_border']) ?>;">
+      <div class="cast-type-result-page" style="--result-tip-bg: <?= h($theme['tip_bg']) ?>; --result-tip-border: <?= h($theme['tip_border']) ?>;">
         <?php if ($saveNotice !== ''): ?>
           <div class="result-notice"><?= h($saveNotice) ?></div>
         <?php endif; ?>
@@ -253,9 +254,11 @@ render_header('接客タイプ診断', [
                 <div class="score-bar">
                   <div class="score-bar-center"></div>
                 <?php if ($talkScore < 0): ?>
-                  <div class="score-bar-fill minus" style="width: <?= min(50, max(0, (abs($talkScore) / 10) * 50)) ?>%; background: linear-gradient(90deg, #93c5fd 0%, #60a5fa 100%);"></div>
+                  <?php $talkWidth = min(50.0, max(4.0, (abs($talkScore) / 10) * 50)); ?>
+                  <div class="score-bar-fill minus" style="width: <?= $talkWidth ?>%; background-image: <?= h($minusBar) ?>;"></div>
                 <?php elseif ($talkScore > 0): ?>
-                  <div class="score-bar-fill plus" style="width: <?= min(50, max(0, ($talkScore / 10) * 50)) ?>%; background: var(--result-bar-fill, linear-gradient(90deg, #f59e0b 0%, #f97316 50%, #ef4444 100%));"></div>
+                  <?php $talkWidth = min(50.0, max(4.0, ($talkScore / 10) * 50)); ?>
+                  <div class="score-bar-fill plus" style="width: <?= $talkWidth ?>%; background-image: <?= h($theme['bar']) ?>;"></div>
                 <?php endif; ?>
               </div>
               <div class="score-item__sub"><?= h($resultView['talk_label']) ?></div>
@@ -273,9 +276,11 @@ render_header('接客タイプ診断', [
               <div class="score-bar">
                 <div class="score-bar-center"></div>
                 <?php if ($moodScore < 0): ?>
-                  <div class="score-bar-fill minus" style="width: <?= min(50, max(0, (abs($moodScore) / 10) * 50)) ?>%; background: linear-gradient(90deg, #93c5fd 0%, #60a5fa 100%);"></div>
+                  <?php $moodWidth = min(50.0, max(4.0, (abs($moodScore) / 10) * 50)); ?>
+                  <div class="score-bar-fill minus" style="width: <?= $moodWidth ?>%; background-image: <?= h($minusBar) ?>;"></div>
                 <?php elseif ($moodScore > 0): ?>
-                  <div class="score-bar-fill plus" style="width: <?= min(50, max(0, ($moodScore / 10) * 50)) ?>%; background: var(--result-bar-fill, linear-gradient(90deg, #f59e0b 0%, #f97316 50%, #ef4444 100%));"></div>
+                  <?php $moodWidth = min(50.0, max(4.0, ($moodScore / 10) * 50)); ?>
+                  <div class="score-bar-fill plus" style="width: <?= $moodWidth ?>%; background-image: <?= h($theme['bar']) ?>;"></div>
                 <?php endif; ?>
               </div>
               <div class="score-item__sub"><?= h($resultView['mood_label']) ?></div>
@@ -293,9 +298,11 @@ render_header('接客タイプ診断', [
               <div class="score-bar">
                 <div class="score-bar-center"></div>
                 <?php if ($responseScore < 0): ?>
-                  <div class="score-bar-fill minus" style="width: <?= min(50, max(0, (abs($responseScore) / 10) * 50)) ?>%; background: linear-gradient(90deg, #93c5fd 0%, #60a5fa 100%);"></div>
+                  <?php $responseWidth = min(50.0, max(4.0, (abs($responseScore) / 10) * 50)); ?>
+                  <div class="score-bar-fill minus" style="width: <?= $responseWidth ?>%; background-image: <?= h($minusBar) ?>;"></div>
                 <?php elseif ($responseScore > 0): ?>
-                  <div class="score-bar-fill plus" style="width: <?= min(50, max(0, ($responseScore / 10) * 50)) ?>%; background: var(--result-bar-fill, linear-gradient(90deg, #f59e0b 0%, #f97316 50%, #ef4444 100%));"></div>
+                  <?php $responseWidth = min(50.0, max(4.0, ($responseScore / 10) * 50)); ?>
+                  <div class="score-bar-fill plus" style="width: <?= $responseWidth ?>%; background-image: <?= h($theme['bar']) ?>;"></div>
                 <?php endif; ?>
               </div>
               <div class="score-item__sub"><?= h($resultView['response_label']) ?></div>
@@ -313,9 +320,11 @@ render_header('接客タイプ診断', [
               <div class="score-bar">
                 <div class="score-bar-center"></div>
                 <?php if ($relationScore < 0): ?>
-                  <div class="score-bar-fill minus" style="width: <?= min(50, max(0, (abs($relationScore) / 10) * 50)) ?>%; background: linear-gradient(90deg, #93c5fd 0%, #60a5fa 100%);"></div>
+                  <?php $relationWidth = min(50.0, max(4.0, (abs($relationScore) / 10) * 50)); ?>
+                  <div class="score-bar-fill minus" style="width: <?= $relationWidth ?>%; background-image: <?= h($minusBar) ?>;"></div>
                 <?php elseif ($relationScore > 0): ?>
-                  <div class="score-bar-fill plus" style="width: <?= min(50, max(0, ($relationScore / 10) * 50)) ?>%; background: var(--result-bar-fill, linear-gradient(90deg, #f59e0b 0%, #f97316 50%, #ef4444 100%));"></div>
+                  <?php $relationWidth = min(50.0, max(4.0, ($relationScore / 10) * 50)); ?>
+                  <div class="score-bar-fill plus" style="width: <?= $relationWidth ?>%; background-image: <?= h($theme['bar']) ?>;"></div>
                 <?php endif; ?>
               </div>
               <div class="score-item__sub"><?= h($resultView['relation_label']) ?></div>
@@ -634,14 +643,19 @@ render_header('接客タイプ診断', [
   height:100%;
   border-radius:999px;
   box-shadow:0 0 0 1px rgba(255,255,255,.22) inset;
+  z-index:1;
 }
 .score-bar__fill.minus{
   right:50%;
-  background:linear-gradient(90deg, #93c5fd 0%, #60a5fa 100%);
+  background-color:#60a5fa;
+  background-repeat:no-repeat;
+  background-size:100% 100%;
 }
 .score-bar__fill.plus{
   left:50%;
-  background:var(--result-bar-fill, linear-gradient(90deg, #f59e0b 0%, #f97316 50%, #ef4444 100%));
+  background-color:#f97316;
+  background-repeat:no-repeat;
+  background-size:100% 100%;
 }
 .result-grid{
   display:grid;
