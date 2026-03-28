@@ -74,6 +74,8 @@
   display:flex;
   gap:6px;
   align-items:center;
+  flex-wrap:wrap;
+  justify-content:flex-end;
 }
 
 .transportMapScreenTop{

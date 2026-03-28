@@ -6,7 +6,7 @@ require_once __DIR__ . '/store.php';
 require_once __DIR__ . '/repo_casts.php';
 
 function store_access_is_super(): bool {
-  return is_role('super_user');
+  return is_role('super_user') || is_role('admin') || (function_exists('can_view_all_store_shift') && can_view_all_store_shift());
 }
 
 function store_access_allowed_stores(PDO $pdo): array {
