@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/db.php';
 require_once __DIR__ . '/../../app/layout.php';
+require_once __DIR__ . '/../../app/transport_map.php';
 require_once __DIR__ . '/../../app/transport_vehicle_location.php';
 
 require_login();
@@ -15,6 +16,8 @@ $stores = [];
 $storeId = 0;
 $storeName = '';
 $vehicleLabel = '';
+$businessDate = '';
+$assignedPickups = [];
 
 try {
   $userId = (int)(current_user_id() ?? 0);
@@ -27,6 +30,39 @@ try {
     }
   }
   $vehicleLabel = trim((string)($_GET['vehicle_label'] ?? ''));
+  if ($storeId > 0) {
+    $storeRow = transport_map_fetch_store_row($pdo, $storeId);
+    $businessDate = transport_map_default_business_date($storeRow);
+    $assignedRows = transport_map_fetch_rows($pdo, [
+      'business_date' => $businessDate,
+      'store_ids' => [$storeId],
+      'status' => '',
+      'driver_user_id' => $userId,
+      'unassigned_only' => 0,
+      'time_from' => '',
+      'time_to' => '',
+    ]);
+    foreach ($assignedRows as $row) {
+      $status = (string)($row['status'] ?? 'pending');
+      if ($status === 'cancelled') {
+        continue;
+      }
+      $pickupAddress = trim((string)($row['pickup_address'] ?? ''));
+      $assignedPickups[] = [
+        'cast_name' => trim((string)($row['pickup_name'] ?? '')) !== '' ? (string)$row['pickup_name'] : (string)($row['cast_name'] ?? '-'),
+        'shop_tag' => (string)($row['shop_tag'] ?? ''),
+        'pickup_time_from' => (string)($row['pickup_time_from'] ?? ''),
+        'pickup_time_to' => (string)($row['pickup_time_to'] ?? ''),
+        'pickup_address' => $pickupAddress,
+        'pickup_note' => (string)($row['pickup_note'] ?? ''),
+        'direction_bucket' => (string)($row['direction_bucket'] ?? ''),
+        'status' => $status,
+        'status_label' => transport_map_status_label($status),
+        'status_color' => transport_map_status_color($status),
+        'map_url' => $pickupAddress !== '' ? 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($pickupAddress) : '',
+      ];
+    }
+  }
 } catch (Throwable $e) {
   $err = $e->getMessage();
 }
@@ -63,6 +99,7 @@ render_header('ドライバー現在地', [
           <div class="heroMeta">
             <span class="heroChip">店舗 <b><?= h($storeName !== '' ? $storeName : '-') ?></b></span>
             <span class="heroChip">ドライバー <b><?= h((string)($_SESSION['display_name'] ?? $_SESSION['login_id'] ?? '-')) ?></b></span>
+            <span class="heroChip">営業日 <b><?= h($businessDate !== '' ? $businessDate : '-') ?></b></span>
           </div>
         </div>
       </div>
@@ -125,6 +162,63 @@ render_header('ドライバー現在地', [
       </ul>
       <div class="driverLocationStatus" id="driverLocationMessage">位置送信の準備ができています。</div>
     </section>
+
+    <section class="card driverLocationPanel">
+      <div class="driverLocationAssignedHead">
+        <div>
+          <div class="cardTitle">今日の送迎確定</div>
+          <div class="muted">このドライバーに割り当て済みの送迎対象を表示します。</div>
+        </div>
+        <div class="driverLocationAssignedMeta"><?= h($businessDate !== '' ? $businessDate : '-') ?> / <?= count($assignedPickups) ?>件</div>
+      </div>
+
+      <?php if ($assignedPickups === []): ?>
+        <div class="driverLocationStatus">このドライバーに確定している送迎対象はまだありません。</div>
+      <?php else: ?>
+        <div class="driverLocationAssignedList">
+          <?php foreach ($assignedPickups as $pickup): ?>
+            <?php
+              $nameParts = [];
+              if ($pickup['shop_tag'] !== '') {
+                $nameParts[] = '【' . $pickup['shop_tag'] . '】';
+              }
+              $nameParts[] = $pickup['cast_name'] !== '' ? $pickup['cast_name'] : '-';
+              $timeLabel = trim(substr($pickup['pickup_time_from'], 0, 5));
+              if (trim(substr($pickup['pickup_time_to'], 0, 5)) !== '') {
+                $timeLabel .= ($timeLabel !== '' ? ' - ' : '') . trim(substr($pickup['pickup_time_to'], 0, 5));
+              }
+            ?>
+            <article class="driverLocationAssignedCard">
+              <div class="driverLocationAssignedCardHead">
+                <div>
+                  <div class="driverLocationAssignedName"><?= h(implode(' ', $nameParts)) ?></div>
+                  <div class="driverLocationAssignedSub">
+                    <?= h($timeLabel !== '' ? $timeLabel : '時間未設定') ?>
+                    <?php if ($pickup['direction_bucket'] !== ''): ?>
+                      / <?= h($pickup['direction_bucket']) ?>
+                    <?php endif; ?>
+                  </div>
+                </div>
+                <span class="driverLocationAssignedStatus" style="--driver-status-color:<?= h($pickup['status_color']) ?>">
+                  <?= h($pickup['status_label']) ?>
+                </span>
+              </div>
+              <div class="driverLocationAssignedAddress"><?= h($pickup['pickup_address'] !== '' ? $pickup['pickup_address'] : '住所未登録') ?></div>
+              <?php if ($pickup['pickup_note'] !== ''): ?>
+                <div class="driverLocationAssignedNote">メモ: <?= h($pickup['pickup_note']) ?></div>
+              <?php endif; ?>
+              <div class="driverLocationAssignedActions">
+                <?php if ($pickup['map_url'] !== ''): ?>
+                  <a class="btn btn-primary" href="<?= h($pickup['map_url']) ?>" target="_blank" rel="noopener noreferrer">Googleマップで開く</a>
+                <?php else: ?>
+                  <span class="driverLocationAssignedEmpty">住所がないため地図を開けません</span>
+                <?php endif; ?>
+              </div>
+            </article>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </section>
   </div>
 </div>
 
@@ -151,6 +245,38 @@ render_header('ドライバー現在地', [
 .driverLocationAlertError{ border:1px solid rgba(239,68,68,.35); background:rgba(254,242,242,.95); color:#991b1b; }
 .driverLocationGuide{ margin:0; padding-left:18px; color:#334155; display:grid; gap:6px; }
 .driverLocationStatus{ margin-top:12px; padding:12px 14px; border-radius:14px; border:1px solid rgba(15,23,42,.10); background:#fff; color:#334155; font-size:13px; }
+.driverLocationAssignedHead{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.driverLocationAssignedMeta{ color:#64748b; font-size:12px; font-weight:800; white-space:nowrap; }
+.driverLocationAssignedList{ display:grid; gap:10px; }
+.driverLocationAssignedCard{
+  display:grid;
+  gap:8px;
+  padding:14px;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:16px;
+  background:rgba(255,255,255,.82);
+}
+.driverLocationAssignedCardHead{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.driverLocationAssignedName{ color:#0f172a; font-size:16px; font-weight:900; }
+.driverLocationAssignedSub{ color:#64748b; font-size:12px; font-weight:700; margin-top:3px; }
+.driverLocationAssignedStatus{
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  padding:0 10px;
+  border-radius:999px;
+  background:color-mix(in srgb, var(--driver-status-color) 12%, #fff);
+  border:1px solid color-mix(in srgb, var(--driver-status-color) 28%, transparent);
+  color:var(--driver-status-color);
+  font-size:11px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.driverLocationAssignedAddress{ color:#1e293b; font-size:14px; font-weight:700; word-break:break-word; }
+.driverLocationAssignedNote{ color:#475569; font-size:12px; }
+.driverLocationAssignedActions{ display:flex; align-items:center; gap:10px; }
+.driverLocationAssignedActions .btn{ min-height:38px; }
+.driverLocationAssignedEmpty{ color:#94a3b8; font-size:12px; font-weight:700; }
 .driverLocationPage .field{ display:grid; gap:6px; min-width:0; }
 .driverLocationPage .fieldLabel{ font-size:12px; font-weight:800; color:#475569; }
 .driverLocationPage .sel{
@@ -169,6 +295,9 @@ render_header('ドライバー現在地', [
   .driverLocationForm,
   .driverLocationSummaryGrid{ grid-template-columns:1fr; }
   .driverLocationActions{ flex-direction:column; align-items:stretch; }
+  .driverLocationAssignedHead,
+  .driverLocationAssignedCardHead,
+  .driverLocationAssignedActions{ flex-direction:column; align-items:flex-start; }
 }
 </style>
 
