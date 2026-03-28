@@ -246,7 +246,7 @@ render_header('接客タイプ診断', [
                 <span class="score-item__label">会話</span>
                 <span class="score-item__value"><?= $talkScore ?></span>
               </div>
-              <div class="score-direction">← 受容　　　主導 →</div>
+              <div class="score-direction"><span>← 受容</span><span>主導 →</span></div>
               <div class="score-bar">
                 <div class="score-bar-center"></div>
                 <?php if ($talkScore < 0): ?>
@@ -263,7 +263,7 @@ render_header('接客タイプ診断', [
                 <span class="score-item__label">空気</span>
                 <span class="score-item__value"><?= $moodScore ?></span>
               </div>
-              <div class="score-direction">← 安心　　　盛り上げ →</div>
+              <div class="score-direction"><span>← 安心</span><span>盛り上げ →</span></div>
               <div class="score-bar">
                 <div class="score-bar-center"></div>
                 <?php if ($moodScore < 0): ?>
@@ -280,7 +280,7 @@ render_header('接客タイプ診断', [
                 <span class="score-item__label">反応</span>
                 <span class="score-item__value"><?= $responseScore ?></span>
               </div>
-              <div class="score-direction">← 観察　　　直感 →</div>
+              <div class="score-direction"><span>← 観察</span><span>直感 →</span></div>
               <div class="score-bar">
                 <div class="score-bar-center"></div>
                 <?php if ($responseScore < 0): ?>
@@ -297,7 +297,7 @@ render_header('接客タイプ診断', [
                 <span class="score-item__label">関係性</span>
                 <span class="score-item__value"><?= $relationScore ?></span>
               </div>
-              <div class="score-direction">← 信頼　　　恋愛演出 →</div>
+              <div class="score-direction"><span>← 信頼</span><span>恋愛演出 →</span></div>
               <div class="score-bar">
                 <div class="score-bar-center"></div>
                 <?php if ($relationScore < 0): ?>
@@ -563,11 +563,17 @@ render_header('接客タイプ診断', [
   margin-bottom:8px;
 }
 .score-direction{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
   margin-bottom:12px;
   color:#6b7280;
   font-size:12px;
   font-weight:700;
   letter-spacing:.02em;
+}
+.score-direction span{
   white-space:nowrap;
 }
 .score-item__sub{
