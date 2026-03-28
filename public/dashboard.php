@@ -225,9 +225,6 @@ if (!function_exists('render_dashboard_message_summary')) {
           <span>一覧を見る</span>
           <span>送信する</span>
         </div>
-        <?php if ($showAllStoreMapScreen): ?>
-          <a class="message-summary-card__subaction" href="/wbss/public/transport/map_screen.php?store_id=all">送迎マップTV 全店舗表示</a>
-        <?php endif; ?>
       </a>
 
       <a class="message-summary-card is-thanks" href="<?= h(dashboard_link('/wbss/public/thanks.php', $storeId)) ?>">
@@ -253,6 +250,9 @@ if (!function_exists('render_dashboard_message_summary')) {
           <span>一覧を見る</span>
           <span>ありがとうを送る</span>
         </div>
+        <?php if ($showAllStoreMapScreen): ?>
+          <a class="message-summary-card__subaction" href="/wbss/public/transport/map_screen.php?store_id=all">送迎マップTV 全店舗表示</a>
+        <?php endif; ?>
       </a>
     </section>
     <?php
