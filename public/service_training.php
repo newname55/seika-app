@@ -1270,6 +1270,10 @@ body[data-theme="dark"] .badgeToast__name{color:#fff8fc}
       missionFeedback.classList.add('show');
 
       window.setTimeout(() => {
+        if (typeof form.requestSubmit === 'function') {
+          form.requestSubmit(button);
+          return;
+        }
         form.submit();
       }, 700);
     });
