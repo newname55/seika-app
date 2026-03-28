@@ -133,7 +133,7 @@ function service_quiz_calculate(array $rawAnswers): array {
 
   $resultTypeKey = service_quiz_detect_type($scores);
   $resultTypes = service_quiz_result_types();
-  $resultType = $resultTypes[$resultTypeKey] ?? $resultTypes['balanced_flex'];
+  $resultType = $resultTypes[$resultTypeKey] ?? $resultTypes['all_rounder'];
 
   return [
     'answers' => $answers,
@@ -158,54 +158,69 @@ function service_quiz_detect_type(array $scores): string {
     abs($response) <= 2 &&
     abs($relation) <= 2
   ) {
-    return 'balanced_flex';
+    return 'all_rounder';
   }
 
   if ($relation >= 4 && $mood >= 0) {
-    return 'romantic_director';
+    return 'sweet_spark';
   }
 
   if ($talk >= 4 && $mood >= 0 && $response >= 0) {
-    return 'lead_driver';
+    return 'flow_leader';
   }
 
   if ($mood >= 4 && $talk >= 1) {
-    return 'mood_maker';
+    return 'energy_booster';
   }
 
   if ($mood <= -4 && $talk <= 0 && $response <= 0) {
-    return 'healing_stable';
+    return 'soft_healer';
   }
 
   if ($response <= -4 && $talk <= 0) {
-    return 'observant_support';
+    return 'silent_analyzer';
   }
 
   if ($mood <= -2 && $response <= -2 && $talk <= 2) {
-    return 'mature_comfort';
+    return 'elegant_calm';
   }
 
   if ($mood <= -3 && $talk <= -1 && $relation <= 0) {
-    return 'empathy_comfort';
+    return 'calm_empath';
   }
 
   if ($relation >= 3) {
-    return 'romantic_director';
+    return 'sweet_spark';
   }
   if ($talk >= 3 && $mood >= -1) {
-    return 'lead_driver';
+    return 'flow_leader';
   }
   if ($mood >= 3) {
-    return 'mood_maker';
+    return 'energy_booster';
   }
   if ($response <= -3) {
-    return 'observant_support';
+    return 'silent_analyzer';
   }
   if ($mood <= -3) {
-    return 'healing_stable';
+    return 'soft_healer';
   }
 
-  return 'balanced_flex';
+  return 'all_rounder';
+}
+
+function service_quiz_legacy_type_key(string $typeKey): string {
+  static $map = [
+    'empathy_comfort' => 'calm_empath',
+    'healing_stable' => 'soft_healer',
+    'mood_maker' => 'energy_booster',
+    'lead_driver' => 'flow_leader',
+    'romantic_director' => 'sweet_spark',
+    'mature_comfort' => 'elegant_calm',
+    'observant_support' => 'silent_analyzer',
+    'balanced_flex' => 'all_rounder',
+  ];
+
+  return $map[$typeKey] ?? $typeKey;
 }
 
 function service_quiz_axis_labels(array $scores): array {
@@ -341,9 +356,9 @@ function service_quiz_hydrate_result_row(array $row): array {
     $resultJson = [];
   }
 
-  $typeKey = (string)($row['result_type_key'] ?? '');
+  $typeKey = service_quiz_legacy_type_key((string)($row['result_type_key'] ?? ''));
   $types = service_quiz_result_types();
-  $type = $types[$typeKey] ?? $types['balanced_flex'];
+  $type = $types[$typeKey] ?? $types['all_rounder'];
 
   return [
     'id' => (int)($row['id'] ?? 0),

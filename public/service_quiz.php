@@ -175,72 +175,125 @@ render_header('接客タイプ診断', [
         $scores = (array)($displayResult['scores'] ?? []);
         $labels = (array)($displayResult['axis_labels'] ?? []);
         $createdAt = trim((string)($displayResult['created_at'] ?? ''));
+        $typeKey = trim((string)($displayResult['result_type_key'] ?? ''));
+        $resultView = [
+          'type' => $typeKey !== '' ? $typeKey : 'all_rounder',
+          'type_label' => (string)($type['name'] ?? '診断結果'),
+          'type_en' => (string)($type['type_en'] ?? ''),
+          'copy' => (string)($type['copy'] ?? ''),
+          'summary' => (string)($type['summary'] ?? ''),
+          'saved_at' => $createdAt,
+          'talk_score' => (int)($scores['talk_axis'] ?? 0),
+          'talk_label' => (string)($labels['talk_axis'] ?? ''),
+          'mood_score' => (int)($scores['mood_axis'] ?? 0),
+          'mood_label' => (string)($labels['mood_axis'] ?? ''),
+          'response_score' => (int)($scores['response_axis'] ?? 0),
+          'response_label' => (string)($labels['response_axis'] ?? ''),
+          'relation_score' => (int)($scores['relation_axis'] ?? 0),
+          'relation_label' => (string)($labels['relation_axis'] ?? ''),
+          'strengths' => (array)($type['strengths'] ?? []),
+          'cautions' => (array)($type['cautions'] ?? []),
+          'matches' => (array)($type['best_customers'] ?? []),
+          'today_tip' => (string)($type['today_tip'] ?? ''),
+        ];
+        $imagePath = '/images/cast_type_images/' . rawurlencode($resultView['type']) . '.png';
       ?>
-      <section class="card serviceQuizCard serviceQuizResultHero">
-        <div class="serviceQuizEyebrow">あなたの接客タイプ</div>
-        <h1 class="serviceQuizResultHero__title"><?= h((string)($type['name'] ?? '診断結果')) ?></h1>
-        <p class="serviceQuizResultHero__summary"><?= h((string)($type['summary'] ?? '')) ?></p>
-        <div class="serviceQuizAxisGrid">
-          <div class="serviceQuizAxisCard">
-            <span>会話</span>
-            <strong><?= (int)($scores['talk_axis'] ?? 0) ?></strong>
-            <small><?= h((string)($labels['talk_axis'] ?? '')) ?></small>
-          </div>
-          <div class="serviceQuizAxisCard">
-            <span>空気</span>
-            <strong><?= (int)($scores['mood_axis'] ?? 0) ?></strong>
-            <small><?= h((string)($labels['mood_axis'] ?? '')) ?></small>
-          </div>
-          <div class="serviceQuizAxisCard">
-            <span>反応</span>
-            <strong><?= (int)($scores['response_axis'] ?? 0) ?></strong>
-            <small><?= h((string)($labels['response_axis'] ?? '')) ?></small>
-          </div>
-          <div class="serviceQuizAxisCard">
-            <span>関係性</span>
-            <strong><?= (int)($scores['relation_axis'] ?? 0) ?></strong>
-            <small><?= h((string)($labels['relation_axis'] ?? '')) ?></small>
-          </div>
+      <div class="cast-type-result-page">
+        <div class="cast-type-result-header">
+          <a href="/wbss/public/dashboard_cast.php" class="back-button">← ダッシュボード</a>
+          <h1>接客タイプ診断</h1>
         </div>
-        <?php if ($createdAt !== ''): ?>
-          <div class="serviceQuizResultHero__meta">保存日時: <?= h($createdAt) ?></div>
+
+        <?php if ($saveNotice !== ''): ?>
+          <div class="result-notice"><?= h($saveNotice) ?></div>
         <?php endif; ?>
-      </section>
 
-      <section class="serviceQuizResultGrid">
-        <div class="card serviceQuizCard serviceQuizSection">
-          <h2>強み</h2>
-          <ul>
-            <?php foreach ((array)($type['strengths'] ?? []) as $item): ?>
-              <li><?= h((string)$item) ?></li>
-            <?php endforeach; ?>
-          </ul>
-        </div>
-        <div class="card serviceQuizCard serviceQuizSection">
-          <h2>注意点</h2>
-          <ul>
-            <?php foreach ((array)($type['cautions'] ?? []) as $item): ?>
-              <li><?= h((string)$item) ?></li>
-            <?php endforeach; ?>
-          </ul>
-        </div>
-        <div class="card serviceQuizCard serviceQuizSection">
-          <h2>相性の良い客層</h2>
-          <ul>
-            <?php foreach ((array)($type['best_customers'] ?? []) as $item): ?>
-              <li><?= h((string)$item) ?></li>
-            <?php endforeach; ?>
-          </ul>
-        </div>
-        <div class="card serviceQuizCard serviceQuizSection serviceQuizSection--tip">
-          <h2>今日の一言</h2>
-          <p><?= h((string)($type['today_tip'] ?? '')) ?></p>
-        </div>
-      </section>
+        <section class="result-hero">
+          <div class="result-hero__card">
+            <img
+              src="<?= h($imagePath) ?>"
+              alt="<?= h($resultView['type_label']) ?>"
+              class="result-card-image"
+            >
+          </div>
 
-      <div class="serviceQuizActions">
-        <a class="btn btn-primary" href="/wbss/public/service_quiz.php?start=1">もう一度診断する</a>
-        <a class="btn" href="/wbss/public/dashboard_cast.php">ダッシュボードへ戻る</a>
+          <div class="result-hero__summary card-panel">
+            <div class="type-badge">あなたの接客タイプ</div>
+            <h2 class="type-title"><?= h($resultView['type_label']) ?></h2>
+            <p class="type-subtitle"><?= h($resultView['type_en']) ?></p>
+            <p class="type-copy"><?= h($resultView['copy']) ?></p>
+            <p class="type-description"><?= nl2br(h($resultView['summary'])) ?></p>
+            <?php if ($resultView['saved_at'] !== ''): ?>
+              <div class="saved-at">保存日時: <?= h($resultView['saved_at']) ?></div>
+            <?php endif; ?>
+          </div>
+        </section>
+
+        <section class="score-section card-panel">
+          <h3>スコア</h3>
+          <div class="score-grid">
+            <div class="score-item">
+              <div class="score-item__label">会話</div>
+              <div class="score-item__value"><?= (int)$resultView['talk_score'] ?></div>
+              <div class="score-item__sub"><?= h($resultView['talk_label']) ?></div>
+              <div class="score-bar"><div class="score-bar__fill" style="width: <?= min(100, max(0, ($resultView['talk_score'] / 6) * 100)) ?>%;"></div></div>
+            </div>
+            <div class="score-item">
+              <div class="score-item__label">空気</div>
+              <div class="score-item__value"><?= (int)$resultView['mood_score'] ?></div>
+              <div class="score-item__sub"><?= h($resultView['mood_label']) ?></div>
+              <div class="score-bar"><div class="score-bar__fill" style="width: <?= min(100, max(0, ($resultView['mood_score'] / 6) * 100)) ?>%;"></div></div>
+            </div>
+            <div class="score-item">
+              <div class="score-item__label">反応</div>
+              <div class="score-item__value"><?= (int)$resultView['response_score'] ?></div>
+              <div class="score-item__sub"><?= h($resultView['response_label']) ?></div>
+              <div class="score-bar"><div class="score-bar__fill" style="width: <?= min(100, max(0, ($resultView['response_score'] / 6) * 100)) ?>%;"></div></div>
+            </div>
+            <div class="score-item">
+              <div class="score-item__label">関係性</div>
+              <div class="score-item__value"><?= (int)$resultView['relation_score'] ?></div>
+              <div class="score-item__sub"><?= h($resultView['relation_label']) ?></div>
+              <div class="score-bar"><div class="score-bar__fill" style="width: <?= min(100, max(0, ($resultView['relation_score'] / 6) * 100)) ?>%;"></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="result-grid">
+          <div class="card-panel">
+            <h3>強み</h3>
+            <ul class="result-list">
+              <?php foreach ($resultView['strengths'] as $item): ?>
+                <li><?= h((string)$item) ?></li>
+              <?php endforeach; ?>
+            </ul>
+          </div>
+          <div class="card-panel">
+            <h3>注意点</h3>
+            <ul class="result-list">
+              <?php foreach ($resultView['cautions'] as $item): ?>
+                <li><?= h((string)$item) ?></li>
+              <?php endforeach; ?>
+            </ul>
+          </div>
+          <div class="card-panel">
+            <h3>相性の良い客層</h3>
+            <ul class="result-list">
+              <?php foreach ($resultView['matches'] as $item): ?>
+                <li><?= h((string)$item) ?></li>
+              <?php endforeach; ?>
+            </ul>
+          </div>
+          <div class="card-panel card-panel--highlight">
+            <h3>今日の一言</h3>
+            <p class="today-tip"><?= nl2br(h($resultView['today_tip'])) ?></p>
+          </div>
+        </section>
+
+        <div class="result-actions">
+          <a href="/wbss/public/service_quiz.php?start=1" class="btn btn-secondary">もう一度診断する</a>
+          <a href="/wbss/public/dashboard_cast.php" class="btn btn-primary">ダッシュボードへ戻る</a>
+        </div>
       </div>
 
     <?php else: ?>
@@ -273,16 +326,17 @@ render_header('接客タイプ診断', [
 </div>
 
 <style>
-.serviceQuiz{max-width:760px;margin:0 auto;display:grid;gap:14px}
-.serviceQuizCard{padding:18px}
+.serviceQuiz{max-width:1120px;margin:0 auto;display:grid;gap:18px}
+.serviceQuizCard{padding:22px}
 .serviceQuizHero,.serviceQuizResultHero,.serviceQuizIntro{
   background:
-    radial-gradient(circle at top right, rgba(255,168,206,.26), transparent 38%),
-    radial-gradient(circle at bottom left, rgba(255,228,239,.34), transparent 36%),
-    linear-gradient(180deg, color-mix(in srgb, var(--cardA) 95%, #fff8fc), color-mix(in srgb, var(--cardB) 94%, #fff2f8));
+    radial-gradient(circle at top right, rgba(255,255,255,.78), transparent 30%),
+    linear-gradient(180deg, #ffffff, #fbfbfd);
+  border-color:#e6e7ee;
+  box-shadow:0 18px 40px rgba(26,32,44,.06);
 }
 .serviceQuizEyebrow{display:inline-flex;padding:7px 11px;border-radius:999px;border:1px solid color-mix(in srgb, var(--accent) 24%, var(--line));font-size:11px;font-weight:1000;letter-spacing:.08em;color:var(--muted);background:rgba(255,255,255,.56)}
-.serviceQuizTitle,.serviceQuizResultHero__title{margin:12px 0 0;font-size:28px;line-height:1.2;font-weight:1000}
+.serviceQuizTitle{margin:12px 0 0;font-size:28px;line-height:1.2;font-weight:1000}
 .serviceQuizHero__top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
 .serviceQuizCount,.serviceQuizResultHero__meta{color:var(--muted);font-size:12px;font-weight:800}
 .serviceQuizProgress{height:10px;border-radius:999px;background:rgba(255,255,255,.62);margin-top:14px;overflow:hidden}
@@ -309,20 +363,200 @@ render_header('接客タイプ診断', [
 .serviceQuizNotice--ok{border-color:rgba(111,224,176,.42);background:rgba(236,255,246,.8)}
 .serviceQuizNotice--error{border-color:rgba(239,68,68,.35);background:rgba(255,241,241,.9)}
 .serviceQuizResultHero__summary,.serviceQuizIntro__lead{margin:14px 0 0;color:var(--muted);font-size:14px;line-height:1.8}
-.serviceQuizAxisGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:18px}
-.serviceQuizAxisCard{
-  display:grid;gap:4px;padding:14px;border-radius:18px;border:1px solid var(--line);
-  background:rgba(255,255,255,.74)
+.cast-type-result-page{
+  max-width:1120px;
+  margin:0 auto;
+  padding:24px 16px 48px;
+  color:#1f2937;
 }
-.serviceQuizAxisCard span{font-size:12px;color:var(--muted);font-weight:800}
-.serviceQuizAxisCard strong{font-size:28px;line-height:1;font-weight:1000}
-.serviceQuizAxisCard small{font-size:12px;font-weight:800}
-.serviceQuizResultGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.serviceQuizSection h2{margin:0 0 12px;font-size:16px}
-.serviceQuizSection ul{margin:0;padding-left:18px;display:grid;gap:8px}
-.serviceQuizSection li,.serviceQuizSection p{line-height:1.7}
-.serviceQuizSection--tip p{margin:0;font-weight:800}
-.serviceQuizActions{display:flex;gap:10px;flex-wrap:wrap}
+.cast-type-result-header{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  margin-bottom:20px;
+}
+.cast-type-result-header h1{
+  margin:0;
+  font-size:32px;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.back-button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:44px;
+  padding:0 16px;
+  border-radius:999px;
+  background:#ffffff;
+  border:1px solid #e5e7eb;
+  text-decoration:none;
+  color:#111827;
+  font-weight:700;
+  box-shadow:0 8px 24px rgba(15,23,42,.06);
+}
+.result-notice{
+  margin-bottom:20px;
+  padding:14px 18px;
+  border-radius:16px;
+  background:#ffffff;
+  border:1px solid #e5e7eb;
+  box-shadow:0 8px 24px rgba(15,23,42,.05);
+  font-weight:700;
+}
+.result-hero{
+  display:grid;
+  grid-template-columns:400px 1fr;
+  gap:24px;
+  margin-bottom:24px;
+  align-items:start;
+}
+.result-hero__card{
+  background:#ffffff;
+  border-radius:28px;
+  padding:18px;
+  box-shadow:0 18px 48px rgba(15,23,42,.08);
+  border:1px solid #edf0f5;
+}
+.result-card-image{
+  display:block;
+  width:100%;
+  height:auto;
+  border-radius:24px;
+}
+.card-panel{
+  background:#ffffff;
+  border-radius:24px;
+  padding:24px;
+  box-shadow:0 18px 48px rgba(15,23,42,.08);
+  border:1px solid #edf0f5;
+}
+.card-panel--highlight{
+  background:linear-gradient(180deg, #fff7fb 0%, #ffffff 100%);
+  border:1px solid #f4d9e7;
+}
+.type-badge{
+  display:inline-flex;
+  align-items:center;
+  min-height:34px;
+  padding:0 12px;
+  border-radius:999px;
+  border:1px solid #d8deea;
+  color:#596275;
+  font-size:13px;
+  font-weight:700;
+  margin-bottom:14px;
+}
+.type-title{
+  margin:0 0 8px;
+  font-size:40px;
+  line-height:1.15;
+  font-weight:900;
+  letter-spacing:.01em;
+}
+.type-subtitle{
+  margin:0 0 10px;
+  color:#6b7280;
+  font-size:18px;
+  font-weight:700;
+}
+.type-copy{
+  margin:0 0 14px;
+  font-size:22px;
+  line-height:1.5;
+  font-weight:800;
+  color:#111827;
+}
+.type-description{
+  margin:0;
+  color:#4b5563;
+  font-size:16px;
+  line-height:1.9;
+}
+.saved-at{
+  margin-top:18px;
+  color:#6b7280;
+  font-size:13px;
+  font-weight:600;
+}
+.score-section{
+  margin-bottom:24px;
+}
+.score-section h3,
+.result-grid h3{
+  margin:0 0 18px;
+  font-size:22px;
+  font-weight:800;
+}
+.score-grid{
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:16px;
+}
+.score-item{
+  padding:16px;
+  border-radius:18px;
+  background:#f8fafc;
+  border:1px solid #e8edf5;
+}
+.score-item__label{
+  font-size:13px;
+  color:#6b7280;
+  font-weight:700;
+  margin-bottom:8px;
+}
+.score-item__value{
+  font-size:34px;
+  line-height:1;
+  font-weight:900;
+  color:#111827;
+  margin-bottom:6px;
+}
+.score-item__sub{
+  font-size:13px;
+  font-weight:700;
+  color:#374151;
+  margin-bottom:12px;
+}
+.score-bar{
+  height:10px;
+  border-radius:999px;
+  background:#e5e7eb;
+  overflow:hidden;
+}
+.score-bar__fill{
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg, #f59e0b 0%, #ef4444 100%);
+}
+.result-grid{
+  display:grid;
+  grid-template-columns:repeat(2, 1fr);
+  gap:24px;
+  margin-bottom:28px;
+}
+.result-list{
+  margin:0;
+  padding-left:1.2em;
+}
+.result-list li{
+  margin-bottom:12px;
+  line-height:1.8;
+  color:#374151;
+}
+.today-tip{
+  margin:0;
+  line-height:1.9;
+  font-size:16px;
+  font-weight:700;
+  color:#7c2d12;
+}
+.result-actions{
+  display:flex;
+  justify-content:flex-start;
+  gap:14px;
+  flex-wrap:wrap;
+}
 .serviceQuizIntro__chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
 .serviceQuizIntro__chips span,.serviceQuizLatest{
   border:1px solid var(--line);background:rgba(255,255,255,.68);border-radius:16px
@@ -334,17 +568,25 @@ render_header('接客タイプ診断', [
 .serviceQuizLatest__summary{margin-top:6px;color:var(--muted);font-size:13px;line-height:1.7}
 body[data-theme="dark"] .serviceQuizHero,
 body[data-theme="dark"] .serviceQuizResultHero,
-body[data-theme="dark"] .serviceQuizIntro{
+body[data-theme="dark"] .serviceQuizIntro,
+body[data-theme="dark"] .card-panel,
+body[data-theme="dark"] .result-hero__card,
+body[data-theme="dark"] .result-notice,
+body[data-theme="dark"] .back-button{
   background:
     radial-gradient(circle at top right, rgba(255,146,194,.2), transparent 38%),
     radial-gradient(circle at bottom left, rgba(164,140,255,.16), transparent 34%),
     linear-gradient(180deg, rgba(38,43,61,.96), rgba(44,50,71,.94));
 }
+body[data-theme="dark"] .score-item{
+  background:rgba(255,255,255,.08);
+  border-color:rgba(255,255,255,.12);
+}
 body[data-theme="dark"] .serviceQuizEyebrow,
-body[data-theme="dark"] .serviceQuizAxisCard,
 body[data-theme="dark"] .serviceQuizChoice,
 body[data-theme="dark"] .serviceQuizIntro__chips span,
-body[data-theme="dark"] .serviceQuizLatest{
+body[data-theme="dark"] .serviceQuizLatest,
+body[data-theme="dark"] .type-badge{
   background:rgba(255,255,255,.08);
   border-color:rgba(255,255,255,.12);
   color:#fff8fc;
@@ -357,24 +599,58 @@ body[data-theme="dark"] .serviceQuizProgressMeta,
 body[data-theme="dark"] .serviceQuizResultHero__summary,
 body[data-theme="dark"] .serviceQuizIntro__lead,
 body[data-theme="dark"] .serviceQuizLatest__summary,
-body[data-theme="dark"] .serviceQuizResultHero__meta,
-body[data-theme="dark"] .serviceQuizAxisCard span{
+body[data-theme="dark"] .type-subtitle,
+body[data-theme="dark"] .type-description,
+body[data-theme="dark"] .saved-at,
+body[data-theme="dark"] .score-item__label,
+body[data-theme="dark"] .score-item__sub,
+body[data-theme="dark"] .result-list li{
   color:rgba(230,223,240,.82);
 }
 body[data-theme="dark"] .serviceQuizQuestion__body,
 body[data-theme="dark"] .serviceQuizTitle,
-body[data-theme="dark"] .serviceQuizResultHero__title,
-body[data-theme="dark"] .serviceQuizLatest__name{
+body[data-theme="dark"] .serviceQuizLatest__name,
+body[data-theme="dark"] .cast-type-result-header h1,
+body[data-theme="dark"] .type-title,
+body[data-theme="dark"] .type-copy,
+body[data-theme="dark"] .score-item__value,
+body[data-theme="dark"] .back-button,
+body[data-theme="dark"] .today-tip{
   color:#fff8fc;
 }
 body[data-theme="dark"] .serviceQuizChoice__key{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14)}
+body[data-theme="dark"] .score-bar{background:rgba(255,255,255,.14)}
+@media (max-width: 960px){
+  .result-hero{grid-template-columns:1fr}
+  .score-grid{grid-template-columns:repeat(2, 1fr)}
+  .result-grid{grid-template-columns:1fr}
+  .type-title{font-size:34px}
+}
 @media (max-width: 640px){
+  .cast-type-result-page{padding:16px 12px 32px}
+  .cast-type-result-header{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:12px;
+  }
+  .cast-type-result-header h1{font-size:26px}
   .serviceQuizCard{padding:16px}
-  .serviceQuizTitle,.serviceQuizResultHero__title{font-size:24px}
+  .serviceQuizTitle{font-size:24px}
   .serviceQuizQuestion__body{font-size:21px}
-  .serviceQuizAxisGrid,.serviceQuizResultGrid{grid-template-columns:1fr}
+  .result-hero{grid-template-columns:1fr}
+  .score-grid{grid-template-columns:1fr}
+  .result-grid{grid-template-columns:1fr}
+  .card-panel,
+  .result-hero__card{
+    border-radius:20px;
+    padding:16px;
+  }
+  .type-title{font-size:30px}
+  .type-copy{font-size:18px}
   .serviceQuizActions{display:grid}
   .serviceQuizActions .btn{width:100%;text-align:center}
+  .result-actions{flex-direction:column}
+  .btn{width:100%}
 }
 </style>
 <?php render_page_end(); ?>
