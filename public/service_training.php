@@ -751,7 +751,10 @@ render_header('接客マナートレーニング', [
         <div class="card trainingResultCard trainingResultCard--badges">
           <div class="trainingResultCard__head">
             <h2>バッジ</h2>
-            <a href="/wbss/public/service_badges.php" class="trainingResultLink">図鑑を見る</a>
+            <div class="trainingResultCard__headActions">
+              <button type="button" class="trainingSoundToggle" data-badge-sound-toggle aria-pressed="false">効果音 OFF</button>
+              <a href="/wbss/public/service_badges.php" class="trainingResultLink">図鑑を見る</a>
+            </div>
           </div>
           <?php if (!empty($badgeState['earned'])): ?>
             <div class="trainingBadgeList">
@@ -782,6 +785,28 @@ render_header('接客マナートレーニング', [
         <a href="/wbss/public/dashboard_cast.php" class="btn btn-primary">ダッシュボードへ戻る</a>
       </div>
     </div>
+    <?php if (!empty($newBadgeKeys)): ?>
+      <?php
+        $newBadgeNames = [];
+        foreach ((array)($badgeState['earned'] ?? []) as $badge) {
+          $badgeKey = (string)($badge['key'] ?? '');
+          if (in_array($badgeKey, $newBadgeKeys, true)) {
+            $newBadgeNames[] = (string)($badge['name'] ?? '');
+          }
+        }
+      ?>
+      <div
+        class="badgeToast"
+        id="badge-toast"
+        aria-live="polite"
+        data-badge-names="<?= h(json_encode(array_values($newBadgeNames), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]') ?>"
+      >
+        <span class="badgeToast__spark badgeToast__spark--one" aria-hidden="true"></span>
+        <span class="badgeToast__spark badgeToast__spark--two" aria-hidden="true"></span>
+        <div class="badgeToast__eyebrow">✨ NEW BADGE ✨</div>
+        <div class="badgeToast__name"></div>
+      </div>
+    <?php endif; ?>
   <?php else: ?>
     <section class="card trainingThemeCard">
       <div class="trainingEyebrow">WBSS 接客マナートレーニング</div>
@@ -923,7 +948,14 @@ render_header('接客マナートレーニング', [
 .trainingResultCard{padding:22px}
 .trainingResultCard h2{margin:0 0 14px;font-size:22px;font-weight:900}
 .trainingResultCard__head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.trainingResultCard__headActions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 .trainingResultLink{font-size:12px;font-weight:900;color:#b45309;text-decoration:none}
+.trainingSoundToggle{
+  min-height:32px;padding:0 12px;border-radius:999px;border:1px solid #f0cfb3;background:#fffaf5;
+  color:#9a3412;font:inherit;font-size:12px;font-weight:900;cursor:pointer;transition:all .15s ease
+}
+.trainingSoundToggle:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(251,146,60,.12)}
+.trainingSoundToggle.is-on{background:#fff1dc;border-color:#fdba74;color:#7c2d12}
 .trainingResultCard--strong{border-color:#dbeafe;background:linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)}
 .trainingResultCard--badges{border-color:#f5d8a8;background:linear-gradient(180deg, #fffaf0 0%, #ffffff 100%)}
 .trainingResultCard--tip{border-color:#f6d0ad;background:linear-gradient(180deg, #fff4e8 0%, #ffffff 100%)}
@@ -938,6 +970,37 @@ render_header('接客マナートレーニング', [
 }
 .trainingBadgeTag.is-earned{background:#fff7e6}
 .trainingBadgeTag.is-new{background:#ffedd5;border-color:#fdba74;color:#9a3412;animation:badgeFadeIn .45s ease}
+.badgeToast{
+  position:fixed;
+  left:50%;
+  top:50%;
+  z-index:70;
+  width:min(calc(100vw - 32px), 320px);
+  padding:18px 18px 16px;
+  border-radius:22px;
+  border:1px solid rgba(253,186,116,.8);
+  background:linear-gradient(180deg, rgba(255,250,240,.98), rgba(255,244,232,.98));
+  box-shadow:0 22px 56px rgba(15,23,42,.18);
+  text-align:center;
+  pointer-events:none;
+  opacity:0;
+  transform:translate(-50%, calc(-50% + 16px)) scale(.96);
+}
+.badgeToast.is-show{
+  animation:badgeToastIn .24s ease forwards, badgeToastOut .28s ease 1.02s forwards;
+}
+.badgeToast__eyebrow{font-size:12px;font-weight:1000;letter-spacing:.12em;color:#b45309}
+.badgeToast__name{margin-top:10px;font-size:24px;line-height:1.35;font-weight:1000;color:#7c2d12}
+.badgeToast__spark{
+  position:absolute;
+  width:12px;
+  height:12px;
+  border-radius:999px;
+  background:radial-gradient(circle, rgba(255,255,255,.95) 0%, rgba(255,204,128,.9) 45%, rgba(255,204,128,0) 72%);
+  opacity:.9;
+}
+.badgeToast__spark--one{top:14px;left:18px;animation:badgeSpark 1s ease-in-out infinite alternate}
+.badgeToast__spark--two{right:20px;bottom:18px;animation:badgeSpark 1.2s ease-in-out .1s infinite alternate}
 .trainingBadgeLockedList{display:grid;gap:10px;margin-top:14px}
 .trainingBadgeLockedItem{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -966,6 +1029,15 @@ body[data-theme="dark"] .trainingBadgeLockedItem,
 body[data-theme="dark"] .trainingBadgeTag{
   background:rgba(255,255,255,.08);
   border-color:rgba(255,255,255,.12);
+}
+body[data-theme="dark"] .trainingSoundToggle{
+  background:rgba(255,255,255,.08);
+  border-color:rgba(255,255,255,.12);
+  color:#fff8fc;
+}
+body[data-theme="dark"] .trainingSoundToggle.is-on{
+  background:rgba(251,191,36,.18);
+  border-color:rgba(251,191,36,.34);
 }
 body[data-theme="dark"] .trainingTags--weak span{
   background:rgba(248,113,113,.14);
@@ -1008,6 +1080,14 @@ body[data-theme="dark"] .trainingMissionAction{
   color:#fff8fc;
 }
 body[data-theme="dark"] .trainingMissionFeedback{background:#f8fafc;color:#111827}
+body[data-theme="dark"] .badgeToast{
+  background:
+    radial-gradient(circle at top right, rgba(255,191,105,.22), transparent 36%),
+    linear-gradient(180deg, rgba(38,43,61,.98), rgba(44,50,71,.96));
+  border-color:rgba(251,191,36,.34);
+}
+body[data-theme="dark"] .badgeToast__eyebrow{color:#fbbf24}
+body[data-theme="dark"] .badgeToast__name{color:#fff8fc}
 @media (max-width: 960px){
   .trainingThemeCard__grid,
   .trainingResultGrid{grid-template-columns:1fr}
@@ -1019,6 +1099,8 @@ body[data-theme="dark"] .trainingMissionFeedback{background:#f8fafc;color:#11182
   .trainingActions{flex-direction:column}
   .trainingActions .btn{width:100%}
   .trainingMissionActions{grid-template-columns:1fr}
+  .trainingResultCard__head{align-items:flex-start}
+  .trainingResultCard__headActions{justify-content:flex-start}
   .trainingFeedback{
     position:fixed;
     left:50%;
@@ -1031,6 +1113,11 @@ body[data-theme="dark"] .trainingMissionFeedback{background:#f8fafc;color:#11182
   .trainingFeedback.show{
     transform:translate(-50%, -50%);
   }
+  .badgeToast{
+    top:48%;
+    padding:16px 16px 14px;
+  }
+  .badgeToast__name{font-size:21px}
 }
 @keyframes trainingChoiceTap{
   0%{transform:scale(.98)}
@@ -1039,6 +1126,18 @@ body[data-theme="dark"] .trainingMissionFeedback{background:#f8fafc;color:#11182
 @keyframes badgeFadeIn{
   0%{opacity:0;transform:translateY(6px)}
   100%{opacity:1;transform:translateY(0)}
+}
+@keyframes badgeToastIn{
+  0%{opacity:0;transform:translate(-50%, calc(-50% + 16px)) scale(.96)}
+  100%{opacity:1;transform:translate(-50%, -50%) scale(1)}
+}
+@keyframes badgeToastOut{
+  0%{opacity:1;transform:translate(-50%, -50%) scale(1)}
+  100%{opacity:0;transform:translate(-50%, calc(-50% - 8px)) scale(1.02)}
+}
+@keyframes badgeSpark{
+  0%{transform:scale(.85);opacity:.4}
+  100%{transform:scale(1.15);opacity:1}
 }
 </style>
 <script>
@@ -1112,6 +1211,102 @@ body[data-theme="dark"] .trainingMissionFeedback{background:#f8fafc;color:#11182
       }, 700);
     });
   });
+})();
+
+(() => {
+  const toast = document.getElementById('badge-toast');
+  const toggle = document.querySelector('[data-badge-sound-toggle]');
+  const storageKey = 'wbss_badge_sound_enabled';
+
+  const updateToggle = (enabled) => {
+    if (!toggle) return;
+    toggle.classList.toggle('is-on', enabled);
+    toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    toggle.textContent = enabled ? '効果音 ON' : '効果音 OFF';
+  };
+
+  let soundEnabled = false;
+  try {
+    soundEnabled = window.localStorage.getItem(storageKey) === '1';
+  } catch (error) {
+    soundEnabled = false;
+  }
+  updateToggle(soundEnabled);
+
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      try {
+        window.localStorage.setItem(storageKey, soundEnabled ? '1' : '0');
+      } catch (error) {
+      }
+      updateToggle(soundEnabled);
+    });
+  }
+
+  if (!toast) {
+    return;
+  }
+
+  let badgeNames = [];
+  try {
+    badgeNames = JSON.parse(toast.dataset.badgeNames || '[]');
+  } catch (error) {
+    badgeNames = [];
+  }
+  if (!Array.isArray(badgeNames) || !badgeNames.length) {
+    return;
+  }
+
+  const nameEl = toast.querySelector('.badgeToast__name');
+  if (!nameEl) {
+    return;
+  }
+
+  const playSound = () => {
+    if (!soundEnabled || typeof window.AudioContext === 'undefined') {
+      return;
+    }
+    try {
+      const context = new window.AudioContext();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(740, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(980, context.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.045, context.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.26);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.26);
+      oscillator.onended = () => context.close().catch(() => {});
+    } catch (error) {
+    }
+  };
+
+  const queue = badgeNames.slice(0, 3);
+  const showToast = (index) => {
+    if (!queue[index]) {
+      return;
+    }
+    nameEl.textContent = queue[index];
+    toast.classList.remove('is-show');
+    window.requestAnimationFrame(() => {
+      toast.classList.add('is-show');
+      playSound();
+    });
+
+    window.setTimeout(() => {
+      toast.classList.remove('is-show');
+      if (queue[index + 1]) {
+        window.setTimeout(() => showToast(index + 1), 220);
+      }
+    }, 1320);
+  };
+
+  showToast(0);
 })();
 </script>
 <?php render_page_end(); ?>
