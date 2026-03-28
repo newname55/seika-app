@@ -196,7 +196,7 @@ render_header('接客タイプ診断', [
           'matches' => (array)($type['best_customers'] ?? []),
           'today_tip' => (string)($type['today_tip'] ?? ''),
         ];
-        $imagePath = '/public/images/cast_type_images/' . rawurlencode($resultView['type']) . '.png';
+        $imagePath = '/wbss/public/images/cast_type_images/' . rawurlencode($resultView['type']) . '.png';
       ?>
       <div class="cast-type-result-page">
         <div class="cast-type-result-header">
