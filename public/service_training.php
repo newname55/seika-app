@@ -595,7 +595,7 @@ render_header('接客マナートレーニング', [
   'show_user' => false,
 ]);
 ?>
-<div class="page">
+<div class="page trainingPage<?= $currentQuestion !== null ? ' is-question-mode' : '' ?>">
   <?php if ($error !== ''): ?>
     <div class="card trainingNotice trainingNotice--error"><?= h($error) ?></div>
   <?php endif; ?>
@@ -606,28 +606,6 @@ render_header('接客マナートレーニング', [
       $currentCategoryKey = (string)($currentQuestion['category'] ?? 'basic_manners');
       $currentCategoryLabel = (string)($categoryMeta[$currentCategoryKey]['label'] ?? ($currentQuestion['category_label'] ?? '育成テーマ'));
     ?>
-    <section class="card trainingThemeCard trainingThemeCard--compact">
-      <div class="trainingEyebrow">WBSS 接客マナートレーニング</div>
-      <div class="trainingThemeCard__grid trainingThemeCard__grid--compact">
-        <div>
-          <h1 class="trainingTitle trainingTitle--compact">今日の育成テーマ</h1>
-          <p class="trainingLead trainingLead--compact"><?= h((string)($growthTheme['growth_message'] ?? '今日の接客で伸ばしたいポイントです。')) ?></p>
-          <div class="trainingTags">
-            <?php foreach (array_slice((array)($growthTheme['focus_skills'] ?? []), 0, 2) as $skill): ?>
-              <span><?= h((string)$skill) ?></span>
-            <?php endforeach; ?>
-          </div>
-        </div>
-        <div class="trainingTypeChip trainingTypeChip--compact">
-          <div class="trainingTypeChip__label">接客タイプ連動</div>
-          <div class="trainingTypeChip__value"><?= h($typeName) ?></div>
-        </div>
-      </div>
-    </section>
-    <?php if ($todayMission): ?>
-      <?php service_training_render_mission_card($todayMission, $typeName, $growthTheme, $missionStreak, $todayMissionStatus, $currentPagePath, true); ?>
-    <?php endif; ?>
-
     <section class="card trainingProgressCard">
       <div class="trainingProgressCard__top">
         <div>
@@ -850,6 +828,7 @@ render_header('接客マナートレーニング', [
 </div>
 
 <style>
+.trainingPage.is-question-mode{padding-top:6px}
 .trainingThemeCard,.trainingProgressCard,.trainingQuestionCard,.trainingResultCard{
   background:
     radial-gradient(circle at top right, rgba(255,255,255,.78), transparent 30%),
@@ -1134,6 +1113,34 @@ body[data-theme="dark"] .badgeToast__name{color:#fff8fc}
   .trainingResultGrid{grid-template-columns:1fr}
 }
 @media (max-width: 640px){
+  .app-header__inner{
+    grid-template-columns:minmax(0, 1fr) auto !important;
+    grid-template-areas:"start end" !important;
+    gap:8px 10px !important;
+    align-items:center !important;
+    padding:8px 12px !important;
+  }
+  .app-header__main{display:none !important}
+  .app-header__start{grid-area:start}
+  .app-header__end{grid-area:end}
+  .app-back{
+    min-height:38px !important;
+    width:auto !important;
+    padding:8px 12px !important;
+    border-radius:12px !important;
+    font-size:13px !important;
+  }
+  .app-back__icon{font-size:13px !important}
+  .userMenu__btn{
+    width:auto !important;
+    min-height:38px !important;
+    padding:8px 10px !important;
+    gap:8px !important;
+    border-radius:12px !important;
+  }
+  .userMenu__avatar{width:22px !important;height:22px !important;font-size:11px !important}
+  .userMenu__name{font-size:12px !important}
+  .userMenu__role{display:none !important}
   .trainingTitle{font-size:24px}
   .trainingThemeCard--compact{padding:14px}
   .trainingThemeCard__grid--compact{grid-template-columns:1fr}
@@ -1153,6 +1160,8 @@ body[data-theme="dark"] .badgeToast__name{color:#fff8fc}
   .trainingChoice{padding:13px 12px}
   .trainingChoice__key{width:34px;height:34px}
   .trainingChoice__text{font-size:14px}
+  .trainingRestart{margin-top:14px}
+  .trainingRestart .btn{min-height:42px;padding:0 16px;font-size:13px}
   .trainingResultCard__head{align-items:flex-start}
   .trainingResultCard__headActions{justify-content:flex-start}
   .trainingFeedback{
